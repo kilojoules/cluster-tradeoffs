@@ -13,6 +13,12 @@ Full analysis: 20 blobs × 20 starts per strategy × 6 wind rose types = **4,800
 | Bimodal | 19.66 | 7.43 | 10/20 |
 | Von Mises κ=2 | **16.13** | **4.37** | 10/20 |
 
+## Wind Rose Types Analyzed
+
+![Wind Rose Comparison](figures/wind_rose_comparison.png)
+
+Six wind rose types were analyzed, ranging from highly concentrated (single direction) to fully uniform.
+
 ## Pareto Frontiers by Wind Rose Type
 
 ![Pareto Comparison](figures/pareto_comparison.png)
@@ -47,9 +53,23 @@ The single-direction case shows the most dramatic tradeoffs:
 | 30-50 GWh | 4 |
 | 50+ GWh | 3 |
 
+### Von Mises κ=1 (Broad Spread)
+
+**Maximum regret: 35.74 GWh** (Blob 3)
+
+![Von Mises κ=1 Blob 3](figures/von_mises_k1_blob3.png)
+
+The broad spread of κ=1 provides intermediate results:
+
+- **Moderate directional preference**: Layouts can still adapt to the dominant direction
+- **Significant spreading**: Wake effects are somewhat averaged
+- **Intermediate regret**: Falls between single-direction and more uniform cases
+
 ### Von Mises κ=2 (Optimal)
 
 **Maximum regret: 16.13 GWh** (Blob 18)
+
+![Von Mises κ=2 Blob 18](figures/von_mises_k2_blob18.png)
 
 This configuration minimizes regret because:
 
@@ -65,9 +85,23 @@ This configuration minimizes regret because:
 | 1-10 GWh | 6 |
 | 10-20 GWh | 4 |
 
+### Von Mises κ=4 (Concentrated)
+
+**Maximum regret: 31.76 GWh** (Blob 5)
+
+![Von Mises κ=4 Blob 5](figures/von_mises_k4_blob5.png)
+
+The more concentrated κ=4 case shows:
+
+- **Strong directional preference**: Similar to single-direction but with some spreading
+- **Higher regret than κ=2**: Concentration increases vulnerability to neighbor placement
+- **Sharp wake corridors**: Still has well-defined danger zones
+
 ### Uniform Distribution
 
-**Maximum regret: 25.74 GWh** (Blobs 3, 7)
+**Maximum regret: 25.74 GWh** (Blob 3)
+
+![Uniform Blob 3](figures/uniform_blob3.png)
 
 Surprisingly, uniform wind doesn't minimize regret:
 
@@ -78,6 +112,8 @@ Surprisingly, uniform wind doesn't minimize regret:
 ### Bimodal Distribution
 
 **Maximum regret: 19.66 GWh** (Blob 5)
+
+![Bimodal Blob 5](figures/bimodal_blob5.png)
 
 Two dominant directions (270° and 90°) create:
 
