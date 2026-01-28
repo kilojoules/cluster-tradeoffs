@@ -35,6 +35,8 @@ Each subplot shows Pareto frontiers for blob configurations with regret > 5 GWh.
 
 **Maximum regret: 60.99 GWh** (Blob 3)
 
+![Single Pareto Frontier](figures/single_pareto.png)
+
 ![Single Blob 3](figures/single_blob3.png)
 
 The single-direction case shows the most dramatic tradeoffs:
@@ -57,6 +59,8 @@ The single-direction case shows the most dramatic tradeoffs:
 
 **Maximum regret: 35.74 GWh** (Blob 3)
 
+![Von Mises κ=1 Pareto Frontier](figures/von_mises_k1_pareto.png)
+
 ![Von Mises κ=1 Blob 3](figures/von_mises_k1_blob3.png)
 
 The broad spread of κ=1 provides intermediate results:
@@ -68,6 +72,8 @@ The broad spread of κ=1 provides intermediate results:
 ### Von Mises κ=2 (Optimal)
 
 **Maximum regret: 16.13 GWh** (Blob 18)
+
+![Von Mises κ=2 Pareto Frontier](figures/von_mises_k2_pareto.png)
 
 ![Von Mises κ=2 Blob 18](figures/von_mises_k2_blob18.png)
 
@@ -89,6 +95,8 @@ This configuration minimizes regret because:
 
 **Maximum regret: 31.76 GWh** (Blob 5)
 
+![Von Mises κ=4 Pareto Frontier](figures/von_mises_k4_pareto.png)
+
 ![Von Mises κ=4 Blob 5](figures/von_mises_k4_blob5.png)
 
 The more concentrated κ=4 case shows:
@@ -101,6 +109,8 @@ The more concentrated κ=4 case shows:
 
 **Maximum regret: 25.74 GWh** (Blob 3)
 
+![Uniform Pareto Frontier](figures/uniform_pareto.png)
+
 ![Uniform Blob 3](figures/uniform_blob3.png)
 
 Surprisingly, uniform wind doesn't minimize regret:
@@ -112,6 +122,8 @@ Surprisingly, uniform wind doesn't minimize regret:
 ### Bimodal Distribution
 
 **Maximum regret: 19.66 GWh** (Blob 5)
+
+![Bimodal Pareto Frontier](figures/bimodal_pareto.png)
 
 ![Bimodal Blob 5](figures/bimodal_blob5.png)
 
