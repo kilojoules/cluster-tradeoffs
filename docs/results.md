@@ -143,15 +143,16 @@ While wind rose type determines the overall magnitude of regret, the **neighbor 
 
 ### Regret by Neighbor Size
 
-**Size is the dominant factor** in determining design regret:
+**Size is the dominant factor** in determining design regret, and this holds across all wind rose types:
 
-| Neighbor Size | Avg Regret (GWh) | Count |
-|---------------|------------------|-------|
-| Large (>12D)  | **46.8**         | 6     |
-| Medium (9-12D)| 13.8             | 6     |
-| Small (<9D)   | 5.1              | 8     |
+| Neighbor Size | Single | Uniform | κ=1 | κ=2 | κ=4 | Bimodal |
+|---------------|-------:|--------:|----:|----:|----:|--------:|
+| Large (>12D)  | **46.8** | 22.1 | 23.1 | 9.7 | 23.7 | 16.9 |
+| Medium (9-12D)| 13.8 | 13.5 | 8.9 | 2.7 | 12.6 | 6.9 |
+| Small (<9D)   | 5.1 | 3.1 | 1.6 | 1.7 | 7.6 | 0.7 |
+| **Large/Small ratio** | **9.2×** | **7.0×** | **14.0×** | **5.9×** | **3.1×** | **23.8×** |
 
-Large neighbors create **9× more regret** than small neighbors. This is the strongest predictor of design tradeoff.
+The size-regret correlation is strong for every wind rose (r = +0.63 to +0.95). However, the **absolute magnitude** of regret depends on wind rose type—single-direction wind with a large neighbor produces 47 GWh regret, while κ=2 with the same neighbor produces only 10 GWh.
 
 ### Regret by Neighbor Shape
 
