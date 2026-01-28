@@ -146,16 +146,16 @@ pixi run python scripts/run_convergence_study.py
 --output-dir, -o    Output directory
 ```
 
-## Results Browser
+## Results by Wind Rose Type
 
-Explore individual blob configurations:
+Detailed analysis for each wind rose configuration:
 
-- [Single Direction Results](results/single_270deg/)
-- [Uniform Results](results/uniform_24dir/)
-- [Von Mises κ=1 Results](results/von_mises_270deg_k1.0/)
-- [Von Mises κ=2 Results](results/von_mises_270deg_k2.0/)
-- [Von Mises κ=4 Results](results/von_mises_270deg_k4.0/)
-- [Bimodal Results](results/bimodal_270_90deg/)
+- [Single Direction (270°)](results/#single-direction-270)
+- [Von Mises κ=1 (Broad Spread)](results/#von-mises-1-broad-spread)
+- [Von Mises κ=2 (Optimal)](results/#von-mises-2-optimal)
+- [Von Mises κ=4 (Concentrated)](results/#von-mises-4-concentrated)
+- [Uniform Distribution](results/#uniform-distribution)
+- [Bimodal Distribution](results/#bimodal-distribution)
 
 ## References
 
