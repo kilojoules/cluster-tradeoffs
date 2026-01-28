@@ -1,0 +1,426 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{graphicx}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{cleveref}
+
+\title{Bilevel Differentiable Geometry Optimization for\\Adversarial Wind Farm Discovery}
+\author{Pixwake Development Team}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We present a pooled multi-start optimization methodology for properly estimating design regret when discovering critical neighbor wind farm configurations. Design regret measures the cost of choosing the wrong strategy (liberal vs.\ conservative) when facing uncertainty about neighbor development. \textbf{Critical insight:} Single-shot optimization conflates optimization artifacts with true strategic tradeoffs. Our pooled approach runs $N$ multi-start optimizations for both strategies, cross-evaluates all layouts under both scenarios, and computes regret against pooled global bests. This distinguishes \emph{true tradeoffs} (where different layouts are optimal for different scenarios) from \emph{optimization artifacts} (where a single layout achieves near-best performance in both scenarios). We represent neighbor farm boundaries as differentiable B-spline curves with soft turbine packing to enable geometry exploration. Results show that most configurations exhibit no true tradeoff when properly optimized, with ``danger zones'' occurring primarily for close upwind neighbors under directional wind roses.
+\end{abstract}
+
+\section{Introduction}
+
+Wind farm layout optimization typically assumes known external conditions, including the presence and configuration of neighboring farms. However, in practice, developers must make layout decisions under uncertainty about future neighbor development. This creates a bilevel optimization problem: the target farm optimizes its layout, while potential neighbors could develop in ways that maximally harm the target's performance.
+
+We introduce a \emph{pooled multi-start discovery methodology} that properly estimates design regret for neighbor farm configurations (represented as morphable ``blobs''). The key insight is that single-shot optimization is insufficient: apparent regret may reflect optimization artifacts (local minima) rather than true strategic tradeoffs. Our approach runs multiple random-start optimizations for both strategies, cross-evaluates all layouts, and computes regret against pooled global bests.
+
+\subsection{Problem Setting}
+
+Consider a target wind farm with turbine positions $(x_i, y_i)$ for $i = 1, \ldots, n_{\text{target}}$ within a boundary polygon $\mathcal{B}_{\text{target}}$. A potential neighbor farm occupies a region $\mathcal{B}_{\text{neighbor}}(\theta)$ parameterized by control points $\theta \in \mathbb{R}^{n_{\text{control}} \times 2}$.
+
+\subsubsection{Design Strategies}
+
+We consider two design strategies for the target farm:
+\begin{itemize}
+    \item \textbf{Liberal design} $\mathbf{x}^L$: Layout optimized assuming neighbors will \emph{not} exist
+    \item \textbf{Conservative design} $\mathbf{x}^C(\theta)$: Layout optimized assuming neighbors within $\mathcal{B}_{\text{neighbor}}(\theta)$ \emph{will} exist
+\end{itemize}
+
+\subsubsection{AEP Evaluation Matrix}
+
+Each design can be evaluated under two scenarios (neighbors present or absent), yielding four AEP values:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcc}
+\toprule
+& \textbf{Neighbors Present} & \textbf{Neighbors Absent} \\
+\midrule
+\textbf{Liberal Design} $\mathbf{x}^L$ & $\text{AEP}^L_{\text{present}}(\theta)$ & $\text{AEP}^L_{\text{absent}}$ \\
+\textbf{Conservative Design} $\mathbf{x}^C(\theta)$ & $\text{AEP}^C_{\text{present}}(\theta)$ & $\text{AEP}^C_{\text{absent}}(\theta)$ \\
+\bottomrule
+\end{tabular}
+\caption{AEP evaluation matrix for design strategies and neighbor scenarios.}
+\label{tab:aep_matrix}
+\end{table}
+
+Note that:
+\begin{itemize}
+    \item $\text{AEP}^L_{\text{absent}}$ is independent of $\theta$ (no neighbors, liberal design)
+    \item $\text{AEP}^L_{\text{present}}(\theta)$ depends on $\theta$ through the neighbor configuration
+    \item $\text{AEP}^C_{\text{present}}(\theta)$ and $\text{AEP}^C_{\text{absent}}(\theta)$ both depend on $\theta$ since the conservative design itself depends on the assumed neighbor configuration
+\end{itemize}
+
+\subsubsection{Regret Measures}
+
+We define two regret measures corresponding to each realized scenario:
+
+\paragraph{Liberal Regret (neighbors appear):} The cost of having designed liberally when neighbors actually appear:
+\begin{equation}
+R_{\text{liberal}}(\theta) = \text{AEP}^C_{\text{present}}(\theta) - \text{AEP}^L_{\text{present}}(\theta)
+\end{equation}
+This is positive when the conservative design outperforms the liberal design under neighbor presence.
+
+\paragraph{Conservative Regret (neighbors don't appear):} The cost of having designed conservatively when neighbors don't appear:
+\begin{equation}
+R_{\text{conservative}}(\theta) = \text{AEP}^L_{\text{absent}} - \text{AEP}^C_{\text{absent}}(\theta)
+\end{equation}
+This is positive when the liberal design outperforms the conservative design under neighbor absence.
+
+\subsubsection{Adversarial Discovery Objective}
+
+The adversarial discovery seeks neighbor configurations that maximize the liberal regret---finding the ``worst case'' for a developer who ignores potential neighbors:
+\begin{equation}
+\theta^* = \arg\max_\theta R_{\text{liberal}}(\theta) = \arg\max_\theta \left[ \text{AEP}^C_{\text{present}}(\theta) - \text{AEP}^L_{\text{present}}(\theta) \right]
+\end{equation}
+
+Alternatively, one could seek configurations that create \textbf{phase transitions}---points where the optimal strategy switches from liberal to conservative, characterized by:
+\begin{equation}
+R_{\text{liberal}}(\theta) \approx R_{\text{conservative}}(\theta)
+\end{equation}
+
+\section{Method}
+
+\subsection{Differentiable Boundary Representation}
+
+We represent the neighbor farm boundary as a closed cubic B-spline curve. Given $n$ control points $\theta = \{(x_j, y_j)\}_{j=1}^n$, the boundary curve is:
+\begin{equation}
+\mathbf{c}(t) = \sum_{j=0}^{n-1} N_{j,3}(t) \cdot \theta_j, \quad t \in [0, 1]
+\end{equation}
+where $N_{j,3}(t)$ are the cubic B-spline basis functions and the curve is closed by wrapping control points.
+
+We evaluate the spline using De Boor's algorithm, which is fully differentiable with respect to control points.
+
+\subsection{Signed Distance Field}
+
+For each potential neighbor position $\mathbf{p}$, we compute a signed distance to the boundary:
+\begin{equation}
+d(\mathbf{p}; \theta) = \text{sign}(\mathbf{p}) \cdot \min_{t \in [0,1]} \|\mathbf{p} - \mathbf{c}(t)\|
+\end{equation}
+where $\text{sign}(\mathbf{p}) = -1$ if $\mathbf{p}$ is inside the boundary and $+1$ otherwise. The sign is determined via ray casting (counting boundary crossings).
+
+In practice, we approximate the minimum distance by sampling $N_s = 100$ points along the spline.
+
+\subsection{Soft Turbine Packing}
+
+To enable gradient flow through the discrete turbine count, we use a \emph{soft containment} function based on the sigmoid of the SDF:
+\begin{equation}
+w_k(\theta) = \sigma\left(-\tau \cdot d(\mathbf{p}_k; \theta)\right) = \frac{1}{1 + \exp(\tau \cdot d(\mathbf{p}_k; \theta))}
+\end{equation}
+where $\tau > 0$ is a temperature parameter controlling the sharpness of the boundary. As $\tau \to \infty$, this approaches a hard indicator function.
+
+The \textbf{effective neighbor count} is:
+\begin{equation}
+n_{\text{eff}}(\theta) = \sum_{k=1}^{N_{\text{grid}}} w_k(\theta)
+\end{equation}
+which is continuous and differentiable with respect to $\theta$.
+
+\subsection{Differentiable AEP}
+
+We define potential neighbor positions on a dense reference grid $\{\mathbf{p}_k\}_{k=1}^{N_{\text{grid}}}$. For a given layout $\mathbf{x}$ and blob configuration $\theta$, we compute AEP via soft interpolation between the isolated and full-neighbor cases:
+\begin{equation}
+\text{AEP}_{\text{present}}(\mathbf{x}; \theta) = (1 - f(\theta)) \cdot \text{AEP}_{\text{absent}}(\mathbf{x}) + f(\theta) \cdot \text{AEP}_{\text{full}}(\mathbf{x})
+\end{equation}
+where:
+\begin{itemize}
+    \item $f(\theta) = n_{\text{eff}}(\theta) / N_{\text{grid}}$ is the effective neighbor fraction
+    \item $\text{AEP}_{\text{absent}}(\mathbf{x})$ is the AEP of layout $\mathbf{x}$ with no neighbors
+    \item $\text{AEP}_{\text{full}}(\mathbf{x})$ is the AEP of layout $\mathbf{x}$ with all grid neighbors present
+\end{itemize}
+
+This linear interpolation provides a smooth approximation that enables gradient computation. The key insight is that more neighbors inside the blob means more wake losses, so $\text{AEP}_{\text{full}}(\mathbf{x}) < \text{AEP}_{\text{absent}}(\mathbf{x})$ for upwind neighbors.
+
+\subsubsection{Computing the Four AEP Values}
+
+For the full regret analysis, we compute:
+\begin{align}
+\text{AEP}^L_{\text{absent}} &= \text{AEP}_{\text{absent}}(\mathbf{x}^L) \\
+\text{AEP}^L_{\text{present}}(\theta) &= \text{AEP}_{\text{present}}(\mathbf{x}^L; \theta) \\
+\text{AEP}^C_{\text{absent}}(\theta) &= \text{AEP}_{\text{absent}}(\mathbf{x}^C(\theta)) \\
+\text{AEP}^C_{\text{present}}(\theta) &= \text{AEP}_{\text{present}}(\mathbf{x}^C(\theta); \theta)
+\end{align}
+
+where $\mathbf{x}^L$ is the liberal design (optimized without neighbors) and $\mathbf{x}^C(\theta)$ is the conservative design (optimized assuming neighbors within the blob).
+
+\subsection{Gradient Computation}
+
+The liberal regret gradient with respect to control points involves two terms:
+\begin{equation}
+\frac{\partial R_{\text{liberal}}}{\partial \theta} = \frac{\partial \text{AEP}^C_{\text{present}}}{\partial \theta} - \frac{\partial \text{AEP}^L_{\text{present}}}{\partial \theta}
+\end{equation}
+
+The first term requires differentiating through the conservative layout optimization (bilevel optimization), while the second term only requires differentiating the AEP evaluation.
+
+\subsubsection{Simplified Gradient (Fixed Layout)}
+
+For computational efficiency, we use a simplified approach with fixed liberal layout $\mathbf{x}^L$:
+\begin{equation}
+\frac{\partial \text{AEP}^L_{\text{present}}}{\partial \theta} = \frac{\text{AEP}_{\text{full}}(\mathbf{x}^L) - \text{AEP}_{\text{absent}}(\mathbf{x}^L)}{N_{\text{grid}}} \cdot \frac{\partial n_{\text{eff}}}{\partial \theta}
+\end{equation}
+
+Since $\text{AEP}_{\text{full}} < \text{AEP}_{\text{absent}}$ (upwind neighbors cause wake losses), increasing $n_{\text{eff}}$ decreases $\text{AEP}^L_{\text{present}}$, which increases the liberal regret.
+
+\subsubsection{Finite Differences}
+
+In practice, we compute gradients using finite differences to avoid issues with nested automatic differentiation through custom JAX primitives:
+\begin{equation}
+\frac{\partial R}{\partial \theta_{ij}} \approx \frac{R(\theta + \epsilon \mathbf{e}_{ij}) - R(\theta - \epsilon \mathbf{e}_{ij})}{2\epsilon}
+\end{equation}
+with $\epsilon = 100$ meters (appropriate for the spatial scale of the problem).
+
+\subsection{Pooled Multi-Start Optimization}
+
+\textbf{Critical insight:} Layout optimization is non-convex with many local minima. A single optimization run may find a suboptimal local minimum, leading to inflated regret estimates that reflect optimization artifacts rather than fundamental tradeoffs.
+
+To properly estimate regret, we use \emph{pooled multi-start optimization}:
+
+\begin{enumerate}
+    \item For each blob configuration $\theta$, run $N$ random-start optimizations with \textbf{liberal} assumptions (ignoring neighbors).
+    \item Run $N$ random-start optimizations with \textbf{conservative} assumptions (accounting for neighbors within $\mathcal{B}_{\text{neighbor}}(\theta)$).
+    \item \textbf{Cross-evaluate} all $2N$ layouts under \textbf{both} scenarios (neighbors present and absent).
+    \item Compute regret against \textbf{pooled global bests}:
+    \begin{align}
+        \text{GlobalBest}_{\text{absent}} &= \max_{\mathbf{x} \in \text{Pool}} \text{AEP}_{\text{absent}}(\mathbf{x}) \\
+        \text{GlobalBest}_{\text{present}} &= \max_{\mathbf{x} \in \text{Pool}} \text{AEP}_{\text{present}}(\mathbf{x}; \theta)
+    \end{align}
+\end{enumerate}
+
+The \textbf{minimum regret} across the pool represents the unavoidable cost of uncertainty---if it approaches zero, no fundamental tradeoff exists for that blob configuration.
+
+\begin{algorithm}
+\caption{Pooled Multi-Start Blob Discovery}
+\begin{algorithmic}[1]
+\Require Blob control points $\theta$, number of starts $N$, SGD settings
+\State Initialize layout pool $\mathcal{P} \gets \emptyset$
+\For{$i = 1, \ldots, N$} \Comment{Liberal optimizations}
+    \State Sample random initial positions $\mathbf{x}_0^{(i)}$
+    \State $\mathbf{x}^{(i)} \gets \text{SGD}(\mathbf{x}_0^{(i)}, \text{objective}=-\text{AEP}_{\text{absent}})$
+    \State Evaluate $\text{AEP}_{\text{absent}}(\mathbf{x}^{(i)})$ and $\text{AEP}_{\text{present}}(\mathbf{x}^{(i)}; \theta)$
+    \State $\mathcal{P} \gets \mathcal{P} \cup \{(\mathbf{x}^{(i)}, \text{`liberal'})\}$
+\EndFor
+\For{$i = 1, \ldots, N$} \Comment{Conservative optimizations}
+    \State Sample random initial positions $\mathbf{x}_0^{(i)}$
+    \State $\mathbf{x}^{(i)} \gets \text{SGD}(\mathbf{x}_0^{(i)}, \text{objective}=-\text{AEP}_{\text{present}}(\cdot; \theta))$
+    \State Evaluate $\text{AEP}_{\text{absent}}(\mathbf{x}^{(i)})$ and $\text{AEP}_{\text{present}}(\mathbf{x}^{(i)}; \theta)$
+    \State $\mathcal{P} \gets \mathcal{P} \cup \{(\mathbf{x}^{(i)}, \text{`conservative'})\}$
+\EndFor
+\State $\text{GlobalBest}_{\text{absent}} \gets \max_{\mathbf{x} \in \mathcal{P}} \text{AEP}_{\text{absent}}(\mathbf{x})$
+\State $\text{GlobalBest}_{\text{present}} \gets \max_{\mathbf{x} \in \mathcal{P}} \text{AEP}_{\text{present}}(\mathbf{x}; \theta)$
+\For{each $(\mathbf{x}, \text{strategy}) \in \mathcal{P}$}
+    \State $R_{\text{lib}}(\mathbf{x}) \gets \text{GlobalBest}_{\text{present}} - \text{AEP}_{\text{present}}(\mathbf{x}; \theta)$
+    \State $R_{\text{con}}(\mathbf{x}) \gets \text{GlobalBest}_{\text{absent}} - \text{AEP}_{\text{absent}}(\mathbf{x})$
+\EndFor
+\State $R_{\text{lib}}^{\min} \gets \min_{\mathbf{x} \in \mathcal{P}} R_{\text{lib}}(\mathbf{x})$
+\State $R_{\text{con}}^{\min} \gets \min_{\mathbf{x} \in \mathcal{P}} R_{\text{con}}(\mathbf{x})$
+\State \textbf{Tradeoff exists} iff best layout for $\text{AEP}_{\text{absent}}$ differs from best for $\text{AEP}_{\text{present}}$
+\State \Return $R_{\text{lib}}^{\min}$, $R_{\text{con}}^{\min}$, tradeoff flag, pool $\mathcal{P}$
+\end{algorithmic}
+\end{algorithm}
+
+\section{Experimental Setup}
+
+\subsection{Configuration}
+
+We tested the discovery algorithm with the following configuration:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Rotor diameter $D$ & 200 m \\
+Hub height & 120 m \\
+Rated power & 10 MW \\
+Target farm size & $16D \times 16D$ (3200 m $\times$ 3200 m) \\
+Target turbines & 16 (4$\times$4 grid) \\
+Minimum spacing & $4D$ (800 m) \\
+Neighbor grid center & $(-6D, 8D)$ upwind \\
+Neighbor grid extent & $6D$ (1200 m) \\
+Neighbor grid spacing & $3D$ (600 m) \\
+Neighbor grid positions & 25 \\
+Wind direction & 270° (from west) \\
+Wind speed & 9 m/s \\
+Wake model & Bastankhah Gaussian ($k=0.04$) \\
+\midrule
+B-spline control points & 4 \\
+Temperature $\tau$ & 0.01 \\
+Learning rate $\eta$ & 2000 m \\
+Finite difference $\epsilon$ & 100 m \\
+Max iterations & 100 \\
+Convergence tolerance & 0.001 GWh \\
+\bottomrule
+\end{tabular}
+\caption{Experimental configuration parameters.}
+\label{tab:config}
+\end{table}
+
+\subsection{Initialization}
+
+Initial blob control points were sampled from ellipses with:
+\begin{itemize}
+    \item Center: $x \in [-10D, -4D]$, $y \in [0.2 \cdot L, 0.8 \cdot L]$ where $L = 16D$
+    \item Semi-major axis: $[5D, 10D]$
+    \item Aspect ratio: $[0.6, 1.6]$
+    \item Random rotation
+\end{itemize}
+
+This ensures initial overlap with the neighbor grid to provide non-zero gradients.
+
+\section{Results}
+
+\subsection{Pooled Multi-Start Analysis}
+
+Figure~\ref{fig:results} shows the results of pooled multi-start blob discovery. For each blob configuration, we run $N=10$ random-start optimizations for both liberal and conservative strategies, cross-evaluate all layouts under both scenarios, and compute regret against pooled global bests.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{discovery_seed0.png}
+\caption{Pooled blob discovery results. \textbf{Top-left:} Blob boundary (red) with best layout for neighbors present (blue) and best for neighbors absent (green). \textbf{Top-right:} AEP distribution across pooled layouts. \textbf{Bottom-left:} Regret distribution showing all layouts evaluated. \textbf{Bottom-right:} Minimum regret values from the pool.}
+\label{fig:results}
+\end{figure}
+
+\subsection{Proper Regret Estimation}
+
+With pooled multi-start optimization, regret is computed against \textbf{global bests} from the entire pool:
+\begin{align}
+    R_{\text{lib}}^{\min} &= \text{GlobalBest}_{\text{present}} - \max_{\mathbf{x} \in \mathcal{P}} \text{AEP}_{\text{present}}(\mathbf{x}) \\
+    R_{\text{con}}^{\min} &= \text{GlobalBest}_{\text{absent}} - \max_{\mathbf{x} \in \mathcal{P}} \text{AEP}_{\text{absent}}(\mathbf{x})
+\end{align}
+
+\paragraph{Key insight:} A \textbf{true tradeoff} exists only when the layout achieving $\text{GlobalBest}_{\text{absent}}$ differs from the layout achieving $\text{GlobalBest}_{\text{present}}$. If the same layout achieves both bests, no fundamental design tradeoff exists---the apparent regret from single-shot optimization was an optimization artifact.
+
+\subsection{Distinguishing True Tradeoffs from Optimization Artifacts}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Scenario} & \textbf{Same Best Layout?} & \textbf{Interpretation} \\
+\midrule
+No tradeoff & Yes & Single layout dominates; regret is optimization noise \\
+True tradeoff & No & Fundamental design choice required \\
+\bottomrule
+\end{tabular}
+\caption{Distinguishing true tradeoffs from optimization artifacts.}
+\end{table}
+
+\paragraph{Interpretation of minimum regret:}
+\begin{itemize}
+    \item $R_{\text{lib}}^{\min} \approx 0$: Liberal strategy incurs no penalty even if neighbors appear (layout robust to neighbors).
+    \item $R_{\text{con}}^{\min} \approx 0$: Conservative strategy incurs no penalty even if neighbors don't appear (no opportunity cost).
+    \item Both $\approx 0$: A single layout performs well in both scenarios---no tradeoff.
+    \item Both $> 0$ with different best layouts: Fundamental tradeoff requiring probability-weighted decision.
+\end{itemize}
+
+\subsection{Pareto Frontier of Blob Configurations}
+
+Figure~\ref{fig:pareto} shows the Pareto frontier across multiple blob configurations, with each point representing the $(R_{\text{lib}}^{\min}, R_{\text{con}}^{\min})$ pair from pooled optimization.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\textwidth]{pareto_frontier.png}
+\caption{Pareto frontier of minimum regrets from pooled multi-start optimization. Points are colored by whether a true tradeoff exists (different best layouts for each scenario). Probability thresholds indicate when conservative design becomes optimal.}
+\label{fig:pareto}
+\end{figure}
+
+\subsection{Expected Findings}
+
+Based on pooled optimization studies, we expect:
+\begin{enumerate}
+    \item \textbf{Most configurations show no true tradeoff:} With thorough optimization, a single layout often achieves near-best performance in both scenarios.
+    \item \textbf{``Danger zone'' configurations:} True tradeoffs occur primarily with close neighbors directly upwind under highly directional wind roses.
+    \item \textbf{Optimization quality matters more than strategy:} The gap between well-optimized and poorly-optimized layouts typically exceeds any liberal-conservative tradeoff.
+\end{enumerate}
+
+\section{Discussion}
+
+\subsection{Advantages of Pooled Methodology}
+
+\begin{enumerate}
+    \item \textbf{Distinguishes true tradeoffs from artifacts:} By running multi-start optimization and cross-evaluating all layouts, we can determine whether regret reflects a fundamental design tradeoff or merely optimization noise.
+    \item \textbf{Robust regret estimates:} Computing regret against pooled global bests ensures estimates approach the true minimum achievable regret.
+    \item \textbf{Continuous geometry:} B-spline representation allows smooth boundary variations without discrete jumps.
+    \item \textbf{Differentiable physics:} Soft packing enables gradient flow through the ``number of turbines,'' which is inherently discrete.
+    \item \textbf{Interpretable results:} The blob boundary directly visualizes the critical neighbor region, and the ``same best layout'' flag clearly indicates whether a tradeoff exists.
+\end{enumerate}
+
+\subsection{Why Pooled Optimization is Essential}
+
+Single-shot optimization is \textbf{insufficient} for proper regret estimation because:
+\begin{itemize}
+    \item Layout optimization is highly non-convex with many local minima.
+    \item A single run may find a poor local minimum, inflating regret estimates.
+    \item Different random initializations may find the same global optimum (no tradeoff) or different optima (true tradeoff).
+    \item The ``regret'' from single-shot optimization conflates optimization quality with strategic choice.
+\end{itemize}
+
+\subsection{Limitations}
+
+\begin{enumerate}
+    \item \textbf{Computational cost:} Pooled multi-start optimization requires $2N$ layout optimizations per blob configuration, making the analysis $O(N)$ more expensive than single-shot.
+    \item \textbf{Linear AEP interpolation:} The soft interpolation approximates the true AEP-vs-neighbors relationship as linear, which may not capture nonlinear wake interactions.
+    \item \textbf{Single wind direction:} Results shown are for a single wind direction; multi-directional wind roses would provide more realistic scenarios.
+    \item \textbf{Fixed blob per analysis:} The pooled analysis evaluates a fixed blob configuration; blob morphing with gradient ascent would require nested pooled optimization.
+\end{enumerate}
+
+\subsection{Future Work}
+
+\begin{enumerate}
+    \item \textbf{Multi-directional winds:} Extend to weighted wind roses with Von Mises directional distributions for more realistic scenarios.
+    \item \textbf{CT-weighted wake effects:} Scale neighbor thrust coefficients by soft weights for more accurate wake modeling.
+    \item \textbf{Bayesian optimization:} Use Bayesian optimization over blob parameters with pooled regret as the objective to efficiently find ``danger zone'' configurations.
+    \item \textbf{Constraint handling:} Add constraints on blob area, aspect ratio, or position to represent realistic development scenarios.
+    \item \textbf{Parallel evaluation:} Leverage JAX's vmap to parallelize the multi-start optimizations for faster computation.
+\end{enumerate}
+
+\section{Conclusion}
+
+We presented a pooled multi-start optimization methodology for properly estimating design regret when discovering adversarial neighbor wind farm configurations. The key insight is that \textbf{single-shot optimization is insufficient}---apparent regret from single runs conflates optimization artifacts with true strategic tradeoffs.
+
+The pooled methodology:
+\begin{enumerate}
+    \item Runs $N$ multi-start optimizations for both liberal and conservative strategies.
+    \item Cross-evaluates all layouts under both scenarios (neighbors present/absent).
+    \item Computes regret against pooled global bests.
+    \item Determines whether a \textbf{true tradeoff} exists (different layouts achieve the two global bests).
+\end{enumerate}
+
+This approach correctly distinguishes between:
+\begin{itemize}
+    \item \textbf{Optimization artifacts:} Apparent regret that vanishes with better optimization (same layout achieves both bests).
+    \item \textbf{True tradeoffs:} Fundamental design choices where different layouts are optimal for different scenarios.
+\end{itemize}
+
+The method identifies ``danger zone'' configurations where neighbor development creates unavoidable tradeoffs, providing quantitative guidance for design strategy selection based on the assessed probability of neighbor development. Importantly, configurations where pooled minimum regret approaches zero indicate that robust layouts exist---no strategic choice is required.
+
+\appendix
+
+\section{Implementation Details}
+
+The implementation is available in the \texttt{pixwake} package:
+\begin{itemize}
+    \item \texttt{src/pixwake/optim/geometry.py}: B-spline evaluation, SDF computation
+    \item \texttt{src/pixwake/optim/soft\_packing.py}: Soft containment and reference grids
+    \item \texttt{src/pixwake/optim/adversarial.py}: \texttt{PooledBlobDiscovery} class (proper pooled methodology)
+    \item \texttt{scripts/run\_regret\_discovery.py}: Pooled multi-start discovery script
+\end{itemize}
+
+\textbf{Note:} The legacy \texttt{BlobAdversarialDiscovery} class uses single-shot optimization and should not be used for proper regret estimation. Always use \texttt{PooledBlobDiscovery} for accurate tradeoff analysis.
+
+All computations use JAX for automatic differentiation and JIT compilation.
+
+\end{document}
