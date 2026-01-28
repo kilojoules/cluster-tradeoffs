@@ -2,6 +2,8 @@
 
 Discovering worst-case wind farm cluster configurations that maximize design regret.
 
+**[📖 Documentation](https://kilojoules.github.io/cluster-tradeoffs/)** | [Methodology](https://kilojoules.github.io/cluster-tradeoffs/methodology/) | [Results](https://kilojoules.github.io/cluster-tradeoffs/results/) | [Replication Guide](https://kilojoules.github.io/cluster-tradeoffs/replication/)
+
 ## Research Question
 
 What is the maximum regret we can create for a wind farm by controlling neighboring wind farm characteristics?
@@ -101,6 +103,92 @@ SGDSettings(
     max_iter=3000,           # SGD iterations per optimization
     learning_rate=D / 5      # Learning rate (D = rotor diameter)
 )
+```
+
+## Wind Rose Effects on Regret
+
+### Research Question
+
+How does wind directionality affect design regret? Does the single-direction assumption (270°) represent a worst case, or do realistic multi-directional wind roses produce similar tradeoffs?
+
+### Wind Rose Types Tested
+
+| Type | Description | Parameters |
+|------|-------------|------------|
+| **Single** | Unidirectional (baseline) | 270° only |
+| **Uniform** | Omnidirectional | 24 directions, equal probability |
+| **Von Mises κ=1** | Mild concentration | Centered at 270°, diffuse |
+| **Von Mises κ=2** | Moderate concentration | Typical offshore |
+| **Von Mises κ=4** | High concentration | Approaching unidirectional |
+| **Bimodal** | Two dominant directions | 270° (70%) + 90° (30%) |
+
+The Von Mises distribution is the circular analog of the normal distribution, with concentration parameter κ controlling spread (κ=0 is uniform, κ→∞ is single direction).
+
+### Key Findings
+
+![Wind Rose Comparison](analysis/wind_rose_comparison_full/pareto_comparison_all.png)
+
+**Converged regret values** (20 blobs, 20 starts per strategy = 4,800 optimizations):
+
+| Wind Rose | Max Regret (GWh) | Mean Regret (GWh) | Interpretation |
+|-----------|------------------|-------------------|----------------|
+| Single (270°) | **60.99** | 20.2 | Worst case — persistent wake alignment |
+| Von Mises κ=1 | 35.74 | 10.3 | Diffuse, approaching uniform |
+| Von Mises κ=4 | 31.76 | 13.4 | High concentration |
+| Uniform | 25.74 | 11.9 | Neighbors affect from all directions |
+| Bimodal | 19.66 | 7.4 | Two danger zones |
+| Von Mises κ=2 | **16.13** | 4.4 | **Sweet spot** — minimal regret |
+
+**Non-monotonic relationship**: Regret doesn't simply decrease with more directional spread. There's a minimum around moderate concentration (κ≈2):
+
+```
+Single → κ=1 → κ=4 → Uniform → Bimodal → κ=2
+  61      36     32      26       20       16   (max regret, GWh)
+```
+
+**Physical interpretation**:
+- **Too concentrated** (single direction): Wake corridor is narrow but intense
+- **Too diffuse** (uniform): Neighbors affect you from everywhere — no "safe" layout exists
+- **Moderate** (κ≈2): Directional preference allows layout adaptation without extreme penalties
+
+### Convergence Verification
+
+![Convergence Plot](analysis/convergence_study/convergence_plot.png)
+
+Regret values stabilize by n=20 starts per strategy:
+
+| Configuration | n=5 | n=10 | n=20 | n=40 | Reduction |
+|--------------|-----|------|------|------|-----------|
+| Single direction | 53.70 | 38.62 | 41.15 | 38.62 | -28% |
+| Uniform | 24.27 | 24.27 | 20.29 | 20.29 | -16% |
+| Von Mises κ=4 | 16.69 | 17.75 | 9.77 | 9.77 | -41% |
+
+The full analysis uses 20 blobs × 20 starts per strategy = 800 optimizations per wind rose type (4,800 total).
+
+### Replicating Wind Rose Analysis
+
+```bash
+# Run comparison across all wind rose types (5 blobs × 5 starts × 6 types)
+pixi run python scripts/run_regret_discovery.py --wind-rose=comparison --n-blobs=5 --n-starts=5
+
+# Run with specific wind rose configuration
+pixi run python scripts/run_regret_discovery.py --wind-rose=von_mises --concentration=2.0 --n-blobs=10
+
+# Run convergence study
+pixi run python scripts/run_convergence_study.py
+```
+
+**Command-line options:**
+
+```
+--wind-rose, -w     Wind rose type: single, uniform, von_mises, bimodal, comparison
+--n-directions, -d  Number of wind directions (default: 24)
+--dominant-dir      Dominant direction in degrees (default: 270)
+--concentration, -k Von Mises kappa parameter (default: 2.0)
+--secondary-dir     Secondary direction for bimodal (default: 90)
+--n-blobs           Number of blob configurations (default: 10)
+--n-starts          Optimization starts per strategy (default: 10)
+--output-dir, -o    Output directory (auto-generated if not specified)
 ```
 
 ## Dependencies
