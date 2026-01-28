@@ -1,0 +1,45 @@
+site_name: Wind Farm Cluster Tradeoffs
+site_description: Discovering worst-case wind farm cluster configurations that maximize design regret
+site_author: Julian Quick
+repo_url: https://github.com/kilojoules/cluster-tradeoffs
+repo_name: kilojoules/cluster-tradeoffs
+
+theme:
+  name: material
+  palette:
+    primary: blue
+    accent: light blue
+  features:
+    - navigation.instant
+    - navigation.sections
+    - toc.integrate
+  icon:
+    repo: fontawesome/brands/github
+
+nav:
+  - Home: index.md
+  - Methodology: methodology.md
+  - Results: results.md
+  - Replication: replication.md
+
+markdown_extensions:
+  - tables
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.arithmatex:
+      generic: true
+  - toc:
+      permalink: true
+
+extra_javascript:
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+plugins:
+  - search
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/kilojoules

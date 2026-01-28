@@ -26,3 +26,5 @@ ffmpeg = ">=8.0.1,<9"
 pixwake = { path = ".", editable = true }
 jax = "*"
 silent-killers = ">=0.1.8, <0.2"
+mkdocs = ">=1.5"
+mkdocs-material = ">=9.0"
