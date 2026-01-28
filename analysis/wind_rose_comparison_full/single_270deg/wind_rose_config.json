@@ -1,0 +1,16 @@
+{
+  "type": "single",
+  "n_directions": 1,
+  "dominant_dir": 270.0,
+  "concentration": 2.0,
+  "mean_ws": 9.0,
+  "wd": [
+    270.0
+  ],
+  "ws": [
+    9.0
+  ],
+  "weights": [
+    1.0
+  ]
+}

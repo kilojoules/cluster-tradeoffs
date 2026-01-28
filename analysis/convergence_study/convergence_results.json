@@ -1,0 +1,104 @@
+{
+  "single_blob3": [
+    {
+      "n_starts": 5,
+      "regret": 53.70342963483665,
+      "n_pareto": 2,
+      "global_best_absent": 1167.9999965190889,
+      "global_best_present": 1063.1926710855705,
+      "elapsed": 20.218578100204468
+    },
+    {
+      "n_starts": 10,
+      "regret": 38.61905364530935,
+      "n_pareto": 3,
+      "global_best_absent": 1167.9999965190889,
+      "global_best_present": 1063.1926710855705,
+      "elapsed": 25.099920749664307
+    },
+    {
+      "n_starts": 20,
+      "regret": 41.151623756814615,
+      "n_pareto": 5,
+      "global_best_absent": 1167.9999965190889,
+      "global_best_present": 1065.7252411970758,
+      "elapsed": 159.83089399337769
+    },
+    {
+      "n_starts": 40,
+      "regret": 38.61905364530935,
+      "n_pareto": 4,
+      "global_best_absent": 1167.9999965190889,
+      "global_best_present": 1063.1926710855705,
+      "elapsed": 332.42814588546753
+    }
+  ],
+  "uniform_blob3": [
+    {
+      "n_starts": 5,
+      "regret": 24.27283694045434,
+      "n_pareto": 2,
+      "global_best_absent": 1068.0727405039845,
+      "global_best_present": 1023.9659339830232,
+      "elapsed": 98.1735770702362
+    },
+    {
+      "n_starts": 10,
+      "regret": 24.27283694045434,
+      "n_pareto": 2,
+      "global_best_absent": 1068.0727405039845,
+      "global_best_present": 1023.9659339830232,
+      "elapsed": 78.45143914222717
+    },
+    {
+      "n_starts": 20,
+      "regret": 20.292470399358763,
+      "n_pareto": 4,
+      "global_best_absent": 1068.829543813033,
+      "global_best_present": 1023.9659339830232,
+      "elapsed": 157.17369985580444
+    },
+    {
+      "n_starts": 40,
+      "regret": 20.292470399358763,
+      "n_pareto": 5,
+      "global_best_absent": 1068.829543813033,
+      "global_best_present": 1023.9659339830232,
+      "elapsed": 316.36247086524963
+    }
+  ],
+  "vonmises_k4_blob1": [
+    {
+      "n_starts": 5,
+      "regret": 16.691605169095737,
+      "n_pareto": 2,
+      "global_best_absent": 1073.7408374793804,
+      "global_best_present": 1018.5598648662308,
+      "elapsed": 39.29315900802612
+    },
+    {
+      "n_starts": 10,
+      "regret": 17.7457340534894,
+      "n_pareto": 2,
+      "global_best_absent": 1076.3790230474194,
+      "global_best_present": 1020.8763812267373,
+      "elapsed": 79.16304588317871
+    },
+    {
+      "n_starts": 20,
+      "regret": 9.773653063193706,
+      "n_pareto": 2,
+      "global_best_absent": 1078.76360206524,
+      "global_best_present": 1018.5598648662308,
+      "elapsed": 163.3223922252655
+    },
+    {
+      "n_starts": 40,
+      "regret": 9.773653063193706,
+      "n_pareto": 2,
+      "global_best_absent": 1078.76360206524,
+      "global_best_present": 1018.5598648662308,
+      "elapsed": 324.8510398864746
+    }
+  ]
+}
