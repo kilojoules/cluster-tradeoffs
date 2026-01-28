@@ -1,0 +1,28 @@
+[workspace]
+authors = ["ernie <ernim@dtu.dk>"]
+channels = ["conda-forge"]
+name = "ouu"
+platforms = ["linux-64", "osx-arm64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+python = ">=3.10,<3.14"
+topfarm = "*"
+py-wake = ">=2.6.12,<3"
+h5py = "*"
+matplotlib = "*"
+numpy = "*"
+pandas = "*"
+pytest = ">=9.0.2,<10"
+cma = ">=4.0.0,<5"
+imageio = ">=2.37.0,<3"
+git-lfs = ">=3.7.1,<4"
+pre-commit = ">=4.5.1,<5"
+ffmpeg = ">=8.0.1,<9"
+
+[pypi-dependencies]
+pixwake = { path = ".", editable = true }
+jax = "*"
+silent-killers = ">=0.1.8, <0.2"
