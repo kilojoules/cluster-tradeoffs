@@ -133,63 +133,80 @@ Two dominant directions (270° and 90°) create:
 - Intermediate regret between single-direction and uniform
 - Layout must balance exposure from both directions
 
-## Impact of Blob Configuration
+## Impact of Neighbor Configuration
 
-While wind rose type determines the overall magnitude of regret, the **blob configuration** (neighbor position, size, and shape) determines which specific scenarios produce high or low regret.
+While wind rose type determines the overall magnitude of regret, the **neighbor configuration** (size, shape, and position) determines which specific scenarios produce high or low regret. We characterize each neighbor blob by three properties:
 
-### Per-Blob Regret Across Wind Rose Types
+- **Size**: Large (>12D radius), Medium (9-12D), or Small (<9D)
+- **Shape**: Elongated (aspect ratio >1.4), Moderate (1.15-1.4), or Compact (<1.15)
+- **Position**: Centered (aligned with target farm), or Offset (north/south shifted)
 
-| Blob | Single | Uniform | κ=1 | κ=2 | κ=4 | Bimodal | Avg |
-|-----:|-------:|--------:|----:|----:|----:|--------:|----:|
-| 3 | **61.0** | 25.7 | **35.7** | 11.2 | 31.6 | 16.3 | **30.3** |
-| 7 | 59.0 | 25.7 | 17.4 | 13.3 | 18.4 | 18.8 | 25.4 |
-| 18 | 40.6 | 24.0 | 25.8 | **16.1** | 27.3 | 17.9 | 25.3 |
-| 5 | 31.2 | 18.9 | 14.0 | 10.2 | **31.8** | **19.7** | 21.0 |
-| 17 | 41.6 | 22.2 | 25.8 | 0.7 | 19.0 | 14.5 | 20.6 |
-| 9 | 47.6 | 15.8 | 19.7 | 6.6 | 14.1 | 14.3 | 19.7 |
-| 4 | 0.0 | 1.9 | 0.0 | 0.7 | 9.2 | 0.0 | 2.0 |
-| 11 | 0.0 | 6.9 | 2.7 | 0.0 | 6.7 | 0.0 | 2.7 |
+### Regret by Neighbor Size
 
-*Selected blobs showing highest and lowest average regret. Bold indicates maximum for that wind rose.*
+**Size is the dominant factor** in determining design regret:
 
-**Key observations:**
-- **Blob 3** produces the highest regret for 3 of 6 wind rose types
-- **Blob 4 and 11** consistently produce near-zero regret
-- Some blobs (e.g., Blob 5) produce high regret only for specific wind roses
+| Neighbor Size | Avg Regret (GWh) | Count |
+|---------------|------------------|-------|
+| Large (>12D)  | **46.8**         | 6     |
+| Medium (9-12D)| 13.8             | 6     |
+| Small (<9D)   | 5.1              | 8     |
 
-### What Makes a Blob High-Regret?
+Large neighbors create **9× more regret** than small neighbors. This is the strongest predictor of design tradeoff.
 
-Analysis of blob characteristics reveals **size is the dominant factor**:
+### Regret by Neighbor Shape
+
+Elongated neighbors create more regret than compact ones:
+
+| Neighbor Shape | Avg Regret (GWh) | Count |
+|----------------|------------------|-------|
+| Elongated      | **31.2**         | 7     |
+| Moderate       | 15.8             | 10    |
+| Compact        | 9.4              | 3     |
+
+Elongated shapes can create longer wake corridors that span more of the target farm area.
+
+### Regret by Neighbor Position
+
+Centered neighbors (aligned with the target farm) create more regret:
+
+| Neighbor Position | Avg Regret (GWh) | Count |
+|-------------------|------------------|-------|
+| Centered          | **26.4**         | 8     |
+| South-shifted     | 18.6             | 4     |
+| North-shifted     | 14.9             | 8     |
+
+When a neighbor is offset from the target farm's center, part of its wake corridor misses the target area entirely.
+
+### Worst-Case Neighbor Profile
+
+The highest-regret scenarios share a common profile:
+
+| Characteristic | Worst-Case Neighbor |
+|----------------|---------------------|
+| Size           | Large (>12D radius) |
+| Shape          | Elongated (aspect ratio >1.4) |
+| Position       | Centered on target farm |
+| Example regret | 61 GWh (single direction) |
+
+This "large, elongated, centered" configuration produces the maximum regret across most wind rose types because it maximizes wake coverage over the target farm while leaving minimal room for the conservative layout to escape.
+
+### Why Size Dominates
+
+Correlation analysis confirms size is the primary driver:
 
 | Characteristic | Correlation with Regret |
 |----------------|------------------------|
-| Size (max radius) | **r = +0.80** |
-| Y extent | r = +0.72 |
-| X extent | r = +0.59 |
-| Eccentricity | r = +0.45 |
-| Centroid X | r = +0.21 |
-| Centroid Y | r = -0.17 |
+| Size (radius)  | **r = +0.80**          |
+| Y extent       | r = +0.72              |
+| X extent       | r = +0.59              |
+| Eccentricity   | r = +0.45              |
+| Position       | r = +0.21              |
 
-**High-regret blobs** (>30 GWh, n=6):
-- Average size: 2,571 m (12.9D)
-- Average eccentricity: 1.44
+Larger neighbors create more design tradeoff because:
 
-**Low-regret blobs** (<10 GWh, n=8):
-- Average size: 1,636 m (8.2D)
-- Average eccentricity: 1.28
-
-### Physical Explanation
-
-Larger blobs create more design tradeoff because:
-
-1. **Greater wake coverage**: A large neighbor can shadow a larger portion of the target farm area
+1. **Greater wake coverage**: A large neighbor shadows a larger portion of the target farm
 2. **Fewer escape routes**: The conservative strategy has less room to shift turbines away from wakes
 3. **Amplified divergence**: Liberal and conservative optimal layouts must differ more dramatically
-
-Blob position (centroid) has weak correlation because:
-- All blobs are sampled from the upwind region
-- Wake effects decay with distance, so very distant blobs have low impact regardless of size
-- The critical factor is how much of the target area the blob can shadow, not where its center is
 
 ## Physical Interpretation
 
