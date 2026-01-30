@@ -20,6 +20,7 @@ nav:
   - Home: index.md
   - Methodology: methodology.md
   - Results: results.md
+  - DEI Case Study: dei-case-study.md
   - Replication: replication.md
 
 markdown_extensions:
