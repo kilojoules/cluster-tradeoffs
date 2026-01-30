@@ -53,6 +53,27 @@ pixi run python scripts/run_regret_discovery.py \
     --output-dir=analysis/wind_rose_comparison_full
 ```
 
+### Danish Energy Island (DEI) Case Study
+
+```bash
+# Single-neighbor analysis with actual DEI geometry
+pixi run python scripts/run_dea_single_neighbor.py \
+    --n-starts=5 \
+    --max-iter=500
+
+# With more optimization effort for robust results
+pixi run python scripts/run_dea_single_neighbor.py \
+    --n-starts=10 \
+    --max-iter=1000
+
+# With TurboPark wake model
+pixi run python scripts/run_dea_single_neighbor.py \
+    --wake-model=turbopark \
+    --ti=0.06
+```
+
+The DEI analysis uses actual wind data from `DEA_neighbors/energy_island_10y_daily_av_wind.csv` and precomputed neighbor layouts from `DEA_neighbors/re_precomputed_layouts.h5`.
+
 ## Command Reference
 
 ### Main Script: `run_regret_discovery.py`
@@ -88,28 +109,49 @@ Options:
 pixi run python scripts/run_convergence_study.py --n-starts-max=40
 ```
 
+### DEI Single-Neighbor Analysis: `run_dea_single_neighbor.py`
+
+```
+usage: run_dea_single_neighbor.py [-h] [--wake-model {bastankhah,turbopark}]
+                                   [--ti TI] [--n-starts N] [--max-iter N]
+                                   [--output-dir DIR]
+
+Options:
+  --wake-model          Wake model: bastankhah or turbopark (default: bastankhah)
+  --ti                  Ambient turbulence intensity for TurboPark (default: 0.06)
+  --n-starts            Multi-start optimization runs per strategy (default: 5)
+  --max-iter            Maximum iterations per optimization run (default: 500)
+  --output-dir, -o      Output directory (default: analysis/dea_single_neighbor)
+```
+
+This script tests each of the 9 DEI neighbor farms individually to identify which neighbors create design regret.
+
 ## Output Structure
 
 ```
 analysis/
-└── wind_rose_comparison_full/
-    ├── comparison_summary.json      # Summary statistics
-    ├── pareto_comparison_all.png    # Combined Pareto plot
-    ├── wind_rose_comparison.png     # Bar chart comparison
-    │
-    ├── single_270deg/
-    │   ├── results.json             # Full optimization results
-    │   ├── wind_rose_config.json    # Wind rose parameters
-    │   ├── pareto_frontier.png      # Pareto frontier for blob 0
-    │   ├── blob_0.png               # Individual blob result
-    │   ├── blob_1.png
-    │   └── ...
-    │
-    ├── uniform_24dir/
-    │   └── ...
-    │
-    └── von_mises_270deg_k2.0/
-        └── ...
+├── wind_rose_comparison_full/
+│   ├── comparison_summary.json      # Summary statistics
+│   ├── pareto_comparison_all.png    # Combined Pareto plot
+│   ├── wind_rose_comparison.png     # Bar chart comparison
+│   │
+│   ├── single_270deg/
+│   │   ├── results.json             # Full optimization results
+│   │   ├── wind_rose_config.json    # Wind rose parameters
+│   │   ├── pareto_frontier.png      # Pareto frontier for blob 0
+│   │   ├── blob_0.png               # Individual blob result
+│   │   ├── blob_1.png
+│   │   └── ...
+│   │
+│   ├── uniform_24dir/
+│   │   └── ...
+│   │
+│   └── von_mises_270deg_k2.0/
+│       └── ...
+│
+└── dea_single_neighbor/
+    ├── dea_single_neighbor_bastankhah.json   # Regret by neighbor farm
+    └── dea_single_neighbor_bastankhah.png    # Polar plot of regret
 ```
 
 ### Results JSON Format

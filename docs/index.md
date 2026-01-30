@@ -1,10 +1,10 @@
 # Wind Farm Cluster Tradeoffs
 
-Discovering worst-case wind farm cluster configurations that maximize design regret.
+Exploring how neighboring wind farm configurations affect design tradeoffs through Monte Carlo sampling.
 
 ## Key Question
 
-**What is the maximum regret a wind farm developer faces when neighboring farms are uncertain?**
+**How much regret can a wind farm developer face when neighboring farms are uncertain?**
 
 When designing a wind farm layout, developers must decide whether to:
 - **Liberal strategy**: Optimize assuming no neighbors will be built (maximize standalone performance)
@@ -12,11 +12,25 @@ When designing a wind farm layout, developers must decide whether to:
 
 **Regret** measures the cost of choosing the wrong strategy.
 
+## Case Study: Danish Energy Island
+
+We analyzed the real-world Danish Energy Island (DEI) cluster with 10 years of site wind data. **Key finding: A single southern neighbor causes 101 GWh regret despite off-axis position.**
+
+| Neighbor Direction | Regret |
+|-------------------|--------|
+| Western (262°) - dominant wind | 0 GWh |
+| **Southern (163°)** - secondary wind | **101 GWh** |
+| All 9 neighbors together | 101 GWh |
+
+This demonstrates the **"ambush effect"**: neighbors off-axis from the dominant wind can cause more regret than on-axis neighbors because the liberal layout doesn't account for them.
+
+[Full DEI Case Study →](dei-case-study.md)
+
 ## Main Findings
 
-### 1. Regret Can Exceed 60 GWh/year
+### 1. Sampled Regret Can Exceed 60 GWh/year
 
-For a 16-turbine farm under single-direction wind conditions, choosing the liberal strategy when neighbors appear can cost up to **61 GWh/year** compared to the conservative strategy.
+Among the randomly sampled blob configurations, the highest regret found was **61 GWh/year** for a 16-turbine farm under single-direction wind conditions. This represents choosing the liberal strategy when neighbors appear.
 
 ![Single Direction High Regret Case](figures/single_blob3.png)
 *Blob 3 under single-direction wind (270°): The liberal-optimal layout achieves 1168 GWh alone but drops to 1011 GWh with neighbors. The conservative-optimal layout achieves 1133 GWh alone and 1072 GWh with neighbors. Regret = 61 GWh.*
@@ -51,15 +65,18 @@ Single → κ=1 → κ=4 → Uniform → Bimodal → κ=2
 
 ## Methodology
 
-### Pooled Multi-Start Optimization
+### Random Blob Sampling + Pooled Multi-Start Optimization
 
-For each neighbor configuration:
+We randomly sample 20 neighbor "blob" configurations per wind rose type. For each blob:
 
-1. Run 20 multi-start SGD optimizations with **liberal** assumptions (ignoring neighbors)
-2. Run 20 multi-start SGD optimizations with **conservative** assumptions (accounting for neighbors)
-3. Pool all 40 layouts
-4. Evaluate each layout under both scenarios
-5. Compute Pareto frontier and regret
+1. **Sample** a random blob shape (B-spline with 4 control points)
+2. Run 20 multi-start SGD optimizations on **target layout** with **liberal** assumptions (ignoring neighbors)
+3. Run 20 multi-start SGD optimizations on **target layout** with **conservative** assumptions (accounting for neighbors)
+4. Pool all 40 target layouts
+5. Evaluate each layout under both scenarios
+6. Compute Pareto frontier and regret
+
+**Note**: The blob shapes are randomly sampled, not optimized. This Monte Carlo approach explores the distribution of regret across neighbor geometries but does not find guaranteed worst-case configurations.
 
 ### Regret Definition
 
@@ -86,7 +103,8 @@ Regret values stabilize by n=20 starts per strategy:
 
 - **Target farm**: 16 turbines in 16D × 16D area (D = 200m rotor diameter)
 - **Minimum spacing**: 4D between turbines
-- **Neighbor representation**: Morphable "blob" shapes using B-spline boundaries
+- **Neighbor representation**: Randomly sampled "blob" shapes using B-spline boundaries (20 samples per wind rose type)
+- **Neighbor grid**: 25 potential turbine positions on a 5×5 grid, masked by blob boundary
 - **Wake model**: Bastankhah Gaussian deficit (k=0.04)
 - **Turbine**: 10 MW class (200m rotor, 120m hub height)
 
@@ -156,6 +174,10 @@ Detailed analysis for each wind rose configuration:
 - [Von Mises κ=4 (Concentrated)](results/#von-mises-4-concentrated)
 - [Uniform Distribution](results/#uniform-distribution)
 - [Bimodal Distribution](results/#bimodal-distribution)
+
+## Real-World Case Study
+
+- [Danish Energy Island (DEI)](dei-case-study.md) - Analysis of the 10-farm North Sea cluster with actual wind data
 
 ## References
 
