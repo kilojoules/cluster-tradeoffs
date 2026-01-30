@@ -127,8 +127,14 @@ def load_wind_data():
 
 
 def figure_1_cluster_map():
-    """Create clean cluster map highlighting Farm 8."""
-    fig, ax = plt.subplots(figsize=(10, 10))
+    """Create clean cluster map highlighting Farm 8 with inset wind rose."""
+    fig = plt.figure(figsize=(12, 10))
+
+    # Main map axis
+    ax = fig.add_axes([0.1, 0.1, 0.75, 0.85])
+
+    # Inset wind rose axis (polar)
+    ax_rose = fig.add_axes([0.72, 0.65, 0.25, 0.30], projection='polar')
 
     layouts = load_layouts()
     results = load_results()
@@ -167,16 +173,6 @@ def figure_1_cluster_map():
         ax.annotate("Target\n(dk0w)", (cx, cy+3), fontsize=12, fontweight='bold',
                    ha='center', va='bottom', color=target_color)
 
-    # Add wind arrow showing dominant direction (from west)
-    ax.annotate('', xy=(720, 6245), xytext=(700, 6245),
-                arrowprops=dict(arrowstyle='->', color='black', lw=2))
-    ax.text(710, 6247, 'Dominant\nWind (W)', ha='center', va='bottom', fontsize=10)
-
-    # Add arrow showing secondary wind from south
-    ax.annotate('', xy=(712, 6240), xytext=(712, 6220),
-                arrowprops=dict(arrowstyle='->', color=problem_color, lw=2, ls='--'))
-    ax.text(714, 6228, 'Secondary\nWind (S)', ha='left', va='center', fontsize=10, color=problem_color)
-
     # Legend
     legend_elements = [
         plt.scatter([], [], c=target_color, s=60, label='Target Farm (66 turbines)'),
@@ -195,7 +191,40 @@ def figure_1_cluster_map():
     ax.set_xlim(670, 770)
     ax.set_ylim(6165, 6330)
 
-    plt.tight_layout()
+    # --- Inset wind rose ---
+    wd, ws = load_wind_data()
+
+    # Bin the wind data
+    n_bins = 16
+    bin_edges = np.linspace(0, 360, n_bins + 1)
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+    counts = np.zeros(n_bins)
+    for i in range(n_bins):
+        if i == n_bins - 1:
+            mask = (wd >= bin_edges[i]) | (wd < bin_edges[0])
+        else:
+            mask = (wd >= bin_edges[i]) & (wd < bin_edges[i+1])
+        counts[i] = mask.sum()
+
+    freq = counts / counts.sum() * 100
+
+    # Convert to radians (meteorological: direction wind is FROM)
+    # In polar plot: 0 is right (E), angles go counter-clockwise
+    # We want: 0 at top (N), clockwise
+    theta = np.radians(bin_centers)
+    width = 2 * np.pi / n_bins * 0.8
+
+    # Color bars by frequency
+    colors = plt.cm.Blues(freq / freq.max())
+
+    ax_rose.bar(theta, freq, width=width, color=colors, edgecolor='white', linewidth=0.5)
+    ax_rose.set_theta_zero_location('N')
+    ax_rose.set_theta_direction(-1)
+    ax_rose.set_title('Wind Rose', fontsize=10, fontweight='bold', pad=8)
+    ax_rose.set_yticklabels([])
+    ax_rose.tick_params(axis='x', labelsize=8)
+
     fig.savefig(OUTPUT_DIR / 'dei_cluster_map.png', dpi=150, bbox_inches='tight',
                 facecolor='white', edgecolor='none')
     plt.close(fig)
