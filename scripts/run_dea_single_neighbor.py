@@ -160,8 +160,23 @@ def run_single_neighbor_analysis(
     n_starts: int = 5,
     max_iter: int = 500,
     output_dir: str = "analysis/dea_single_neighbor",
+    farm_indices: list[int] | None = None,
+    skip_combined: bool = False,
 ):
-    """Run DEA analysis with each individual neighbor using gradient-based optimization."""
+    """Run DEA analysis with each individual neighbor using gradient-based optimization.
+
+    Args:
+        wake_model: Wake model to use ("bastankhah" or "turbopark")
+        ti_amb: Ambient turbulence intensity (for turbopark)
+        n_starts: Number of optimization starts per strategy
+        max_iter: Maximum optimization iterations per start
+        output_dir: Output directory for results
+        farm_indices: List of farm indices to run (1-9). If None, runs all farms. If empty list, skips individual farms.
+        skip_combined: If True, skip the "all neighbors combined" analysis
+    """
+    if farm_indices is None:
+        farm_indices = list(range(1, N_NEIGHBOR_FARMS + 1))
+    # If farm_indices is an empty list, we skip individual farms (for --only-combined)
 
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -322,9 +337,10 @@ def run_single_neighbor_analysis(
 
     print("\n" + "=" * 70)
     print(f"Testing each neighbor farm individually (n_starts={n_starts}, max_iter={max_iter})")
+    print(f"Farms to run: {farm_indices}")
     print("=" * 70)
 
-    for farm_idx in range(1, N_NEIGHBOR_FARMS + 1):
+    for farm_idx in farm_indices:
         x_neighbor, y_neighbor = load_neighbor_layout(farm_idx)
         if x_neighbor is None:
             print(f"Skipping farm {farm_idx} - no layout found")
@@ -418,73 +434,77 @@ def run_single_neighbor_analysis(
         }
 
     # Also test all neighbors together for comparison
-    print("\n--- ALL 9 NEIGHBORS TOGETHER ---")
-    x_all_neighbors = []
-    y_all_neighbors = []
-    for farm_idx in range(1, N_NEIGHBOR_FARMS + 1):
-        x_n, y_n = load_neighbor_layout(farm_idx)
-        if x_n is not None:
-            x_all_neighbors.extend(x_n)
-            y_all_neighbors.extend(y_n)
-
-    x_all_neighbors = np.array(x_all_neighbors)
-    y_all_neighbors = np.array(y_all_neighbors)
-
-    start_time = time.time()
-
-    all_layouts = []
-    for seed in range(n_starts):
-        x0, y0 = generate_layout(seed)
-
-        # Liberal
-        x_lib, y_lib, aep_lib_absent = optimize_layout(x0, y0, None, None, max_iter)
-        aep_lib_present = float(compute_aep_binned(x_lib, y_lib, x_all_neighbors, y_all_neighbors))
-        all_layouts.append({'aep_absent': float(aep_lib_absent), 'aep_present': aep_lib_present})
-
-        # Conservative
-        x_con, y_con, aep_con_present = optimize_layout(x0, y0, x_all_neighbors, y_all_neighbors, max_iter)
-        aep_con_absent = float(compute_aep_binned(x_con, y_con, None, None))
-        all_layouts.append({'aep_absent': aep_con_absent, 'aep_present': float(aep_con_present)})
-
-        print(f"  Start {seed}: Liberal={aep_lib_absent:.1f}/{aep_lib_present:.1f}, "
-              f"Conservative={aep_con_absent:.1f}/{aep_con_present:.1f} GWh")
-
-    elapsed = time.time() - start_time
-
-    aep_absent = np.array([r['aep_absent'] for r in all_layouts])
-    aep_present = np.array([r['aep_present'] for r in all_layouts])
-
-    # Pareto
-    pareto_mask = np.zeros(len(all_layouts), dtype=bool)
-    for i in range(len(all_layouts)):
-        dominated = False
-        for j in range(len(all_layouts)):
-            if i != j:
-                if (aep_absent[j] >= aep_absent[i] and aep_present[j] > aep_present[i]) or \
-                   (aep_absent[j] > aep_absent[i] and aep_present[j] >= aep_present[i]):
-                    dominated = True
-                    break
-        if not dominated:
-            pareto_mask[i] = True
-
-    pareto_indices = np.where(pareto_mask)[0]
-    if len(pareto_indices) > 0:
-        lib_opt_idx = pareto_indices[np.argmax(aep_absent[pareto_mask])]
-        con_opt_idx = pareto_indices[np.argmax(aep_present[pareto_mask])]
-        all_regret = aep_present[con_opt_idx] - aep_present[lib_opt_idx]
+    if skip_combined:
+        print("\n--- SKIPPING ALL 9 NEIGHBORS TOGETHER (--skip-combined) ---")
+        all_regret = None
     else:
-        all_regret = 0.0
+        print("\n--- ALL 9 NEIGHBORS TOGETHER ---")
+        x_all_neighbors = []
+        y_all_neighbors = []
+        for farm_idx in range(1, N_NEIGHBOR_FARMS + 1):
+            x_n, y_n = load_neighbor_layout(farm_idx)
+            if x_n is not None:
+                x_all_neighbors.extend(x_n)
+                y_all_neighbors.extend(y_n)
 
-    print(f"Pareto points: {pareto_mask.sum()}")
-    print(f"REGRET (all 9): {all_regret:.2f} GWh")
+        x_all_neighbors = np.array(x_all_neighbors)
+        y_all_neighbors = np.array(y_all_neighbors)
 
-    results["all_neighbors"] = {
-        "name": "All 9 neighbors",
-        "n_pareto": int(pareto_mask.sum()),
-        "regret_gwh": float(all_regret),
-        "total_turbines": len(x_all_neighbors),
-        "elapsed_seconds": elapsed,
-    }
+        start_time = time.time()
+
+        all_layouts = []
+        for seed in range(n_starts):
+            x0, y0 = generate_layout(seed)
+
+            # Liberal
+            x_lib, y_lib, aep_lib_absent = optimize_layout(x0, y0, None, None, max_iter)
+            aep_lib_present = float(compute_aep_binned(x_lib, y_lib, x_all_neighbors, y_all_neighbors))
+            all_layouts.append({'aep_absent': float(aep_lib_absent), 'aep_present': aep_lib_present})
+
+            # Conservative
+            x_con, y_con, aep_con_present = optimize_layout(x0, y0, x_all_neighbors, y_all_neighbors, max_iter)
+            aep_con_absent = float(compute_aep_binned(x_con, y_con, None, None))
+            all_layouts.append({'aep_absent': aep_con_absent, 'aep_present': float(aep_con_present)})
+
+            print(f"  Start {seed}: Liberal={aep_lib_absent:.1f}/{aep_lib_present:.1f}, "
+                  f"Conservative={aep_con_absent:.1f}/{aep_con_present:.1f} GWh")
+
+        elapsed = time.time() - start_time
+
+        aep_absent = np.array([r['aep_absent'] for r in all_layouts])
+        aep_present = np.array([r['aep_present'] for r in all_layouts])
+
+        # Pareto
+        pareto_mask = np.zeros(len(all_layouts), dtype=bool)
+        for i in range(len(all_layouts)):
+            dominated = False
+            for j in range(len(all_layouts)):
+                if i != j:
+                    if (aep_absent[j] >= aep_absent[i] and aep_present[j] > aep_present[i]) or \
+                       (aep_absent[j] > aep_absent[i] and aep_present[j] >= aep_present[i]):
+                        dominated = True
+                        break
+            if not dominated:
+                pareto_mask[i] = True
+
+        pareto_indices = np.where(pareto_mask)[0]
+        if len(pareto_indices) > 0:
+            lib_opt_idx = pareto_indices[np.argmax(aep_absent[pareto_mask])]
+            con_opt_idx = pareto_indices[np.argmax(aep_present[pareto_mask])]
+            all_regret = aep_present[con_opt_idx] - aep_present[lib_opt_idx]
+        else:
+            all_regret = 0.0
+
+        print(f"Pareto points: {pareto_mask.sum()}")
+        print(f"REGRET (all 9): {all_regret:.2f} GWh")
+
+        results["all_neighbors"] = {
+            "name": "All 9 neighbors",
+            "n_pareto": int(pareto_mask.sum()),
+            "regret_gwh": float(all_regret),
+            "total_turbines": len(x_all_neighbors),
+            "elapsed_seconds": elapsed,
+        }
 
     # Summary
     print("\n" + "=" * 70)
@@ -493,45 +513,62 @@ def run_single_neighbor_analysis(
     print(f"{'Farm':<30} {'Direction':>10} {'Regret (GWh)':>15}")
     print("-" * 70)
 
-    for farm_idx in range(1, N_NEIGHBOR_FARMS + 1):
+    for farm_idx in farm_indices:
         if farm_idx in results:
             r = results[farm_idx]
             print(f"{r['name']:<30} {r['direction']:>10.0f}° {r['regret_gwh']:>15.2f}")
 
-    print("-" * 70)
-    print(f"{'All 9 neighbors':<30} {'(ring)':<10} {results['all_neighbors']['regret_gwh']:>15.2f}")
+    if not skip_combined:
+        print("-" * 70)
+        print(f"{'All 9 neighbors':<30} {'(ring)':<10} {results['all_neighbors']['regret_gwh']:>15.2f}")
 
-    # Create visualization
-    fig, ax = plt.subplots(figsize=(12, 8), subplot_kw={'projection': 'polar'})
+    # Create visualization (only if we have results to plot)
+    plotted_farms = [i for i in farm_indices if i in results]
+    if plotted_farms:
+        fig, ax = plt.subplots(figsize=(12, 8), subplot_kw={'projection': 'polar'})
 
-    farm_indices = [i for i in range(1, N_NEIGHBOR_FARMS + 1) if i in results]
-    directions_rad = [np.radians(results[i]['direction']) for i in farm_indices]
-    regrets = [results[i]['regret_gwh'] for i in farm_indices]
+        directions_rad = [np.radians(results[i]['direction']) for i in plotted_farms]
+        regrets = [results[i]['regret_gwh'] for i in plotted_farms]
 
-    # Plot bars
-    bars = ax.bar(directions_rad, regrets, width=0.3, alpha=0.7, color='steelblue', edgecolor='black')
+        # Plot bars
+        bars = ax.bar(directions_rad, regrets, width=0.3, alpha=0.7, color='steelblue', edgecolor='black')
 
-    # Add labels
-    for i, (d, r, idx) in enumerate(zip(directions_rad, regrets, farm_indices)):
-        ax.annotate(f'Farm {idx}\n{r:.1f} GWh',
-                   xy=(d, r),
-                   xytext=(d, r + max(regrets)*0.1),
-                   ha='center', va='bottom', fontsize=9)
+        # Add labels
+        max_regret = max(regrets) if regrets else 1.0
+        for i, (d, r, idx) in enumerate(zip(directions_rad, regrets, plotted_farms)):
+            ax.annotate(f'Farm {idx}\n{r:.1f} GWh',
+                       xy=(d, r),
+                       xytext=(d, r + max_regret*0.1),
+                       ha='center', va='bottom', fontsize=9)
 
-    ax.set_theta_zero_location('N')
-    ax.set_theta_direction(-1)
-    ax.set_title(f'DEA Single Neighbor Regret by Direction ({wake_model.upper()})\n(All 9 together: {all_regret:.2f} GWh)',
-                 fontsize=14, pad=20)
-    ax.set_ylabel('Regret (GWh)', labelpad=30)
+        ax.set_theta_zero_location('N')
+        ax.set_theta_direction(-1)
+        if all_regret is not None:
+            title = f'DEA Single Neighbor Regret by Direction ({wake_model.upper()})\n(All 9 together: {all_regret:.2f} GWh)'
+        else:
+            title = f'DEA Single Neighbor Regret by Direction ({wake_model.upper()})'
+        ax.set_title(title, fontsize=14, pad=20)
+        ax.set_ylabel('Regret (GWh)', labelpad=30)
 
-    plt.tight_layout()
-    fig.savefig(output_path / f'dea_single_neighbor_{wake_model}.png', dpi=150, bbox_inches='tight')
-    print(f"\nSaved plot to {output_path / f'dea_single_neighbor_{wake_model}.png'}")
-    plt.close(fig)
+        plt.tight_layout()
+        if len(farm_indices) == N_NEIGHBOR_FARMS:
+            plot_filename = f'dea_single_neighbor_{wake_model}.png'
+        else:
+            farm_suffix = '_'.join(str(f) for f in sorted(farm_indices))
+            plot_filename = f'dea_single_neighbor_{wake_model}_farm{farm_suffix}.png'
+        fig.savefig(output_path / plot_filename, dpi=150, bbox_inches='tight')
+        print(f"\nSaved plot to {output_path / plot_filename}")
+        plt.close(fig)
 
-    # Save results
-    with open(output_path / f'dea_single_neighbor_{wake_model}.json', 'w') as f:
+    # Save results (include farm indices in filename if running specific farms)
+    if len(farm_indices) == N_NEIGHBOR_FARMS:
+        results_filename = f'dea_single_neighbor_{wake_model}.json'
+    else:
+        farm_suffix = '_'.join(str(f) for f in sorted(farm_indices))
+        results_filename = f'dea_single_neighbor_{wake_model}_farm{farm_suffix}.json'
+    with open(output_path / results_filename, 'w') as f:
         json.dump(results, f, indent=2)
+    print(f"Saved results to {output_path / results_filename}")
 
     return results
 
@@ -547,8 +584,21 @@ if __name__ == "__main__":
     parser.add_argument("--max-iter", type=int, default=500,
                         help="Maximum optimization iterations per start")
     parser.add_argument("--output-dir", "-o", type=str, default="analysis/dea_single_neighbor")
+    parser.add_argument("--farm", type=int, default=None,
+                        help="Run only a specific farm index (1-9). If not set, runs all farms.")
+    parser.add_argument("--skip-combined", action="store_true",
+                        help="Skip the 'all neighbors combined' analysis")
+    parser.add_argument("--only-combined", action="store_true",
+                        help="Skip individual farms, only run 'all neighbors combined' analysis")
 
     args = parser.parse_args()
+
+    if args.only_combined:
+        farm_indices = []
+        skip_combined = False
+    else:
+        farm_indices = [args.farm] if args.farm else None
+        skip_combined = args.skip_combined
 
     run_single_neighbor_analysis(
         wake_model=args.wake_model,
@@ -556,4 +606,6 @@ if __name__ == "__main__":
         n_starts=args.n_starts,
         max_iter=args.max_iter,
         output_dir=args.output_dir,
+        farm_indices=farm_indices,
+        skip_combined=skip_combined,
     )
