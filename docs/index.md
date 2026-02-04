@@ -177,7 +177,8 @@ Detailed analysis for each wind rose configuration:
 
 ## Real-World Case Study
 
-- [Danish Energy Island (DEI)](dei-case-study.md) - Analysis of the 10-farm North Sea cluster with actual wind data
+- [Danish Energy Island (DEI)](dei-case-study.md) - Analysis with Bastankhah and OMAE wake models
+- [DEI: Nygaard 2022 Wake Model](dei-nygaard2022.md) - Analysis with PyWake literature defaults
 
 ## References
 

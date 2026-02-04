@@ -1,4 +1,4 @@
-"""Test DEA case with each individual neighboring wind farm separately.
+"""Test DEI case with each individual neighboring wind farm separately.
 
 This script tests whether having just ONE neighboring wind farm (instead of all 9)
 leads to design regret. If the symmetric "ring" geometry is what eliminates tradeoffs,
@@ -7,9 +7,9 @@ then individual neighbors from asymmetric directions should create regret.
 Uses actual gradient-based optimization to find liberal vs conservative optimal layouts.
 
 Usage:
-    pixi run python scripts/run_dea_single_neighbor.py
-    pixi run python scripts/run_dea_single_neighbor.py --wake-model=turbopark
-    pixi run python scripts/run_dea_single_neighbor.py --n-starts=5 --max-iter=500
+    pixi run python scripts/run_dei_single_neighbor.py
+    pixi run python scripts/run_dei_single_neighbor.py --wake-model=turbopark
+    pixi run python scripts/run_dei_single_neighbor.py --n-starts=5 --max-iter=500
 """
 
 import argparse
@@ -29,16 +29,17 @@ jax.config.update("jax_enable_x64", True)
 
 from pixwake import Curve, Turbine, WakeSimulation
 from pixwake.deficit import BastankhahGaussianDeficit, TurboGaussianDeficit
-from pixwake.turbulence import CrespoHernandez
+from pixwake.superposition import SquaredSum
+from pixwake.utils import ct2a_mom1d
 
 
 # =============================================================================
-# DEA Study Configuration
+# DEI Study Configuration
 # =============================================================================
 
-DEA_DIR = Path(__file__).parent.parent / "DEA_neighbors"
-WIND_DATA_FILE = DEA_DIR / "energy_island_10y_daily_av_wind.csv"
-LAYOUTS_FILE = DEA_DIR / "re_precomputed_layouts.h5"
+DEI_DIR = Path(__file__).parent.parent / "OMAE_neighbors"
+WIND_DATA_FILE = DEI_DIR / "energy_island_10y_daily_av_wind.csv"
+LAYOUTS_FILE = DEI_DIR / "re_precomputed_layouts.h5"
 
 TARGET_FARM_IDX = 0
 TARGET_N_TURBINES = 66
@@ -63,7 +64,7 @@ FARM_NAMES = {
 
 
 def load_wind_data():
-    """Load DEA wind time series data."""
+    """Load DEI wind time series data."""
     df = pd.read_csv(WIND_DATA_FILE, sep=';')
     wd = df['WD_150'].values
     ws = df['WS_150'].values
@@ -98,11 +99,33 @@ def load_target_boundary():
     return dk0w_tender_3
 
 
-def create_dea_turbine():
-    """Create turbine matching DEA specification."""
-    ws = jnp.array([0.0, 4.0, 10.0, 15.0, 25.0])
-    power = jnp.array([0.0, 0.0, 15000.0, 15000.0, 0.0])
-    ct = jnp.array([0.0, 0.8, 0.8, 0.4, 0.0])
+def create_dei_turbine():
+    """Create turbine matching DEI specification.
+
+    Uses EXACT power/CT curves from PyWake's GenericWindTurbine(diameter=240, hub_height=150, power_norm=15000).
+    This ensures pixwake and PyWake produce identical results.
+    """
+    # Exact curves extracted from PyWake GenericWindTurbine at 1 m/s resolution (high precision)
+    ws = jnp.array([0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+                    13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0, 21.0, 22.0, 23.0, 24.0, 25.0])
+
+    # Power in kW (extracted from PyWake GenericWindTurbine, high precision)
+    power = jnp.array([
+        0.0000000000, 0.0000000000, 2.3985813556, 209.2580932713, 689.1977407908, 1480.6084745032,
+        2661.2377234914, 4308.9290345041, 6501.0566168182, 9260.5162758057, 12081.4039288222, 13937.2966269349,
+        14705.0159806425, 14931.0392395129, 14985.2085175128, 14996.9062345265, 14999.3433209739, 14999.8550035258,
+        14999.9662091698, 14999.9916237998, 14999.9977839699, 14999.9993738862, 14999.9998112694, 14999.9999393881,
+        14999.9999792501, 14999.9999923911,
+    ])
+
+    # CT curve (extracted from PyWake GenericWindTurbine, high precision)
+    ct = jnp.array([
+        0.8888888889, 0.8888888889, 0.8888888889, 0.8003233124, 0.8000001158, 0.8000000002,
+        0.8000000000, 0.7999999845, 0.7999170517, 0.7930486829, 0.7353646478, 0.6099800647,
+        0.4763545657, 0.3698364821, 0.2915403905, 0.2340695174, 0.1910465178, 0.1581411392,
+        0.1324922850, 0.1121722012, 0.0958466811, 0.0825690747, 0.0716530730, 0.0625917527,
+        0.0550045472, 0.0486016164,
+    ])
 
     return Turbine(
         rotor_diameter=float(TARGET_ROTOR_DIAMETER),
@@ -130,7 +153,12 @@ def compute_neighbor_direction(target_boundary, x_neighbor, y_neighbor):
 
 
 def compute_binned_wind_rose(wd_ts, ws_ts, n_bins=24):
-    """Compute binned wind rose from time series data."""
+    """Compute binned wind rose from time series data.
+
+    NOTE: This is used for optimization only. For final AEP evaluation,
+    use compute_aep_full_timeseries() which correctly handles the non-linear
+    power curve by computing E[P(v)] instead of P(E[v]).
+    """
     bin_edges = np.linspace(0, 360, n_bins + 1)
     bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
 
@@ -154,16 +182,81 @@ def compute_binned_wind_rose(wd_ts, ws_ts, n_bins=24):
     return jnp.array(bin_centers), jnp.array(mean_speeds), jnp.array(weights)
 
 
+def create_full_timeseries_aep_evaluator(sim, wd_ts, ws_ts, ti_amb=None, batch_size=500):
+    """Create a function to evaluate AEP using full time series.
+
+    This correctly computes E[P(v)] by evaluating power at each time step,
+    avoiding the P(E[v]) error that occurs with binned wind roses.
+
+    Args:
+        sim: WakeSimulation instance
+        wd_ts: Wind direction time series (numpy array)
+        ws_ts: Wind speed time series (numpy array)
+        ti_amb: Ambient turbulence intensity (scalar or None)
+        batch_size: Number of time steps per batch (to manage memory)
+
+    Returns:
+        Function that computes AEP given turbine positions
+    """
+    n_samples = len(wd_ts)
+    n_batches = (n_samples + batch_size - 1) // batch_size
+
+    # Pre-convert to JAX arrays
+    wd_full = jnp.array(wd_ts)
+    ws_full = jnp.array(ws_ts)
+
+    def compute_aep(x_target, y_target, x_neighbor=None, y_neighbor=None):
+        """Compute AEP using full time series evaluation."""
+        if x_neighbor is not None:
+            x_all = jnp.concatenate([x_target, jnp.array(x_neighbor)])
+            y_all = jnp.concatenate([y_target, jnp.array(y_neighbor)])
+        else:
+            x_all = x_target
+            y_all = y_target
+
+        n_target = len(x_target)
+        total_power = 0.0
+
+        # Process in batches to avoid memory issues
+        for batch_idx in range(n_batches):
+            start_idx = batch_idx * batch_size
+            end_idx = min((batch_idx + 1) * batch_size, n_samples)
+
+            wd_batch = wd_full[start_idx:end_idx]
+            ws_batch = ws_full[start_idx:end_idx]
+
+            if ti_amb is not None:
+                ti_batch = jnp.full_like(ws_batch, ti_amb)
+                result = sim(x_all, y_all, ws_amb=ws_batch, wd_amb=wd_batch, ti_amb=ti_batch)
+            else:
+                result = sim(x_all, y_all, ws_amb=ws_batch, wd_amb=wd_batch)
+
+            power = result.power()  # shape: (n_conditions, n_turbines)
+            target_power = power[:, :n_target].sum(axis=1)  # sum over target turbines
+            total_power += float(target_power.sum())  # sum over time steps in batch
+
+        # Convert to AEP (GWh/year)
+        # Each sample represents one day (24 hours)
+        # total_power is in kW summed over all samples
+        # AEP = (total_power / n_samples) * 8760 hours/year / 1e6 kW->GWh
+        avg_power = total_power / n_samples  # kW
+        aep_gwh = avg_power * 8760 / 1e6
+
+        return aep_gwh
+
+    return compute_aep
+
+
 def run_single_neighbor_analysis(
     wake_model: str = "bastankhah",
     ti_amb: float = 0.06,
     n_starts: int = 5,
     max_iter: int = 500,
-    output_dir: str = "analysis/dea_single_neighbor",
+    output_dir: str = "analysis/dei_single_neighbor",
     farm_indices: list[int] | None = None,
     skip_combined: bool = False,
 ):
-    """Run DEA analysis with each individual neighbor using gradient-based optimization.
+    """Run DEI analysis with each individual neighbor using gradient-based optimization.
 
     Args:
         wake_model: Wake model to use ("bastankhah" or "turbopark")
@@ -182,7 +275,7 @@ def run_single_neighbor_analysis(
     output_path.mkdir(parents=True, exist_ok=True)
 
     print("=" * 70)
-    print(f"DEA SINGLE NEIGHBOR ANALYSIS ({wake_model.upper()}) - OPTIMIZED")
+    print(f"DEI SINGLE NEIGHBOR ANALYSIS ({wake_model.upper()}) - OPTIMIZED")
     print("=" * 70)
 
     # Load data
@@ -195,17 +288,36 @@ def run_single_neighbor_analysis(
     print(f"Dominant direction: {float(wd[jnp.argmax(weights)]):.0f}° ({float(jnp.max(weights)*100):.1f}% frequency)")
 
     target_boundary = load_target_boundary()
-    turbine = create_dea_turbine()
+    turbine = create_dei_turbine()
 
     # Create wake model
-    if wake_model == "turbopark":
-        deficit = TurboGaussianDeficit(A=0.02)
-        sim = WakeSimulation(turbine, deficit, turbulence=CrespoHernandez())
-        ti_array = jnp.full_like(ws, ti_amb)
-    else:
+    # Default is now TurboGaussian to match PyWake/OMAE pipeline
+    if wake_model == "bastankhah":
         deficit = BastankhahGaussianDeficit(k=0.04)
         sim = WakeSimulation(turbine, deficit)
         ti_array = None
+        ti_scalar = None
+    else:  # turbopark (default) - matches PyWake Nygaard_2022 literature defaults
+        deficit = TurboGaussianDeficit(
+            A=0.04,  # Nygaard_2022 default
+            ct2a=ct2a_mom1d,
+            ctlim=0.96,
+            use_effective_ws=False,  # Nygaard_2022 uses ambient WS
+            use_effective_ti=False,
+            superposition=SquaredSum(),  # Nygaard_2022 default
+        )
+        # Nygaard_2022 doesn't use turbulence model, but TI is still required
+        sim = WakeSimulation(turbine, deficit)
+        ti_array = jnp.full_like(ws, ti_amb)
+        ti_scalar = ti_amb
+
+    # Create full time series evaluator for accurate AEP calculation
+    # (The binned wind rose is still used for optimization speed)
+    print("Creating full time series AEP evaluator...")
+    compute_aep_full = create_full_timeseries_aep_evaluator(
+        sim, wd_ts, ws_ts, ti_amb=ti_scalar, batch_size=500
+    )
+    print(f"Full time series: {len(wd_ts)} samples (10 years daily data)")
 
     # Get boundary extent for layout generation
     x_min, x_max = float(target_boundary[0].min()), float(target_boundary[0].max())
@@ -362,25 +474,33 @@ def run_single_neighbor_analysis(
             x0, y0 = generate_layout(seed)
 
             # Liberal: optimize ignoring neighbor
-            x_lib, y_lib, aep_lib_absent = optimize_layout(x0, y0, None, None, max_iter)
-            aep_lib_present = float(compute_aep_binned(x_lib, y_lib, x_neighbor, y_neighbor))
+            x_lib, y_lib, _ = optimize_layout(x0, y0, None, None, max_iter)
+            # Re-evaluate with full time series for accurate AEP
+            aep_lib_absent = compute_aep_full(x_lib, y_lib, None, None)
+            aep_lib_present = compute_aep_full(x_lib, y_lib, x_neighbor, y_neighbor)
             liberal_layouts.append({
-                'x': x_lib, 'y': y_lib,
+                'x': np.array(x_lib), 'y': np.array(y_lib),
                 'aep_absent': float(aep_lib_absent),
-                'aep_present': aep_lib_present,
+                'aep_present': float(aep_lib_present),
+                'seed': seed,
+                'strategy': 'liberal',
             })
 
             # Conservative: optimize considering neighbor
-            x_con, y_con, aep_con_present = optimize_layout(x0, y0, x_neighbor, y_neighbor, max_iter)
-            aep_con_absent = float(compute_aep_binned(x_con, y_con, None, None))
+            x_con, y_con, _ = optimize_layout(x0, y0, x_neighbor, y_neighbor, max_iter)
+            # Re-evaluate with full time series for accurate AEP
+            aep_con_absent = compute_aep_full(x_con, y_con, None, None)
+            aep_con_present = compute_aep_full(x_con, y_con, x_neighbor, y_neighbor)
             conservative_layouts.append({
-                'x': x_con, 'y': y_con,
-                'aep_absent': aep_con_absent,
+                'x': np.array(x_con), 'y': np.array(y_con),
+                'aep_absent': float(aep_con_absent),
                 'aep_present': float(aep_con_present),
+                'seed': seed,
+                'strategy': 'conservative',
             })
 
             print(f"  Start {seed}: Liberal={aep_lib_absent:.1f}/{aep_lib_present:.1f}, "
-                  f"Conservative={aep_con_absent:.1f}/{aep_con_present:.1f} GWh")
+                  f"Conservative={aep_con_absent:.1f}/{aep_con_present:.1f} GWh", flush=True)
 
         elapsed = time.time() - start_time
 
@@ -433,6 +553,21 @@ def run_single_neighbor_analysis(
             "elapsed_seconds": elapsed,
         }
 
+        # Save layouts for this farm
+        layouts_file = output_path / f"layouts_farm{farm_idx}.h5"
+        with h5py.File(layouts_file, 'w') as hf:
+            for i, layout in enumerate(all_layouts):
+                grp = hf.create_group(f"layout_{i}")
+                grp.create_dataset('x', data=layout['x'])
+                grp.create_dataset('y', data=layout['y'])
+                grp.attrs['aep_absent'] = layout['aep_absent']
+                grp.attrs['aep_present'] = layout['aep_present']
+                grp.attrs['seed'] = layout['seed']
+                grp.attrs['strategy'] = layout['strategy']
+            hf.attrs['farm_idx'] = farm_idx
+            hf.attrs['n_layouts'] = len(all_layouts)
+        print(f"Saved {len(all_layouts)} layouts to {layouts_file}")
+
     # Also test all neighbors together for comparison
     if skip_combined:
         print("\n--- SKIPPING ALL 9 NEIGHBORS TOGETHER (--skip-combined) ---")
@@ -457,17 +592,33 @@ def run_single_neighbor_analysis(
             x0, y0 = generate_layout(seed)
 
             # Liberal
-            x_lib, y_lib, aep_lib_absent = optimize_layout(x0, y0, None, None, max_iter)
-            aep_lib_present = float(compute_aep_binned(x_lib, y_lib, x_all_neighbors, y_all_neighbors))
-            all_layouts.append({'aep_absent': float(aep_lib_absent), 'aep_present': aep_lib_present})
+            x_lib, y_lib, _ = optimize_layout(x0, y0, None, None, max_iter)
+            # Re-evaluate with full time series for accurate AEP
+            aep_lib_absent = compute_aep_full(x_lib, y_lib, None, None)
+            aep_lib_present = compute_aep_full(x_lib, y_lib, x_all_neighbors, y_all_neighbors)
+            all_layouts.append({
+                'x': np.array(x_lib), 'y': np.array(y_lib),
+                'aep_absent': float(aep_lib_absent),
+                'aep_present': float(aep_lib_present),
+                'seed': seed,
+                'strategy': 'liberal',
+            })
 
             # Conservative
-            x_con, y_con, aep_con_present = optimize_layout(x0, y0, x_all_neighbors, y_all_neighbors, max_iter)
-            aep_con_absent = float(compute_aep_binned(x_con, y_con, None, None))
-            all_layouts.append({'aep_absent': aep_con_absent, 'aep_present': float(aep_con_present)})
+            x_con, y_con, _ = optimize_layout(x0, y0, x_all_neighbors, y_all_neighbors, max_iter)
+            # Re-evaluate with full time series for accurate AEP
+            aep_con_absent = compute_aep_full(x_con, y_con, None, None)
+            aep_con_present = compute_aep_full(x_con, y_con, x_all_neighbors, y_all_neighbors)
+            all_layouts.append({
+                'x': np.array(x_con), 'y': np.array(y_con),
+                'aep_absent': float(aep_con_absent),
+                'aep_present': float(aep_con_present),
+                'seed': seed,
+                'strategy': 'conservative',
+            })
 
             print(f"  Start {seed}: Liberal={aep_lib_absent:.1f}/{aep_lib_present:.1f}, "
-                  f"Conservative={aep_con_absent:.1f}/{aep_con_present:.1f} GWh")
+                  f"Conservative={aep_con_absent:.1f}/{aep_con_present:.1f} GWh", flush=True)
 
         elapsed = time.time() - start_time
 
@@ -544,28 +695,29 @@ def run_single_neighbor_analysis(
         ax.set_theta_zero_location('N')
         ax.set_theta_direction(-1)
         if all_regret is not None:
-            title = f'DEA Single Neighbor Regret by Direction ({wake_model.upper()})\n(All 9 together: {all_regret:.2f} GWh)'
+            title = f'DEI Single Neighbor Regret by Direction ({wake_model.upper()})\n(All 9 together: {all_regret:.2f} GWh)'
         else:
-            title = f'DEA Single Neighbor Regret by Direction ({wake_model.upper()})'
+            title = f'DEI Single Neighbor Regret by Direction ({wake_model.upper()})'
         ax.set_title(title, fontsize=14, pad=20)
         ax.set_ylabel('Regret (GWh)', labelpad=30)
 
         plt.tight_layout()
         if len(farm_indices) == N_NEIGHBOR_FARMS:
-            plot_filename = f'dea_single_neighbor_{wake_model}.png'
+            plot_filename = f'dei_single_neighbor_{wake_model}.png'
         else:
             farm_suffix = '_'.join(str(f) for f in sorted(farm_indices))
-            plot_filename = f'dea_single_neighbor_{wake_model}_farm{farm_suffix}.png'
+            plot_filename = f'dei_single_neighbor_{wake_model}_farm{farm_suffix}.png'
         fig.savefig(output_path / plot_filename, dpi=150, bbox_inches='tight')
         print(f"\nSaved plot to {output_path / plot_filename}")
         plt.close(fig)
 
     # Save results (include farm indices in filename if running specific farms)
     if len(farm_indices) == N_NEIGHBOR_FARMS:
-        results_filename = f'dea_single_neighbor_{wake_model}.json'
+        results_filename = f'dei_single_neighbor_{wake_model}.json'
     else:
         farm_suffix = '_'.join(str(f) for f in sorted(farm_indices))
-        results_filename = f'dea_single_neighbor_{wake_model}_farm{farm_suffix}.json'
+        results_filename = f'dei_single_neighbor_{wake_model}_farm{farm_suffix}.json'
+
     with open(output_path / results_filename, 'w') as f:
         json.dump(results, f, indent=2)
     print(f"Saved results to {output_path / results_filename}")
@@ -574,8 +726,8 @@ def run_single_neighbor_analysis(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Test DEA with individual neighbors (optimized)")
-    parser.add_argument("--wake-model", type=str, default="bastankhah",
+    parser = argparse.ArgumentParser(description="Test DEI with individual neighbors (optimized)")
+    parser.add_argument("--wake-model", type=str, default="turbopark",
                         choices=["bastankhah", "turbopark"])
     parser.add_argument("--ti", type=float, default=0.06,
                         help="Ambient turbulence intensity (for turbopark)")
@@ -583,7 +735,7 @@ if __name__ == "__main__":
                         help="Number of optimization starts per strategy")
     parser.add_argument("--max-iter", type=int, default=500,
                         help="Maximum optimization iterations per start")
-    parser.add_argument("--output-dir", "-o", type=str, default="analysis/dea_single_neighbor")
+    parser.add_argument("--output-dir", "-o", type=str, default="analysis/dei_single_neighbor")
     parser.add_argument("--farm", type=int, default=None,
                         help="Run only a specific farm index (1-9). If not set, runs all farms.")
     parser.add_argument("--skip-combined", action="store_true",
