@@ -653,9 +653,30 @@ def run_single_neighbor_analysis(
             "name": "All 9 neighbors",
             "n_pareto": int(pareto_mask.sum()),
             "regret_gwh": float(all_regret),
+            "regret_pct": float(all_regret / aep_present[con_opt_idx] * 100) if len(pareto_indices) > 0 else 0.0,
+            "lib_opt_absent": float(aep_absent[lib_opt_idx]) if len(pareto_indices) > 0 else 0.0,
+            "lib_opt_present": float(aep_present[lib_opt_idx]) if len(pareto_indices) > 0 else 0.0,
+            "con_opt_absent": float(aep_absent[con_opt_idx]) if len(pareto_indices) > 0 else 0.0,
+            "con_opt_present": float(aep_present[con_opt_idx]) if len(pareto_indices) > 0 else 0.0,
             "total_turbines": len(x_all_neighbors),
             "elapsed_seconds": elapsed,
         }
+
+        # Save combined layouts for PyWake verification
+        layouts_file = output_path / "layouts_combined.h5"
+        with h5py.File(layouts_file, 'w') as hf:
+            for i, layout in enumerate(all_layouts):
+                grp = hf.create_group(f"layout_{i}")
+                grp.create_dataset('x', data=layout['x'])
+                grp.create_dataset('y', data=layout['y'])
+                grp.attrs['aep_absent'] = layout['aep_absent']
+                grp.attrs['aep_present'] = layout['aep_present']
+                grp.attrs['seed'] = layout['seed']
+                grp.attrs['strategy'] = layout['strategy']
+            hf.attrs['case'] = 'all_neighbors'
+            hf.attrs['n_layouts'] = len(all_layouts)
+            hf.attrs['n_neighbor_turbines'] = len(x_all_neighbors)
+        print(f"Saved {len(all_layouts)} layouts to {layouts_file}")
 
     # Summary
     print("\n" + "=" * 70)
