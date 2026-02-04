@@ -250,6 +250,7 @@ def create_full_timeseries_aep_evaluator(sim, wd_ts, ws_ts, ti_amb=None, batch_s
 def run_single_neighbor_analysis(
     wake_model: str = "bastankhah",
     ti_amb: float = 0.06,
+    A: float = 0.04,
     n_starts: int = 5,
     max_iter: int = 500,
     output_dir: str = "analysis/dei_single_neighbor",
@@ -261,6 +262,7 @@ def run_single_neighbor_analysis(
     Args:
         wake_model: Wake model to use ("bastankhah" or "turbopark")
         ti_amb: Ambient turbulence intensity (for turbopark)
+        A: Wake expansion coefficient (for turbopark, default 0.04)
         n_starts: Number of optimization starts per strategy
         max_iter: Maximum optimization iterations per start
         output_dir: Output directory for results
@@ -275,7 +277,7 @@ def run_single_neighbor_analysis(
     output_path.mkdir(parents=True, exist_ok=True)
 
     print("=" * 70)
-    print(f"DEI SINGLE NEIGHBOR ANALYSIS ({wake_model.upper()}) - OPTIMIZED")
+    print(f"DEI SINGLE NEIGHBOR ANALYSIS ({wake_model.upper()}, A={A}) - OPTIMIZED")
     print("=" * 70)
 
     # Load data
@@ -299,7 +301,7 @@ def run_single_neighbor_analysis(
         ti_scalar = None
     else:  # turbopark (default) - matches PyWake Nygaard_2022 literature defaults
         deficit = TurboGaussianDeficit(
-            A=0.04,  # Nygaard_2022 default
+            A=A,  # Wake expansion coefficient (default 0.04 for Nygaard_2022)
             ct2a=ct2a_mom1d,
             ctlim=0.96,
             use_effective_ws=False,  # Nygaard_2022 uses ambient WS
@@ -739,6 +741,15 @@ def run_single_neighbor_analysis(
         farm_suffix = '_'.join(str(f) for f in sorted(farm_indices))
         results_filename = f'dei_single_neighbor_{wake_model}_farm{farm_suffix}.json'
 
+    # Add configuration metadata
+    results["_config"] = {
+        "wake_model": wake_model,
+        "A": A,
+        "ti_amb": ti_amb,
+        "n_starts": n_starts,
+        "max_iter": max_iter,
+    }
+
     with open(output_path / results_filename, 'w') as f:
         json.dump(results, f, indent=2)
     print(f"Saved results to {output_path / results_filename}")
@@ -752,6 +763,8 @@ if __name__ == "__main__":
                         choices=["bastankhah", "turbopark"])
     parser.add_argument("--ti", type=float, default=0.06,
                         help="Ambient turbulence intensity (for turbopark)")
+    parser.add_argument("--A", type=float, default=0.04,
+                        help="Wake expansion coefficient A (for turbopark, default 0.04)")
     parser.add_argument("--n-starts", type=int, default=5,
                         help="Number of optimization starts per strategy")
     parser.add_argument("--max-iter", type=int, default=500,
@@ -776,6 +789,7 @@ if __name__ == "__main__":
     run_single_neighbor_analysis(
         wake_model=args.wake_model,
         ti_amb=args.ti,
+        A=args.A,
         n_starts=args.n_starts,
         max_iter=args.max_iter,
         output_dir=args.output_dir,
