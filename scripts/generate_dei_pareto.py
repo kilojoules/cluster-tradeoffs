@@ -17,17 +17,17 @@ from pixwake import Curve, Turbine, WakeSimulation
 from pixwake.deficit import BastankhahGaussianDeficit
 
 # Paths
-DEA_DIR = Path(__file__).parent.parent / "DEA_neighbors"
+DEI_DIR = Path(__file__).parent.parent / "OMAE_neighbors"
 OUTPUT_DIR = Path(__file__).parent.parent / "docs/figures"
-LAYOUTS_FILE = DEA_DIR / "re_precomputed_layouts.h5"
-WIND_DATA_FILE = DEA_DIR / "energy_island_10y_daily_av_wind.csv"
+LAYOUTS_FILE = DEI_DIR / "re_precomputed_layouts.h5"
+WIND_DATA_FILE = DEI_DIR / "energy_island_10y_daily_av_wind.csv"
 
 # Configuration
 TARGET_N_TURBINES = 66
 TARGET_ROTOR_DIAMETER = 240
 TARGET_HUB_HEIGHT = 150
-N_STARTS = 5
-MAX_ITER = 500
+N_STARTS = 50
+MAX_ITER = 2000
 
 
 def load_wind_data():
@@ -72,9 +72,26 @@ def load_neighbor_layout(farm_idx):
 
 
 def create_turbine():
-    ws = jnp.array([0.0, 4.0, 10.0, 15.0, 25.0])
-    power = jnp.array([0.0, 0.0, 15000.0, 15000.0, 0.0])
-    ct = jnp.array([0.0, 0.8, 0.8, 0.4, 0.0])
+    """Create turbine matching DEI specification.
+
+    Uses EXACT power/CT curves from PyWake's GenericWindTurbine(diameter=240, hub_height=150, power_norm=15000).
+    """
+    ws = jnp.array([0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+                    13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0, 21.0, 22.0, 23.0, 24.0, 25.0])
+    power = jnp.array([
+        0.0000000000, 0.0000000000, 2.3985813556, 209.2580932713, 689.1977407908, 1480.6084745032,
+        2661.2377234914, 4308.9290345041, 6501.0566168182, 9260.5162758057, 12081.4039288222, 13937.2966269349,
+        14705.0159806425, 14931.0392395129, 14985.2085175128, 14996.9062345265, 14999.3433209739, 14999.8550035258,
+        14999.9662091698, 14999.9916237998, 14999.9977839699, 14999.9993738862, 14999.9998112694, 14999.9999393881,
+        14999.9999792501, 14999.9999923911,
+    ])
+    ct = jnp.array([
+        0.8888888889, 0.8888888889, 0.8888888889, 0.8003233124, 0.8000001158, 0.8000000002,
+        0.8000000000, 0.7999999845, 0.7999170517, 0.7930486829, 0.7353646478, 0.6099800647,
+        0.4763545657, 0.3698364821, 0.2915403905, 0.2340695174, 0.1910465178, 0.1581411392,
+        0.1324922850, 0.1121722012, 0.0958466811, 0.0825690747, 0.0716530730, 0.0625917527,
+        0.0550045472, 0.0486016164,
+    ])
     return Turbine(
         rotor_diameter=float(TARGET_ROTOR_DIAMETER),
         hub_height=float(TARGET_HUB_HEIGHT),
@@ -261,7 +278,7 @@ def main():
 
     ax.set_xlabel('AEP without Farm 8 (GWh/year)', fontsize=12)
     ax.set_ylabel('AEP with Farm 8 (GWh/year)', fontsize=12)
-    ax.set_title('Pareto Front: Farm 8 (South, 163°)\nPooled Multi-Start Optimization', fontsize=13, fontweight='bold')
+    ax.set_title(f'Pareto Front: Farm 8 (South, 163°)\n{pareto_mask.sum()} Pareto points from {N_STARTS*2} optimizations ({N_STARTS} starts × 2 strategies)', fontsize=13, fontweight='bold')
     ax.legend(loc='upper left', fontsize=10)
     ax.grid(True, alpha=0.3)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
