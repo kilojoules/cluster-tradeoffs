@@ -21,6 +21,7 @@ nav:
   - Methodology: methodology.md
   - Results: results.md
   - DEI Case Study: dei-case-study.md
+  - DEI Nygaard 2022: dei-nygaard2022.md
   - Replication: replication.md
 
 markdown_extensions:
