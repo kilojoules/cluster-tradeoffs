@@ -56,7 +56,7 @@ Each layout is then evaluated under both scenarios (with and without the neighbo
 **Observations:**
 - **Farms 1, 2, 4-7, 9**: All 100 optimization results collapse to a single Pareto point—liberal and conservative strategies find the same optimum. No design tradeoff exists.
 - **Farm 3 (NW, 335°)**: Shows 2 Pareto points with negligible spread (0.2 GWh regret).
-- **Farm 8 (S, 163°)**: Clear Pareto frontier with 7 non-dominated points spanning 20.4 GWh of regret. This is the only neighbor that creates a meaningful design tradeoff.
+- **Farm 8 (S, 163°)**: Clear Pareto frontier with 6 non-dominated points spanning 10.2 GWh of regret. This is the only neighbor that creates a meaningful design tradeoff.
 
 ### Farm 8 Detail
 
