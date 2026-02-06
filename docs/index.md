@@ -180,6 +180,11 @@ Detailed analysis for each wind rose configuration:
 - [Danish Energy Island (DEI)](dei-case-study.md) - Analysis with Bastankhah and OMAE wake models
 - [DEI: Nygaard 2022 Wake Model](dei-nygaard2022.md) - Analysis with PyWake literature defaults
 
+### Wake Model Sensitivity (A Parameter Sweep)
+
+- [DEI: A=0.02 (Narrow Wakes)](dei-A0.02.md) - Higher regret with concentrated wake effects
+- [DEI: A=0.10 (Wider Wakes)](dei-A0.10.md) - Lower regret with dissipating wakes
+
 ## References
 
 - Wake model: Bastankhah & Porté-Agel (2014)
