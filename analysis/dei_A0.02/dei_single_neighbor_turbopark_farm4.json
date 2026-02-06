@@ -1,0 +1,23 @@
+{
+  "4": {
+    "name": "dk0Y_tender_4 (N)",
+    "direction": 348.6619488771817,
+    "distance_km": 55.16197420791099,
+    "n_turbines": 66,
+    "n_pareto": 1,
+    "regret_gwh": 0.0,
+    "regret_pct": 0.0,
+    "lib_opt_absent": 5468.958252220093,
+    "lib_opt_present": 5446.920346367368,
+    "con_opt_absent": 5468.958252220093,
+    "con_opt_present": 5446.920346367368,
+    "elapsed_seconds": 4641.450707197189
+  },
+  "_config": {
+    "wake_model": "turbopark",
+    "A": 0.02,
+    "ti_amb": 0.06,
+    "n_starts": 50,
+    "max_iter": 2000
+  }
+}

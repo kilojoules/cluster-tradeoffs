@@ -1,0 +1,23 @@
+{
+  "5": {
+    "name": "dk0x_tender_2 (NE)",
+    "direction": 18.50627812150958,
+    "distance_km": 37.20780830543888,
+    "n_turbines": 66,
+    "n_pareto": 1,
+    "regret_gwh": 0.0,
+    "regret_pct": 0.0,
+    "lib_opt_absent": 5731.227961675336,
+    "lib_opt_present": 5725.666817278949,
+    "con_opt_absent": 5731.227961675336,
+    "con_opt_present": 5725.666817278949,
+    "elapsed_seconds": 5953.70330119133
+  },
+  "_config": {
+    "wake_model": "turbopark",
+    "A": 0.1,
+    "ti_amb": 0.06,
+    "n_starts": 50,
+    "max_iter": 2000
+  }
+}
