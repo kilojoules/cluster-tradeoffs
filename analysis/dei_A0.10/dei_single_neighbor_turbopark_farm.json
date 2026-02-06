@@ -1,0 +1,21 @@
+{
+  "all_neighbors": {
+    "name": "All 9 neighbors",
+    "n_pareto": 4,
+    "regret_gwh": 9.702444588010621,
+    "regret_pct": 0.17503187174402726,
+    "lib_opt_absent": 5731.227961675336,
+    "lib_opt_present": 5533.542046449494,
+    "con_opt_absent": 5723.217297782645,
+    "con_opt_present": 5543.244491037504,
+    "total_turbines": 594,
+    "elapsed_seconds": 52819.01622390747
+  },
+  "_config": {
+    "wake_model": "turbopark",
+    "A": 0.1,
+    "ti_amb": 0.06,
+    "n_starts": 50,
+    "max_iter": 2000
+  }
+}

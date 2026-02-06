@@ -1,0 +1,23 @@
+{
+  "1": {
+    "name": "dk1d_tender_9 (SW)",
+    "direction": 213.65026418829325,
+    "distance_km": 38.876410424529084,
+    "n_turbines": 66,
+    "n_pareto": 2,
+    "regret_gwh": 18.191697519845548,
+    "regret_pct": 0.3396621271951445,
+    "lib_opt_absent": 5468.958252220093,
+    "lib_opt_present": 5337.629886142897,
+    "con_opt_absent": 5468.9470486285245,
+    "con_opt_present": 5355.821583662742,
+    "elapsed_seconds": 26194.79908800125
+  },
+  "_config": {
+    "wake_model": "turbopark",
+    "A": 0.02,
+    "ti_amb": 0.06,
+    "n_starts": 50,
+    "max_iter": 2000
+  }
+}

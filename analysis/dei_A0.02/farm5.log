@@ -1,0 +1,88 @@
+======================================================================
+DEI SINGLE NEIGHBOR ANALYSIS (TURBOPARK, A=0.02) - OPTIMIZED
+======================================================================
+
+Loading data...
+Binned wind rose: 24 directions
+Dominant direction: 278° (7.7% frequency)
+Creating full time series AEP evaluator...
+Full time series: 3653 samples (10 years daily data)
+Compiling liberal optimizer...
+/Users/julianquick/cluster-tradeoffs/.pixi/envs/default/lib/python3.13/site-packages/jax/_src/numpy/array_methods.py:125: UserWarning: Explicitly requested dtype float64 requested in astype is not available, and will be truncated to dtype float32. To enable more dtypes, set the jax_enable_x64 configuration option or the JAX_ENABLE_X64 shell environment variable. See https://github.com/jax-ml/jax#current-gotchas for more.
+  return lax_numpy.astype(self, dtype, copy=copy, device=device)
+
+======================================================================
+Testing each neighbor farm individually (n_starts=50, max_iter=2000)
+Farms to run: [5]
+======================================================================
+
+--- Farm 5: dk0x_tender_2 (NE) ---
+Direction: 19°, Distance: 37.2 km, Turbines: 66
+  Start 0: Liberal=5453.1/5424.5, Conservative=5451.6/5423.0 GWh
+  Start 1: Liberal=5423.8/5401.6, Conservative=5420.8/5399.0 GWh
+  Start 2: Liberal=5468.9/5444.2, Conservative=5462.9/5438.3 GWh
+  Start 3: Liberal=5430.9/5407.5, Conservative=5426.3/5402.3 GWh
+  Start 4: Liberal=5419.9/5396.4, Conservative=5421.2/5397.8 GWh
+  Start 5: Liberal=5445.9/5420.7, Conservative=5444.3/5419.0 GWh
+  Start 6: Liberal=5434.4/5407.1, Conservative=5439.5/5412.5 GWh
+  Start 7: Liberal=5425.5/5402.1, Conservative=5424.7/5401.3 GWh
+  Start 8: Liberal=5419.0/5396.5, Conservative=5420.1/5397.8 GWh
+  Start 9: Liberal=5413.6/5390.1, Conservative=5417.6/5393.9 GWh
+  Start 10: Liberal=5422.9/5400.6, Conservative=5421.8/5399.7 GWh
+  Start 11: Liberal=5469.0/5447.4, Conservative=5469.4/5447.8 GWh
+  Start 12: Liberal=5446.1/5420.6, Conservative=5447.1/5421.8 GWh
+  Start 13: Liberal=5400.0/5375.5, Conservative=5393.9/5369.8 GWh
+  Start 14: Liberal=5448.9/5427.5, Conservative=5446.3/5425.0 GWh
+  Start 15: Liberal=5417.2/5393.4, Conservative=5418.7/5395.5 GWh
+  Start 16: Liberal=5434.0/5410.0, Conservative=5429.0/5405.1 GWh
+  Start 17: Liberal=5419.5/5396.6, Conservative=5421.3/5398.4 GWh
+  Start 18: Liberal=5431.0/5407.9, Conservative=5429.9/5406.5 GWh
+  Start 19: Liberal=5425.1/5401.2, Conservative=5421.8/5398.3 GWh
+  Start 20: Liberal=5404.6/5382.6, Conservative=5409.0/5386.7 GWh
+  Start 21: Liberal=5439.5/5414.4, Conservative=5439.7/5415.1 GWh
+  Start 22: Liberal=5431.4/5408.0, Conservative=5433.0/5409.5 GWh
+  Start 23: Liberal=5442.1/5418.3, Conservative=5443.9/5420.1 GWh
+  Start 24: Liberal=5428.3/5406.0, Conservative=5433.6/5411.0 GWh
+  Start 25: Liberal=5423.9/5399.1, Conservative=5433.5/5408.5 GWh
+  Start 26: Liberal=5413.7/5391.2, Conservative=5413.3/5390.7 GWh
+  Start 27: Liberal=5433.2/5407.5, Conservative=5431.5/5406.1 GWh
+  Start 28: Liberal=5447.9/5424.1, Conservative=5443.8/5419.6 GWh
+  Start 29: Liberal=5456.3/5432.5, Conservative=5457.8/5434.3 GWh
+  Start 30: Liberal=5404.7/5379.4, Conservative=5412.1/5386.5 GWh
+  Start 31: Liberal=5448.6/5425.0, Conservative=5451.9/5428.4 GWh
+  Start 32: Liberal=5438.2/5415.1, Conservative=5433.2/5410.8 GWh
+  Start 33: Liberal=5433.1/5409.7, Conservative=5424.4/5401.6 GWh
+  Start 34: Liberal=5441.3/5414.5, Conservative=5441.6/5414.8 GWh
+  Start 35: Liberal=5413.2/5389.7, Conservative=5411.8/5388.5 GWh
+  Start 36: Liberal=5415.2/5391.6, Conservative=5407.3/5383.9 GWh
+  Start 37: Liberal=5445.1/5421.4, Conservative=5445.2/5421.4 GWh
+  Start 38: Liberal=5415.8/5391.9, Conservative=5419.7/5396.2 GWh
+  Start 39: Liberal=5431.3/5406.3, Conservative=5427.0/5402.3 GWh
+  Start 40: Liberal=5432.5/5410.0, Conservative=5431.9/5409.4 GWh
+  Start 41: Liberal=5425.1/5400.4, Conservative=5422.5/5397.5 GWh
+  Start 42: Liberal=5420.6/5399.6, Conservative=5418.5/5397.0 GWh
+  Start 43: Liberal=5377.8/5349.2, Conservative=5371.7/5342.9 GWh
+  Start 44: Liberal=5456.3/5432.7, Conservative=5468.5/5444.6 GWh
+  Start 45: Liberal=5402.3/5380.9, Conservative=5406.9/5385.2 GWh
+  Start 46: Liberal=5364.4/5344.3, Conservative=5365.4/5345.5 GWh
+  Start 47: Liberal=5450.6/5425.1, Conservative=5449.5/5424.6 GWh
+  Start 48: Liberal=5461.8/5438.9, Conservative=5461.9/5439.1 GWh
+  Start 49: Liberal=5452.4/5429.2, Conservative=5452.3/5429.2 GWh
+Pareto points: 1
+Liberal-optimal: 5469.4 / 5447.8 GWh
+Conservative-optimal: 5469.4 / 5447.8 GWh
+REGRET: 0.00 GWh (0.00%)
+Time: 4739.6s
+Saved 100 layouts to analysis/dei_A0.02/layouts_farm5.h5
+
+--- SKIPPING ALL 9 NEIGHBORS TOGETHER (--skip-combined) ---
+
+======================================================================
+SUMMARY
+======================================================================
+Farm                            Direction    Regret (GWh)
+----------------------------------------------------------------------
+dk0x_tender_2 (NE)                     19°            0.00
+
+Saved plot to analysis/dei_A0.02/dei_single_neighbor_turbopark_farm5.png
+Saved results to analysis/dei_A0.02/dei_single_neighbor_turbopark_farm5.json
