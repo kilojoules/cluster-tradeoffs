@@ -80,27 +80,29 @@ Narrower wakes (A=0.02) produce higher regret because wake effects are more conc
 
 ## PyWake Verification
 
-To confirm these results are not artifacts of the pixwake implementation, we verified the Pareto-optimal layouts using PyWake with identical wake model configuration.
+To confirm these results are not artifacts of the pixwake implementation, we evaluated the pixwake-optimized layouts using PyWake with identical wake model configuration (TurboGaussianDeficit, A=0.02, SquaredSum superposition, no turbulence model).
 
 ### Farm 8 Verification
 
+Evaluating all 100 pixwake layouts in PyWake:
+
 | Metric | PyWake | pixwake | Difference |
 |--------|--------|---------|------------|
-| Pareto points | 4 | 3 | +1 |
 | Liberal-opt AEP (alone) | 5455.7 GWh | 5469.0 GWh | -0.24% |
 | Liberal-opt AEP (w/neighbor) | 5276.9 GWh | 5294.2 GWh | -0.33% |
 | Conservative-opt AEP (alone) | 5439.0 GWh | 5453.1 GWh | -0.26% |
 | Conservative-opt AEP (w/neighbor) | 5306.3 GWh | 5322.7 GWh | -0.31% |
-| **Regret** | **29.49 GWh (0.56%)** | **28.51 GWh (0.54%)** | +3.4% |
+| **Regret** | **29.49 GWh** | **28.51 GWh** | +1.0 GWh |
 
 ### Combined Case Verification
 
+Evaluating the 5 pixwake Pareto-optimal layouts in PyWake:
+
 | Metric | PyWake | pixwake | Difference |
 |--------|--------|---------|------------|
-| Pareto points | 5 | 5 | 0 |
-| **Regret** | **9.07 GWh** | **11.52 GWh** | -2.45 GWh |
+| **Regret** | **9.07 GWh** | **11.52 GWh** | -2.5 GWh |
 
-**Conclusion:** Both implementations confirm significant design regret exists. The AEP values differ by ~0.3% between pixwake and PyWake, which is expected due to minor implementation differences. The Pareto tradeoffs are real and reproducible.
+**Conclusion:** PyWake confirms the design regret found by pixwake. AEP values match within ~0.3%, and both implementations find ~10-30 GWh of regret depending on the case. The tradeoffs are real and not artifacts of the pixwake implementation.
 
 ### Verification Script
 
