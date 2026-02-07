@@ -13,7 +13,7 @@ def load_results():
     """Load all farm results."""
     results = {}
     for farm_idx in range(1, 10):
-        json_file = RESULTS_DIR / f"dea_single_neighbor_bastankhah_farm{farm_idx}.json"
+        json_file = RESULTS_DIR / f"dei_single_neighbor_bastankhah_farm{farm_idx}.json"
         if json_file.exists():
             with open(json_file) as f:
                 data = json.load(f)

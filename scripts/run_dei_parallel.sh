@@ -23,7 +23,7 @@ run_batch() {
     pids=()
     for farm in "${farms[@]}"; do
         echo "Launching farm $farm..."
-        pixi run python scripts/run_dea_single_neighbor.py \
+        pixi run python scripts/run_dei_single_neighbor.py \
             --n-starts=$N_STARTS \
             --max-iter=$MAX_ITER \
             --farm=$farm \
@@ -60,5 +60,5 @@ echo "Results saved to: $OUTPUT_DIR"
 echo ""
 echo "NOTE: 'All neighbors combined' analysis still needs to be run separately."
 echo "This will take ~3.4 hours. Run with:"
-echo "  pixi run python scripts/run_dea_single_neighbor.py --n-starts=50 --max-iter=2000"
+echo "  pixi run python scripts/run_dei_single_neighbor.py --n-starts=50 --max-iter=2000"
 echo "=========================================="

@@ -20,7 +20,7 @@ This document specifies the analysis protocol for the Danish Energy Island (DEI)
 
 ### Optimization
 
-- **Method**: Gradient-based (Adam) with multi-start
+- **Method**: Gradient-based SGD with multi-start
 - **Starts**: 50 random initial layouts per strategy
 - **Iterations**: 2000 per start
 - **Strategies**:
@@ -65,7 +65,7 @@ Saved layouts enable verification by:
 
 ## Wake Model Configurations
 
-### 1. Nygaard_2022 (PyWake Literature Default)
+This should be our default model. The plan is to sweep the A parameter in 0.02 increments from 0.02 to 0.20. So the multistart optiizations and pareto/regret analysis should all be performed and stored as a function of A.
 
 | Parameter | Value |
 |-----------|-------|
@@ -79,28 +79,6 @@ Saved layouts enable verification by:
 | Turbulence | None |
 | Ambient TI | 0.06 |
 
-### 2. Bastankhah Gaussian
-
-| Parameter | Value |
-|-----------|-------|
-| Model | BastankhahGaussianDeficit |
-| k | 0.04 |
-| superposition | SquaredSum |
-| Turbulence | None |
-
-### 3. OMAE TurboPark (if needed for comparison)
-
-| Parameter | Value |
-|-----------|-------|
-| Model | TurboGaussianDeficit |
-| A | 0.02 |
-| ct2a | ct2a_mom1d |
-| ctlim | 0.96 |
-| superposition | LinearSum |
-| use_effective_ws | True |
-| use_effective_ti | True |
-| Turbulence | CrespoHernandez |
-| Ambient TI | 0.06 |
 
 ## Turbine Specification
 
@@ -123,10 +101,12 @@ For each wake model:
 - `analysis/dei_{model}/dei_pareto_combined.png` - Combined Pareto plot
 - `analysis/dei_{model}/dei_polar_summary.png` - Regret by direction
 
-## Checklist
+## parrelelization
+parrelelize on the optimization case level. sudo code:
 
-- [ ] Nygaard_2022: All 9 farms + combined
-- [ ] Bastankhah: All 9 farms + combined
-- [ ] OMAE TurboPark: All 9 farms + combined (optional)
-- [ ] PyWake verification for each model
-- [ ] Documentation updated with results
+for all A values:
+    50 "liberal" optimizations
+    for each farm
+       run "conservative" case assuming only that farm is there (3 parrelel runs at a time)
+    run all clusters case. This is memory intensive so should be run by itself.
+    compute regret metrics, make a docs page showing computed pareto sets etc

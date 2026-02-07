@@ -11,11 +11,11 @@ from matplotlib.patches import Polygon
 import h5py
 
 # Paths
-DEA_DIR = Path(__file__).parent.parent / "DEA_neighbors"
-RESULTS_FILE = Path(__file__).parent.parent / "analysis/dea_single_neighbor/dea_single_neighbor_bastankhah.json"
+DEI_DIR = Path(__file__).parent.parent / "OMAE_neighbors"
+RESULTS_FILE = Path(__file__).parent.parent / "analysis/dei_single_neighbor/dei_single_neighbor_bastankhah.json"
 OUTPUT_DIR = Path(__file__).parent.parent / "docs/figures"
-LAYOUTS_FILE = DEA_DIR / "re_precomputed_layouts.h5"
-WIND_DATA_FILE = DEA_DIR / "energy_island_10y_daily_av_wind.csv"
+LAYOUTS_FILE = DEI_DIR / "re_precomputed_layouts.h5"
+WIND_DATA_FILE = DEI_DIR / "energy_island_10y_daily_av_wind.csv"
 
 # Farm boundaries (UTM coordinates)
 FARM_BOUNDARIES = {

@@ -229,7 +229,8 @@ def plot_wind_rose(
     return ax
 
 
-from pixwake.deficit import BastankhahGaussianDeficit
+from pixwake.deficit import BastankhahGaussianDeficit, TurboGaussianDeficit
+from pixwake.turbulence import CrespoHernandez
 from pixwake.optim.adversarial import (
     PooledBlobDiscovery,
     PooledBlobDiscoverySettings,
@@ -269,6 +270,7 @@ def run_single_pooled_discovery(
     weights: jnp.ndarray,
     blob_seed: int,
     settings: PooledBlobDiscoverySettings,
+    ti_amb: float | None = None,
 ) -> dict:
     """Run pooled multi-start discovery for a single blob configuration."""
     print(f"\n{'='*60}", flush=True)
@@ -285,6 +287,7 @@ def run_single_pooled_discovery(
         ws_amb=ws,
         wd_amb=wd,
         weights=weights,
+        ti_amb=ti_amb,
     )
 
     result = discoverer.discover(
@@ -321,6 +324,8 @@ def run_multistart_pooled_discovery(
     n_starts_per_strategy: int = 10,
     output_dir: str | None = None,
     wind_rose_config: WindRoseConfig | None = None,
+    wake_model: str = "bastankhah",
+    ti_amb: float = 0.06,
 ):
     """Run pooled multi-start discovery across multiple blob configurations.
 
@@ -329,6 +334,8 @@ def run_multistart_pooled_discovery(
         n_starts_per_strategy: Number of optimization starts per strategy (liberal/conservative).
         output_dir: Output directory path. If None, auto-generated based on wind rose type.
         wind_rose_config: Wind rose configuration. If None, uses single direction (270°).
+        wake_model: Wake model to use: "bastankhah" or "turbopark".
+        ti_amb: Ambient turbulence intensity (only used with turbopark model).
     """
     # Default wind rose: single direction (baseline)
     if wind_rose_config is None:
@@ -347,8 +354,14 @@ def run_multistart_pooled_discovery(
 
     # Create turbine and simulation
     turbine = create_turbine(D)
-    deficit = BastankhahGaussianDeficit(k=0.04)
-    sim = WakeSimulation(turbine, deficit)
+    if wake_model == "turbopark":
+        deficit = TurboGaussianDeficit(A=0.02)
+        sim = WakeSimulation(turbine, deficit, turbulence=CrespoHernandez())
+        ti_amb_array = ti_amb  # Will be passed to discoverer
+    else:
+        deficit = BastankhahGaussianDeficit(k=0.04)
+        sim = WakeSimulation(turbine, deficit)
+        ti_amb_array = None  # Not needed for Bastankhah
 
     # Target farm boundary
     target_boundary = jnp.array([
@@ -442,6 +455,7 @@ def run_multistart_pooled_discovery(
                 weights=weights,
                 blob_seed=blob_seed,
                 settings=settings,
+                ti_amb=ti_amb_array,
             )
             results.append(result)
 
@@ -899,6 +913,8 @@ def run_wind_rose_comparison(
     n_blobs: int = 5,
     n_starts_per_strategy: int = 5,
     output_base_dir: str = "analysis/wind_rose_comparison",
+    wake_model: str = "bastankhah",
+    ti_amb: float = 0.06,
 ) -> dict[str, list[dict]]:
     """Run discovery across multiple wind rose types to characterize effects.
 
@@ -910,6 +926,8 @@ def run_wind_rose_comparison(
         n_blobs: Number of blob configurations per wind rose type.
         n_starts_per_strategy: Optimization starts per strategy.
         output_base_dir: Base directory for all outputs.
+        wake_model: Wake model to use: "bastankhah" or "turbopark".
+        ti_amb: Ambient turbulence intensity (only used with turbopark model).
 
     Returns:
         Dictionary mapping wind rose type names to their results.
@@ -941,6 +959,8 @@ def run_wind_rose_comparison(
             n_starts_per_strategy=n_starts_per_strategy,
             output_dir=str(output_dir),
             wind_rose_config=config,
+            wake_model=wake_model,
+            ti_amb=ti_amb,
         )
         all_results[config_name] = results
 
@@ -1083,6 +1103,18 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Output directory (default: auto-generated based on wind rose type).",
     )
+    parser.add_argument(
+        "--wake-model", "-m",
+        choices=["bastankhah", "turbopark"],
+        default="bastankhah",
+        help="Wake model to use (default: bastankhah). Use 'turbopark' for TurbOPark model.",
+    )
+    parser.add_argument(
+        "--ti",
+        type=float,
+        default=0.06,
+        help="Ambient turbulence intensity (default: 0.06). Only used with turbopark model.",
+    )
 
     return parser.parse_args()
 
@@ -1096,6 +1128,8 @@ if __name__ == "__main__":
             n_blobs=args.n_blobs,
             n_starts_per_strategy=args.n_starts,
             output_base_dir=args.output_dir or "analysis/wind_rose_comparison",
+            wake_model=args.wake_model,
+            ti_amb=args.ti,
         )
     else:
         # Run with single wind rose configuration
@@ -1112,4 +1146,6 @@ if __name__ == "__main__":
             n_starts_per_strategy=args.n_starts,
             output_dir=args.output_dir,
             wind_rose_config=config,
+            wake_model=args.wake_model,
+            ti_amb=args.ti,
         )
