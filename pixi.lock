@@ -368,8 +368,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/eb/95/7118e935b0b0bd3f94dfec2d852fd4e4f4f9757bdb49850519acd245cd3a/backrefs-6.1-py313-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/98/78/01c019cdb5d6498122777c1a43056ebb3ebfeef2076d9d026bfe15583b2b/click-8.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f7/ec/67fbef5d497f86283db54c22eec6f6140243aae73265799baaaa19cd17fb/ghp_import-2.1.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/d8/99/91fd58d495f03495e93b3f6100336d7a1df212aa90ad37d1322b8bb7df71/jax-0.9.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/ec/d0/77bda8d946e3a854a5a533be7baf439bfffab9adae2a668a4dc645a494cd/jaxlib-0.9.0-cp313-cp313-manylinux_2_27_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/57/1e/63ac22ec535e08129e16cb71b7eeeb8816c01d627ea1bc9105e925a71da0/jax-0.9.0.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/d9/48/34923a6add7dda5fb8f30409a98b638f0dbd2d9571dbbf73db958eaec44a/jaxlib-0.9.0.1-cp313-cp313-manylinux_2_27_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/59/1b/6ef961f543593969d25b2afe57a3564200280528caa9bd1082eecdd7b3bc/markdown-3.10.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2c/19/04f9b178c2d8a15b076c8b5140708fa6ffc5601fb6f1e975537072df5b2a/mergedeep-1.3.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/22/5b/dbc6a8cddc9cfa9c4971d59fb12bb8d42e161b7e7f8cc89e49137c5b279c/mkdocs-1.6.1-py3-none-any.whl
@@ -679,8 +679,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/eb/95/7118e935b0b0bd3f94dfec2d852fd4e4f4f9757bdb49850519acd245cd3a/backrefs-6.1-py313-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/98/78/01c019cdb5d6498122777c1a43056ebb3ebfeef2076d9d026bfe15583b2b/click-8.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f7/ec/67fbef5d497f86283db54c22eec6f6140243aae73265799baaaa19cd17fb/ghp_import-2.1.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/d8/99/91fd58d495f03495e93b3f6100336d7a1df212aa90ad37d1322b8bb7df71/jax-0.9.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/ab/1a/a1db3023f66af906c85cdbafad88a0ae02df0d87ac7f749f1c9140ef6e3c/jaxlib-0.9.0-cp313-cp313-macosx_11_0_arm64.whl
+      - pypi: https://files.pythonhosted.org/packages/57/1e/63ac22ec535e08129e16cb71b7eeeb8816c01d627ea1bc9105e925a71da0/jax-0.9.0.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/f0/8d/f5a78b4d2a08e2d358e01527a3617af2df67c70231029ce1bdbb814219ff/jaxlib-0.9.0.1-cp313-cp313-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/59/1b/6ef961f543593969d25b2afe57a3564200280528caa9bd1082eecdd7b3bc/markdown-3.10.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2c/19/04f9b178c2d8a15b076c8b5140708fa6ffc5601fb6f1e975537072df5b2a/mergedeep-1.3.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/22/5b/dbc6a8cddc9cfa9c4971d59fb12bb8d42e161b7e7f8cc89e49137c5b279c/mkdocs-1.6.1-py3-none-any.whl
@@ -2469,49 +2469,49 @@ packages:
   - pkg:pypi/isoduration?source=hash-mapping
   size: 19832
   timestamp: 1733493720346
-- pypi: https://files.pythonhosted.org/packages/d8/99/91fd58d495f03495e93b3f6100336d7a1df212aa90ad37d1322b8bb7df71/jax-0.9.0-py3-none-any.whl
+- pypi: https://files.pythonhosted.org/packages/57/1e/63ac22ec535e08129e16cb71b7eeeb8816c01d627ea1bc9105e925a71da0/jax-0.9.0.1-py3-none-any.whl
   name: jax
-  version: 0.9.0
-  sha256: be1c7c1fa91b338f071805a786f9366d4a08361b711b0568ef5a157226c68915
+  version: 0.9.0.1
+  sha256: 3baeaec6dc853394c272eb38a35ffba1972d67cf55d07a76bdb913bcd867e2ca
   requires_dist:
-  - jaxlib<=0.9.0,>=0.9.0
+  - jaxlib<=0.9.0.1,>=0.9.0.1
   - ml-dtypes>=0.5.0
   - numpy>=2.0
   - opt-einsum
   - scipy>=1.13
-  - jaxlib==0.9.0 ; extra == 'minimum-jaxlib'
+  - jaxlib==0.9.0.1 ; extra == 'minimum-jaxlib'
   - jaxlib==0.8.2 ; extra == 'ci'
-  - jaxlib<=0.9.0,>=0.9.0 ; extra == 'tpu'
+  - jaxlib<=0.9.0.1,>=0.9.0.1 ; extra == 'tpu'
   - libtpu==0.0.34.* ; extra == 'tpu'
   - requests ; extra == 'tpu'
-  - jaxlib<=0.9.0,>=0.9.0 ; extra == 'cuda'
-  - jax-cuda12-plugin[with-cuda]<=0.9.0,>=0.9.0 ; extra == 'cuda'
-  - jaxlib<=0.9.0,>=0.9.0 ; extra == 'cuda12'
-  - jax-cuda12-plugin[with-cuda]<=0.9.0,>=0.9.0 ; extra == 'cuda12'
-  - jaxlib<=0.9.0,>=0.9.0 ; extra == 'cuda13'
-  - jax-cuda13-plugin[with-cuda]<=0.9.0,>=0.9.0 ; extra == 'cuda13'
-  - jaxlib<=0.9.0,>=0.9.0 ; extra == 'cuda12-local'
-  - jax-cuda12-plugin<=0.9.0,>=0.9.0 ; extra == 'cuda12-local'
-  - jaxlib<=0.9.0,>=0.9.0 ; extra == 'cuda13-local'
-  - jax-cuda13-plugin<=0.9.0,>=0.9.0 ; extra == 'cuda13-local'
-  - jaxlib<=0.9.0,>=0.9.0 ; extra == 'rocm'
-  - jax-rocm7-plugin<=0.9.0,>=0.9.0 ; extra == 'rocm'
+  - jaxlib<=0.9.0.1,>=0.9.0.1 ; extra == 'cuda'
+  - jax-cuda12-plugin[with-cuda]<=0.9.0.1,>=0.9.0.1 ; extra == 'cuda'
+  - jaxlib<=0.9.0.1,>=0.9.0.1 ; extra == 'cuda12'
+  - jax-cuda12-plugin[with-cuda]<=0.9.0.1,>=0.9.0.1 ; extra == 'cuda12'
+  - jaxlib<=0.9.0.1,>=0.9.0.1 ; extra == 'cuda13'
+  - jax-cuda13-plugin[with-cuda]<=0.9.0.1,>=0.9.0.1 ; extra == 'cuda13'
+  - jaxlib<=0.9.0.1,>=0.9.0.1 ; extra == 'cuda12-local'
+  - jax-cuda12-plugin<=0.9.0.1,>=0.9.0.1 ; extra == 'cuda12-local'
+  - jaxlib<=0.9.0.1,>=0.9.0.1 ; extra == 'cuda13-local'
+  - jax-cuda13-plugin<=0.9.0.1,>=0.9.0.1 ; extra == 'cuda13-local'
+  - jaxlib<=0.9.0.1,>=0.9.0.1 ; extra == 'rocm'
+  - jax-rocm7-plugin<=0.9.0.1,>=0.9.0.1 ; extra == 'rocm'
   - kubernetes ; extra == 'k8s'
   - xprof ; extra == 'xprof'
   requires_python: '>=3.11'
-- pypi: https://files.pythonhosted.org/packages/ab/1a/a1db3023f66af906c85cdbafad88a0ae02df0d87ac7f749f1c9140ef6e3c/jaxlib-0.9.0-cp313-cp313-macosx_11_0_arm64.whl
+- pypi: https://files.pythonhosted.org/packages/d9/48/34923a6add7dda5fb8f30409a98b638f0dbd2d9571dbbf73db958eaec44a/jaxlib-0.9.0.1-cp313-cp313-manylinux_2_27_x86_64.whl
   name: jaxlib
-  version: 0.9.0
-  sha256: abcf50ca9f0f015f756035ff00803f5d04f42964775f936420d7afbf23b61c5c
+  version: 0.9.0.1
+  sha256: 54dd2d34c6bec4f099f888a2f7895069a47c3ba86aaa77b0b78e9c3f9ef948f1
   requires_dist:
   - scipy>=1.13
   - numpy>=2.0
   - ml-dtypes>=0.5.0
   requires_python: '>=3.11'
-- pypi: https://files.pythonhosted.org/packages/ec/d0/77bda8d946e3a854a5a533be7baf439bfffab9adae2a668a4dc645a494cd/jaxlib-0.9.0-cp313-cp313-manylinux_2_27_x86_64.whl
+- pypi: https://files.pythonhosted.org/packages/f0/8d/f5a78b4d2a08e2d358e01527a3617af2df67c70231029ce1bdbb814219ff/jaxlib-0.9.0.1-cp313-cp313-macosx_11_0_arm64.whl
   name: jaxlib
-  version: 0.9.0
-  sha256: 6aba184182c45e403b62dc269a04747da55da11d97586269710199204262d4ec
+  version: 0.9.0.1
+  sha256: e857cafdd12e18493d96d4a290ed31aa9d99a0dc3056b4b42974c0f342c9bb0c
   requires_dist:
   - scipy>=1.13
   - numpy>=2.0
@@ -5940,11 +5940,12 @@ packages:
 - pypi: ./
   name: pixwake
   version: 0.1.0
-  sha256: 0eb8aa39d3846d3cfb49c30be4f03d3edf7f313373ef07ba03201ba3d595be9c
+  sha256: 824cb501712c1337e55df5c8a57c19fb03d5d607d4cd6f1fd5566a9f1f24852d
   requires_dist:
   - jax
   - matplotlib
   - scipy
+  - cma
   requires_python: '>=3.10'
   editable: true
 - conda: https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.5.1-pyhcf101f3_0.conda

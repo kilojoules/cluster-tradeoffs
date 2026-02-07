@@ -58,6 +58,11 @@ References:
         Blondel et al., "Efficient and Modular Implicit Differentiation", NeurIPS 2022
 """
 
+from pixwake.optim.adversarial import (
+    CMAAdversarialSearch,
+    CMAAdversarialSearchResult,
+    CMAAdversarialSearchSettings,
+)
 from pixwake.optim.sgd import (
     SGDSettings,
     SGDState,
@@ -70,6 +75,9 @@ from pixwake.optim.sgd import (
 )
 
 __all__ = [
+    "CMAAdversarialSearch",
+    "CMAAdversarialSearchResult",
+    "CMAAdversarialSearchSettings",
     "SGDSettings",
     "SGDState",
     "topfarm_sgd_solve",

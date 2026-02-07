@@ -18,8 +18,10 @@ Example:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import NamedTuple
+
+import numpy as np
 
 import jax
 import jax.numpy as jnp
@@ -1110,4 +1112,345 @@ class PooledBlobDiscovery:
             n_liberal_starts=settings.n_starts,
             n_conservative_starts=settings.n_starts,
             same_best_layout=same_best,
+        )
+
+
+# =============================================================================
+# CMA-ES Bilevel Adversarial Search
+# =============================================================================
+
+
+class CMAAdversarialSearchResult(NamedTuple):
+    """Result of CMA-ES bilevel adversarial search.
+
+    Attributes:
+        best_phi: Best 4D design vector [bearing, distance, rotation, aspect_ratio].
+        best_control_points: B-spline control points for best blob.
+        best_objective: Best irreducible tradeoff (GWh).
+        best_inner_result: PooledBlobDiscoveryResult for best coarse evaluation.
+        coarse_history: List of (phi, objective) from all CMA-ES evaluations.
+        refined_result: PooledBlobDiscoveryResult from full-fidelity re-evaluation, or None.
+    """
+
+    best_phi: np.ndarray
+    best_control_points: jnp.ndarray
+    best_objective: float
+    best_inner_result: PooledBlobDiscoveryResult
+    coarse_history: list[tuple[np.ndarray, float]]
+    refined_result: PooledBlobDiscoveryResult | None
+
+
+@dataclass
+class CMAAdversarialSearchSettings:
+    """Settings for CMA-ES bilevel adversarial search.
+
+    Attributes:
+        phi_bounds: Box bounds for design vector as ((lo, lo, lo, lo), (hi, hi, hi, hi)).
+        fixed_area: Fixed blob area in m^2.
+        target_center: (x, y) center of the target farm.
+        n_control: Number of B-spline control points.
+        cma_sigma0: Initial CMA-ES step size.
+        cma_popsize: CMA-ES population size (None for default).
+        cma_maxiter: Maximum CMA-ES iterations.
+        cma_seed: CMA-ES random seed.
+        coarse_n_starts: Number of starts per strategy in coarse inner loop.
+        coarse_sgd_settings: SGD settings for coarse inner loop.
+        refine: Whether to run full-fidelity refinement at best_phi.
+        refine_n_starts: Number of starts per strategy in refinement.
+        refine_sgd_settings: SGD settings for refinement.
+        neighbor_grid_extent: Half-extent of neighbor reference grid.
+        neighbor_grid_spacing: Spacing of neighbor reference grid.
+        verbose: Print progress.
+    """
+
+    phi_bounds: tuple[tuple[float, ...], tuple[float, ...]] = (
+        (0.0, 2000.0, 0.0, 1.0),
+        (2 * np.pi, 10000.0, 2 * np.pi, 3.0),
+    )
+    fixed_area: float = 50.0 * 200.0 ** 2
+    target_center: tuple[float, float] = (1600.0, 1600.0)
+    n_control: int = 8
+    cma_sigma0: float = 0.5
+    cma_popsize: int | None = None
+    cma_maxiter: int = 50
+    cma_seed: int = 42
+    coarse_n_starts: int = 5
+    coarse_sgd_settings: SGDSettings | None = None
+    refine: bool = True
+    refine_n_starts: int = 20
+    refine_sgd_settings: SGDSettings | None = None
+    neighbor_grid_extent: float = 1200.0
+    neighbor_grid_spacing: float = 600.0
+    verbose: bool = True
+
+
+class CMAAdversarialSearch:
+    """CMA-ES bilevel adversarial search for worst-case neighbor blobs.
+
+    Uses CMA-ES to optimize over a 4D blob parameterization
+    (bearing, distance, rotation, aspect_ratio) to find the neighbor
+    configuration that maximizes the irreducible design tradeoff.
+    The inner loop reuses PooledBlobDiscovery.discover() unchanged.
+
+    Parameters
+    ----------
+    sim : WakeSimulation
+        Wake simulation engine.
+    target_boundary : jnp.ndarray
+        Target farm boundary polygon, shape (n_vertices, 2).
+    target_min_spacing : float
+        Minimum spacing between target turbines.
+    ws_amb : jnp.ndarray
+        Ambient wind speeds.
+    wd_amb : jnp.ndarray
+        Wind directions.
+    ti_amb : jnp.ndarray | None
+        Ambient turbulence intensity.
+    weights : jnp.ndarray | None
+        Probability weights for wind conditions.
+    """
+
+    def __init__(
+        self,
+        sim,
+        target_boundary: jnp.ndarray,
+        target_min_spacing: float,
+        ws_amb: jnp.ndarray,
+        wd_amb: jnp.ndarray,
+        ti_amb: jnp.ndarray | None = None,
+        weights: jnp.ndarray | None = None,
+    ):
+        self.sim = sim
+        self.target_boundary = target_boundary
+        self.target_min_spacing = target_min_spacing
+        self.ws_amb = ws_amb
+        self.wd_amb = wd_amb
+        self.ti_amb = ti_amb
+        self.weights = weights
+
+    @staticmethod
+    def _extract_irreducible_tradeoff(result: PooledBlobDiscoveryResult) -> float:
+        """Extract the irreducible tradeoff from an inner loop result.
+
+        The irreducible tradeoff is:
+            conservative_best_present - liberal_best_present
+
+        where liberal_best is the layout maximizing AEP absent and
+        conservative_best is the layout maximizing AEP present.
+        A positive value means the liberal design suffers under neighbor presence.
+
+        CMA-ES minimizes, so we return the negative.
+        """
+        all_layouts = result.all_layouts
+        liberal_best = max(all_layouts, key=lambda l: l['aep_absent'])
+        conservative_best = max(all_layouts, key=lambda l: l['aep_present'])
+        tradeoff = conservative_best['aep_present'] - liberal_best['aep_present']
+        return -tradeoff  # CMA-ES minimizes
+
+    def search(
+        self,
+        init_target_x: jnp.ndarray,
+        init_target_y: jnp.ndarray,
+        settings: CMAAdversarialSearchSettings | None = None,
+    ) -> CMAAdversarialSearchResult:
+        """Run CMA-ES bilevel adversarial search.
+
+        Parameters
+        ----------
+        init_target_x, init_target_y : jnp.ndarray
+            Initial target farm turbine positions.
+        settings : CMAAdversarialSearchSettings | None
+            Search settings. Uses defaults if None.
+
+        Returns
+        -------
+        CMAAdversarialSearchResult
+            Search results.
+        """
+        import cma
+
+        from pixwake.optim.geometry import phi_to_control_points
+        from pixwake.optim.soft_packing import create_reference_grid
+
+        if settings is None:
+            settings = CMAAdversarialSearchSettings()
+
+        # Coarse inner loop settings
+        coarse_sgd = settings.coarse_sgd_settings or SGDSettings(
+            max_iter=500, learning_rate=40.0,
+        )
+        coarse_pool_settings = PooledBlobDiscoverySettings(
+            n_starts=settings.coarse_n_starts,
+            sgd_settings=coarse_sgd,
+            verbose=False,
+        )
+
+        # CMA-ES setup
+        lo = np.array(settings.phi_bounds[0])
+        hi = np.array(settings.phi_bounds[1])
+        x0 = (lo + hi) / 2.0
+
+        # Scale sigma0 to the normalized [0, 1] space
+        opts = {
+            'bounds': [list(lo), list(hi)],
+            'maxiter': settings.cma_maxiter,
+            'seed': settings.cma_seed,
+            'verbose': -9,  # suppress CMA-ES internal output
+        }
+        if settings.cma_popsize is not None:
+            opts['popsize'] = settings.cma_popsize
+
+        es = cma.CMAEvolutionStrategy(x0.tolist(), settings.cma_sigma0, opts)
+
+        # Track best
+        best_phi = None
+        best_objective = float('inf')  # CMA-ES minimizes
+        best_control_points = None
+        best_inner_result = None
+        coarse_history = []
+        eval_count = 0
+
+        if settings.verbose:
+            print("=" * 60)
+            print("CMA-ES Bilevel Adversarial Search")
+            print("=" * 60)
+            print(f"  phi_bounds: {settings.phi_bounds}")
+            print(f"  fixed_area: {settings.fixed_area:.0f} m^2")
+            print(f"  cma_sigma0: {settings.cma_sigma0}, maxiter: {settings.cma_maxiter}")
+            print(f"  coarse inner: {settings.coarse_n_starts} starts, "
+                  f"{coarse_sgd.max_iter} SGD iters")
+            print("=" * 60, flush=True)
+
+        generation = 0
+        while not es.stop():
+            candidates = es.ask()
+            fitnesses = []
+
+            for phi_list in candidates:
+                phi = np.array(phi_list)
+
+                # Map to control points
+                cp = phi_to_control_points(
+                    phi,
+                    target_center=settings.target_center,
+                    fixed_area=settings.fixed_area,
+                    n_control=settings.n_control,
+                )
+
+                # Build neighbor grid centered on this blob
+                bearing, distance, rotation, aspect_ratio = phi
+                blob_cx = settings.target_center[0] + distance * np.sin(bearing)
+                blob_cy = settings.target_center[1] + distance * np.cos(bearing)
+                neighbor_grid = create_reference_grid(
+                    center=(float(blob_cx), float(blob_cy)),
+                    extent=settings.neighbor_grid_extent,
+                    spacing=settings.neighbor_grid_spacing,
+                )
+
+                # Run coarse inner loop
+                discoverer = PooledBlobDiscovery(
+                    sim=self.sim,
+                    target_boundary=self.target_boundary,
+                    target_min_spacing=self.target_min_spacing,
+                    neighbor_grid=neighbor_grid,
+                    ws_amb=self.ws_amb,
+                    wd_amb=self.wd_amb,
+                    ti_amb=self.ti_amb,
+                    weights=self.weights,
+                )
+
+                inner_result = discoverer.discover(
+                    init_target_x,
+                    init_target_y,
+                    cp,
+                    settings=coarse_pool_settings,
+                    seed=settings.cma_seed + eval_count,
+                )
+
+                obj = self._extract_irreducible_tradeoff(inner_result)
+                fitnesses.append(obj)
+                coarse_history.append((phi.copy(), float(-obj)))  # store positive tradeoff
+
+                # Track best
+                if obj < best_objective:
+                    best_objective = obj
+                    best_phi = phi.copy()
+                    best_control_points = cp
+                    best_inner_result = inner_result
+
+                eval_count += 1
+
+            es.tell(candidates, fitnesses)
+
+            if settings.verbose:
+                best_so_far = -best_objective
+                gen_best = -min(fitnesses)
+                print(
+                    f"Gen {generation}: best_this_gen={gen_best:.3f} GWh, "
+                    f"best_overall={best_so_far:.3f} GWh, evals={eval_count}",
+                    flush=True,
+                )
+            generation += 1
+
+        if settings.verbose:
+            print(f"\nCMA-ES finished after {eval_count} evaluations")
+            print(f"Best tradeoff: {-best_objective:.3f} GWh")
+            print(f"Best phi: bearing={best_phi[0]:.3f} rad, dist={best_phi[1]:.0f} m, "
+                  f"rot={best_phi[2]:.3f} rad, alpha={best_phi[3]:.2f}")
+
+        # Refinement
+        refined_result = None
+        if settings.refine and best_phi is not None:
+            if settings.verbose:
+                print("\nRunning refinement at best_phi...", flush=True)
+
+            refine_sgd = settings.refine_sgd_settings or SGDSettings(
+                max_iter=3000, learning_rate=40.0,
+            )
+            refine_pool_settings = PooledBlobDiscoverySettings(
+                n_starts=settings.refine_n_starts,
+                sgd_settings=refine_sgd,
+                verbose=settings.verbose,
+            )
+
+            # Rebuild grid and control points for best phi
+            bearing, distance, rotation, aspect_ratio = best_phi
+            blob_cx = settings.target_center[0] + distance * np.sin(bearing)
+            blob_cy = settings.target_center[1] + distance * np.cos(bearing)
+            neighbor_grid = create_reference_grid(
+                center=(float(blob_cx), float(blob_cy)),
+                extent=settings.neighbor_grid_extent,
+                spacing=settings.neighbor_grid_spacing,
+            )
+
+            discoverer = PooledBlobDiscovery(
+                sim=self.sim,
+                target_boundary=self.target_boundary,
+                target_min_spacing=self.target_min_spacing,
+                neighbor_grid=neighbor_grid,
+                ws_amb=self.ws_amb,
+                wd_amb=self.wd_amb,
+                ti_amb=self.ti_amb,
+                weights=self.weights,
+            )
+
+            refined_result = discoverer.discover(
+                init_target_x,
+                init_target_y,
+                best_control_points,
+                settings=refine_pool_settings,
+                seed=settings.cma_seed + 999999,
+            )
+
+            refined_tradeoff = -self._extract_irreducible_tradeoff(refined_result)
+            if settings.verbose:
+                print(f"Refined tradeoff: {refined_tradeoff:.3f} GWh")
+
+        return CMAAdversarialSearchResult(
+            best_phi=best_phi,
+            best_control_points=best_control_points,
+            best_objective=float(-best_objective),
+            best_inner_result=best_inner_result,
+            coarse_history=coarse_history,
+            refined_result=refined_result,
         )

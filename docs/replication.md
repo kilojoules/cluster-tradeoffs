@@ -57,22 +57,22 @@ pixi run python scripts/run_regret_discovery.py \
 
 ```bash
 # Single-neighbor analysis with actual DEI geometry
-pixi run python scripts/run_dea_single_neighbor.py \
+pixi run python scripts/run_dei_single_neighbor.py \
     --n-starts=5 \
     --max-iter=500
 
 # With more optimization effort for robust results
-pixi run python scripts/run_dea_single_neighbor.py \
+pixi run python scripts/run_dei_single_neighbor.py \
     --n-starts=10 \
     --max-iter=1000
 
 # With TurboPark wake model
-pixi run python scripts/run_dea_single_neighbor.py \
+pixi run python scripts/run_dei_single_neighbor.py \
     --wake-model=turbopark \
     --ti=0.06
 ```
 
-The DEI analysis uses actual wind data from `DEA_neighbors/energy_island_10y_daily_av_wind.csv` and precomputed neighbor layouts from `DEA_neighbors/re_precomputed_layouts.h5`.
+The DEI analysis uses actual wind data from `OMAE_neighbors/energy_island_10y_daily_av_wind.csv` and precomputed neighbor layouts from `OMAE_neighbors/re_precomputed_layouts.h5`.
 
 ## Command Reference
 
@@ -109,10 +109,10 @@ Options:
 pixi run python scripts/run_convergence_study.py --n-starts-max=40
 ```
 
-### DEI Single-Neighbor Analysis: `run_dea_single_neighbor.py`
+### DEI Single-Neighbor Analysis: `run_dei_single_neighbor.py`
 
 ```
-usage: run_dea_single_neighbor.py [-h] [--wake-model {bastankhah,turbopark}]
+usage: run_dei_single_neighbor.py [-h] [--wake-model {bastankhah,turbopark}]
                                    [--ti TI] [--n-starts N] [--max-iter N]
                                    [--output-dir DIR]
 
@@ -121,7 +121,7 @@ Options:
   --ti                  Ambient turbulence intensity for TurboPark (default: 0.06)
   --n-starts            Multi-start optimization runs per strategy (default: 5)
   --max-iter            Maximum iterations per optimization run (default: 500)
-  --output-dir, -o      Output directory (default: analysis/dea_single_neighbor)
+  --output-dir, -o      Output directory (default: analysis/dei_single_neighbor)
 ```
 
 This script tests each of the 9 DEI neighbor farms individually to identify which neighbors create design regret.
@@ -149,9 +149,9 @@ analysis/
 │   └── von_mises_270deg_k2.0/
 │       └── ...
 │
-└── dea_single_neighbor/
-    ├── dea_single_neighbor_bastankhah.json   # Regret by neighbor farm
-    └── dea_single_neighbor_bastankhah.png    # Polar plot of regret
+└── dei_single_neighbor/
+    ├── dei_single_neighbor_bastankhah.json   # Regret by neighbor farm
+    └── dei_single_neighbor_bastankhah.png    # Polar plot of regret
 ```
 
 ### Results JSON Format

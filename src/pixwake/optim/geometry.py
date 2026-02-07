@@ -14,6 +14,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import partial
 
+import numpy as np
+
 import jax
 import jax.numpy as jnp
 
@@ -321,6 +323,47 @@ def create_ellipse_control_points(
     y_final = y_rot + center[1]
 
     return jnp.stack([x_final, y_final], axis=-1)
+
+
+def phi_to_control_points(
+    phi: np.ndarray,
+    target_center: tuple[float, float],
+    fixed_area: float,
+    n_control: int = 8,
+) -> jnp.ndarray:
+    """Map a 4D design vector to B-spline control points for an elliptical blob.
+
+    The design vector uses polar coordinates relative to the target farm center,
+    making it natural for CMA-ES box-bounded search.
+
+    Args:
+        phi: Design vector (4,): [bearing_rad, distance_m, rotation_rad, aspect_ratio].
+            bearing uses meteorological convention (0=N, clockwise).
+        target_center: (x, y) center of the target farm.
+        fixed_area: Fixed blob area in m^2.
+        n_control: Number of B-spline control points.
+
+    Returns:
+        Control points of shape (n_control, 2).
+    """
+    bearing, distance, rotation, aspect_ratio = phi
+
+    # Blob center from polar coords (meteorological: 0=N, clockwise)
+    cx = target_center[0] + distance * np.sin(bearing)
+    cy = target_center[1] + distance * np.cos(bearing)
+
+    # Semi-axes from fixed area and aspect ratio
+    # area = pi * semi_major * semi_minor, aspect_ratio = semi_major / semi_minor
+    semi_minor = np.sqrt(fixed_area / (np.pi * aspect_ratio))
+    semi_major = aspect_ratio * semi_minor
+
+    return create_ellipse_control_points(
+        (float(cx), float(cy)),
+        float(semi_major),
+        float(semi_minor),
+        float(rotation),
+        n_control,
+    )
 
 
 def sample_random_blob(

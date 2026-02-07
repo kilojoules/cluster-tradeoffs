@@ -178,18 +178,20 @@ Centered neighbors (aligned with the target farm) create more regret:
 
 When a neighbor is offset from the target farm's center, part of its wake corridor misses the target area entirely.
 
-### Worst-Case Neighbor Profile
+### Highest-Regret Neighbor Profile (From Random Sampling)
 
-The highest-regret scenarios share a common profile:
+Among the 20 randomly sampled blob configurations per wind rose type, the highest-regret scenarios share a common profile:
 
-| Characteristic | Worst-Case Neighbor |
+| Characteristic | Highest-Regret Blob |
 |----------------|---------------------|
 | Size           | Large (>12D radius) |
 | Shape          | Elongated (aspect ratio >1.4) |
 | Position       | Centered on target farm |
 | Example regret | 61 GWh (single direction) |
 
-This "large, elongated, centered" configuration produces the maximum regret across most wind rose types because it maximizes wake coverage over the target farm while leaving minimal room for the conservative layout to escape.
+This "large, elongated, centered" configuration produces the maximum regret among sampled blobs because it maximizes wake coverage over the target farm while leaving minimal room for the conservative layout to escape.
+
+**Note**: These are the highest-regret configurations found through random sampling, not guaranteed global worst cases. An adversarial optimization approach might find even higher regret values.
 
 ### Why Size Dominates
 

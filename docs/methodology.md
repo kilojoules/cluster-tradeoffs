@@ -12,10 +12,19 @@
 
 ### Neighboring Farm Representation
 
-Potential neighboring farms are represented as "blobs" - morphable shapes defined by B-spline boundaries with 4 control points. This allows exploration of various neighbor geometries without committing to specific layouts.
+Potential neighboring farms are represented as "blobs" - morphable shapes defined by B-spline boundaries with 4 control points. For each analysis run, we **randomly sample** multiple blob configurations to explore how different neighbor geometries affect design tradeoffs.
+
+**Important**: The blob shapes are randomly sampled, not optimized to find worst-case configurations. This Monte Carlo approach provides a distribution of possible regret values across different neighbor geometries, but does not guarantee finding the absolute worst-case scenario.
 
 ![Blob Example](figures/single_blob3.png)
 *Example blob (coral/red region) positioned upwind of the target farm (dashed rectangle). Turbines within the blob create wakes that affect the target farm.*
+
+#### Blob Sampling Parameters
+
+- **Position**: Center sampled within (-10D to -4D, 0.2L to 0.8L) where L = target size
+- **Size**: Radius sampled between 5D and 10D
+- **Shape**: Aspect ratio sampled between 0.6 and 1.6
+- **Number of blobs**: 20 random configurations per wind rose type
 
 ### Wake Model
 
@@ -63,15 +72,23 @@ where:
 
 ## Optimization Methodology
 
+### What Is Optimized vs. Sampled
+
+| Component | Method | Description |
+|-----------|--------|-------------|
+| **Blob shape** | Random sampling | B-spline control points sampled from bounded distributions |
+| **Neighbor positions** | Fixed grid | 25 potential positions on a 5×5 grid, masked by blob |
+| **Target layout** | SGD optimization | Turbine positions optimized via gradient descent |
+
 ### Pooled Multi-Start Approach
 
-For each blob configuration, we run a pooled multi-start optimization:
+For each randomly sampled blob configuration, we run a pooled multi-start optimization on the **target farm layout only**:
 
-1. **Liberal Strategy** (20 starts): Optimize layout assuming neighbors are absent
+1. **Liberal Strategy** (20 starts): Optimize target layout assuming neighbors are absent
    - Objective: Maximize AEP_absent
    - Gradient-based optimization with random initialization
 
-2. **Conservative Strategy** (20 starts): Optimize layout accounting for neighbor wakes
+2. **Conservative Strategy** (20 starts): Optimize target layout accounting for neighbor wakes
    - Objective: Maximize AEP_present
    - Same optimization procedure
 

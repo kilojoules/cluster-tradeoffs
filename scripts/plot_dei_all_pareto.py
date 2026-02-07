@@ -49,7 +49,7 @@ def compute_pareto(points):
 
 def load_farm_info(farm_idx):
     """Load farm metadata from JSON."""
-    json_file = RESULTS_DIR / f"dea_single_neighbor_bastankhah_farm{farm_idx}.json"
+    json_file = RESULTS_DIR / f"dei_single_neighbor_bastankhah_farm{farm_idx}.json"
     if json_file.exists():
         with open(json_file) as f:
             data = json.load(f)
