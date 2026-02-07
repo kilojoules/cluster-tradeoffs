@@ -256,6 +256,7 @@ def run_single_neighbor_analysis(
     output_dir: str = "analysis/dei_single_neighbor",
     farm_indices: list[int] | None = None,
     skip_combined: bool = False,
+    seed_offset: int = 0,
 ):
     """Run DEI analysis with each individual neighbor using gradient-based optimization.
 
@@ -268,6 +269,7 @@ def run_single_neighbor_analysis(
         output_dir: Output directory for results
         farm_indices: List of farm indices to run (1-9). If None, runs all farms. If empty list, skips individual farms.
         skip_combined: If True, skip the "all neighbors combined" analysis
+        seed_offset: Starting seed number (for appending additional runs)
     """
     if farm_indices is None:
         farm_indices = list(range(1, N_NEIGHBOR_FARMS + 1))
@@ -472,7 +474,7 @@ def run_single_neighbor_analysis(
         liberal_layouts = []  # Optimize without neighbor
         conservative_layouts = []  # Optimize with neighbor
 
-        for seed in range(n_starts):
+        for seed in range(seed_offset, seed_offset + n_starts):
             x0, y0 = generate_layout(seed)
 
             # Liberal: optimize ignoring neighbor
@@ -555,11 +557,15 @@ def run_single_neighbor_analysis(
             "elapsed_seconds": elapsed,
         }
 
-        # Save layouts for this farm
+        # Save layouts for this farm (append if file exists)
         layouts_file = output_path / f"layouts_farm{farm_idx}.h5"
-        with h5py.File(layouts_file, 'w') as hf:
+        mode = 'a' if layouts_file.exists() and seed_offset > 0 else 'w'
+        with h5py.File(layouts_file, mode) as hf:
+            # Count existing layouts to determine starting index
+            existing_count = len([k for k in hf.keys() if k.startswith('layout_')]) if mode == 'a' else 0
             for i, layout in enumerate(all_layouts):
-                grp = hf.create_group(f"layout_{i}")
+                layout_idx = existing_count + i
+                grp = hf.create_group(f"layout_{layout_idx}")
                 grp.create_dataset('x', data=layout['x'])
                 grp.create_dataset('y', data=layout['y'])
                 grp.attrs['aep_absent'] = layout['aep_absent']
@@ -567,8 +573,8 @@ def run_single_neighbor_analysis(
                 grp.attrs['seed'] = layout['seed']
                 grp.attrs['strategy'] = layout['strategy']
             hf.attrs['farm_idx'] = farm_idx
-            hf.attrs['n_layouts'] = len(all_layouts)
-        print(f"Saved {len(all_layouts)} layouts to {layouts_file}")
+            hf.attrs['n_layouts'] = existing_count + len(all_layouts)
+        print(f"Saved {len(all_layouts)} layouts to {layouts_file} (total: {existing_count + len(all_layouts)})")
 
     # Also test all neighbors together for comparison
     if skip_combined:
@@ -590,7 +596,7 @@ def run_single_neighbor_analysis(
         start_time = time.time()
 
         all_layouts = []
-        for seed in range(n_starts):
+        for seed in range(seed_offset, seed_offset + n_starts):
             x0, y0 = generate_layout(seed)
 
             # Liberal
@@ -664,11 +670,14 @@ def run_single_neighbor_analysis(
             "elapsed_seconds": elapsed,
         }
 
-        # Save combined layouts for PyWake verification
+        # Save combined layouts for PyWake verification (append if file exists)
         layouts_file = output_path / "layouts_combined.h5"
-        with h5py.File(layouts_file, 'w') as hf:
+        mode = 'a' if layouts_file.exists() and seed_offset > 0 else 'w'
+        with h5py.File(layouts_file, mode) as hf:
+            existing_count = len([k for k in hf.keys() if k.startswith('layout_')]) if mode == 'a' else 0
             for i, layout in enumerate(all_layouts):
-                grp = hf.create_group(f"layout_{i}")
+                layout_idx = existing_count + i
+                grp = hf.create_group(f"layout_{layout_idx}")
                 grp.create_dataset('x', data=layout['x'])
                 grp.create_dataset('y', data=layout['y'])
                 grp.attrs['aep_absent'] = layout['aep_absent']
@@ -676,9 +685,9 @@ def run_single_neighbor_analysis(
                 grp.attrs['seed'] = layout['seed']
                 grp.attrs['strategy'] = layout['strategy']
             hf.attrs['case'] = 'all_neighbors'
-            hf.attrs['n_layouts'] = len(all_layouts)
+            hf.attrs['n_layouts'] = existing_count + len(all_layouts)
             hf.attrs['n_neighbor_turbines'] = len(x_all_neighbors)
-        print(f"Saved {len(all_layouts)} layouts to {layouts_file}")
+        print(f"Saved {len(all_layouts)} layouts to {layouts_file} (total: {existing_count + len(all_layouts)})")
 
     # Summary
     print("\n" + "=" * 70)
@@ -767,6 +776,8 @@ if __name__ == "__main__":
                         help="Wake expansion coefficient A (for turbopark, default 0.04)")
     parser.add_argument("--n-starts", type=int, default=5,
                         help="Number of optimization starts per strategy")
+    parser.add_argument("--seed-offset", type=int, default=0,
+                        help="Starting seed number (for appending additional runs)")
     parser.add_argument("--max-iter", type=int, default=500,
                         help="Maximum optimization iterations per start")
     parser.add_argument("--output-dir", "-o", type=str, default="analysis/dei_single_neighbor")
@@ -795,4 +806,5 @@ if __name__ == "__main__":
         output_dir=args.output_dir,
         farm_indices=farm_indices,
         skip_combined=skip_combined,
+        seed_offset=args.seed_offset,
     )
