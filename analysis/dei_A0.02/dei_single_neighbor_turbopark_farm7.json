@@ -7,17 +7,17 @@
     "n_pareto": 1,
     "regret_gwh": 0.0,
     "regret_pct": 0.0,
-    "lib_opt_absent": 5468.958252220093,
-    "lib_opt_present": 5384.630583432795,
-    "con_opt_absent": 5468.958252220093,
-    "con_opt_present": 5384.630583432795,
-    "elapsed_seconds": 5465.218101024628
+    "lib_opt_absent": 5483.050336884752,
+    "lib_opt_present": 5389.422037251575,
+    "con_opt_absent": 5483.050336884752,
+    "con_opt_present": 5389.422037251575,
+    "elapsed_seconds": 10565.07854104042
   },
   "_config": {
     "wake_model": "turbopark",
     "A": 0.02,
     "ti_amb": 0.06,
-    "n_starts": 50,
+    "n_starts": 150,
     "max_iter": 2000
   }
 }
