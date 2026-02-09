@@ -21,9 +21,16 @@ def main():
             npz_path = input_dir / 'bootstrap_convergence_combined.npz'
         else:
             npz_path = input_dir / f'bootstrap_convergence_farm{case}.npz'
+        if not npz_path.exists():
+            print(f'Skipping {npz_path} (not found)')
+            continue
         data[case] = np.load(npz_path)
 
-    n_starts = data[1]['n_starts']
+    # Filter to cases that have data
+    cases = [c for c in cases if c in data]
+    labels = [f'Farm {c}' if isinstance(c, int) else 'Combined' for c in cases]
+
+    max_starts = max(len(data[c]['n_starts']) for c in cases)
 
     # Create figure with two panels
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
@@ -36,6 +43,7 @@ def main():
 
     for idx, (case, label) in enumerate(zip(cases, labels)):
         d = data[case]
+        n_starts = d['n_starts']
         true_lib = float(d['true_liberal_aep'])
         true_con = float(d['true_conservative_aep'])
 
@@ -60,7 +68,7 @@ def main():
     ax.set_ylabel('Gap from true optimum (GWh)', fontsize=12)
     ax.set_title('AEP Convergence: Liberal vs Conservative', fontsize=14)
     ax.grid(True, alpha=0.3)
-    ax.set_xlim(1, 50)
+    ax.set_xlim(1, max_starts)
     ax.set_ylim(bottom=0)
 
     # Right panel: Bar chart of gaps at n=50
@@ -80,7 +88,7 @@ def main():
     bars2 = ax.bar(x + width/2, con_gaps, width, label='Conservative', color='C1', alpha=0.7)
 
     ax.set_xlabel('Case', fontsize=12)
-    ax.set_ylabel('Gap from true optimum at n=50 (GWh)', fontsize=12)
+    ax.set_ylabel(f'Gap from true optimum at max starts (GWh)', fontsize=12)
     ax.set_title('Optimization Difficulty by Strategy', fontsize=14)
     ax.set_xticks(x)
     ax.set_xticklabels(labels, rotation=45, ha='right')

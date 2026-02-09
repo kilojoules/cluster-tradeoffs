@@ -1347,6 +1347,25 @@ class CMAAdversarialSearch:
                     spacing=settings.neighbor_grid_spacing,
                 )
 
+                # Filter out grid points inside the target boundary
+                tb = self.target_boundary
+                x_min, x_max = float(tb[:, 0].min()), float(tb[:, 0].max())
+                y_min, y_max = float(tb[:, 1].min()), float(tb[:, 1].max())
+                outside = ~(
+                    (neighbor_grid[:, 0] >= x_min)
+                    & (neighbor_grid[:, 0] <= x_max)
+                    & (neighbor_grid[:, 1] >= y_min)
+                    & (neighbor_grid[:, 1] <= y_max)
+                )
+                neighbor_grid = neighbor_grid[outside]
+
+                if len(neighbor_grid) == 0:
+                    # No valid neighbor positions — skip this candidate
+                    fitnesses.append(0.0)
+                    coarse_history.append((phi.copy(), 0.0))
+                    eval_count += 1
+                    continue
+
                 # Run coarse inner loop
                 discoverer = PooledBlobDiscovery(
                     sim=self.sim,
@@ -1422,6 +1441,18 @@ class CMAAdversarialSearch:
                 extent=settings.neighbor_grid_extent,
                 spacing=settings.neighbor_grid_spacing,
             )
+
+            # Filter out grid points inside the target boundary
+            tb = self.target_boundary
+            x_min, x_max = float(tb[:, 0].min()), float(tb[:, 0].max())
+            y_min, y_max = float(tb[:, 1].min()), float(tb[:, 1].max())
+            outside = ~(
+                (neighbor_grid[:, 0] >= x_min)
+                & (neighbor_grid[:, 0] <= x_max)
+                & (neighbor_grid[:, 1] >= y_min)
+                & (neighbor_grid[:, 1] <= y_max)
+            )
+            neighbor_grid = neighbor_grid[outside]
 
             discoverer = PooledBlobDiscovery(
                 sim=self.sim,

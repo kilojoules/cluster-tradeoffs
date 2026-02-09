@@ -4,20 +4,20 @@
     "direction": 261.7805558020931,
     "distance_km": 21.9191499258237,
     "n_turbines": 66,
-    "n_pareto": 2,
-    "regret_gwh": 10.27699315630889,
-    "regret_pct": 0.19508500003122684,
-    "lib_opt_absent": 5468.958252220093,
-    "lib_opt_present": 5257.679617892144,
-    "con_opt_absent": 5468.9470486285245,
-    "con_opt_present": 5267.956611048453,
-    "elapsed_seconds": 26047.689904928207
+    "n_pareto": 5,
+    "regret_gwh": 7.768942567752674,
+    "regret_pct": 0.14712469022490116,
+    "lib_opt_absent": 5480.692786597317,
+    "lib_opt_present": 5272.746894629072,
+    "con_opt_absent": 5464.843464637284,
+    "con_opt_present": 5280.515837196825,
+    "elapsed_seconds": 17346.60946893692
   },
   "_config": {
     "wake_model": "turbopark",
     "A": 0.02,
     "ti_amb": 0.06,
-    "n_starts": 50,
+    "n_starts": 300,
     "max_iter": 2000
   }
 }

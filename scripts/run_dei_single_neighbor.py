@@ -470,11 +470,44 @@ def run_single_neighbor_analysis(
 
         start_time = time.time()
 
-        # Run multi-start optimization
+        # Run multi-start optimization, saving incrementally to HDF5
+        layouts_file = output_path / f"layouts_farm{farm_idx}.h5"
+
+        # Determine which seeds already exist in the file
+        completed_seeds = set()
+        if layouts_file.exists():
+            with h5py.File(layouts_file, 'r') as hf:
+                for key in hf.keys():
+                    if key.startswith('layout_'):
+                        completed_seeds.add((int(hf[key].attrs['seed']), hf[key].attrs['strategy']))
+
         liberal_layouts = []  # Optimize without neighbor
         conservative_layouts = []  # Optimize with neighbor
 
         for seed in range(seed_offset, seed_offset + n_starts):
+            # Skip seeds that are already completed
+            if (seed, 'liberal') in completed_seeds and (seed, 'conservative') in completed_seeds:
+                # Load existing results for Pareto/regret computation
+                with h5py.File(layouts_file, 'r') as hf:
+                    for key in hf.keys():
+                        if not key.startswith('layout_'):
+                            continue
+                        grp = hf[key]
+                        if int(grp.attrs['seed']) == seed:
+                            layout = {
+                                'x': grp['x'][:], 'y': grp['y'][:],
+                                'aep_absent': float(grp.attrs['aep_absent']),
+                                'aep_present': float(grp.attrs['aep_present']),
+                                'seed': int(grp.attrs['seed']),
+                                'strategy': str(grp.attrs['strategy']),
+                            }
+                            if layout['strategy'] == 'liberal':
+                                liberal_layouts.append(layout)
+                            else:
+                                conservative_layouts.append(layout)
+                print(f"  Start {seed}: already completed, skipping", flush=True)
+                continue
+
             x0, y0 = generate_layout(seed)
 
             # Liberal: optimize ignoring neighbor
@@ -482,29 +515,46 @@ def run_single_neighbor_analysis(
             # Re-evaluate with full time series for accurate AEP
             aep_lib_absent = compute_aep_full(x_lib, y_lib, None, None)
             aep_lib_present = compute_aep_full(x_lib, y_lib, x_neighbor, y_neighbor)
-            liberal_layouts.append({
+            lib_layout = {
                 'x': np.array(x_lib), 'y': np.array(y_lib),
                 'aep_absent': float(aep_lib_absent),
                 'aep_present': float(aep_lib_present),
                 'seed': seed,
                 'strategy': 'liberal',
-            })
+            }
+            liberal_layouts.append(lib_layout)
 
             # Conservative: optimize considering neighbor
             x_con, y_con, _ = optimize_layout(x0, y0, x_neighbor, y_neighbor, max_iter)
             # Re-evaluate with full time series for accurate AEP
             aep_con_absent = compute_aep_full(x_con, y_con, None, None)
             aep_con_present = compute_aep_full(x_con, y_con, x_neighbor, y_neighbor)
-            conservative_layouts.append({
+            con_layout = {
                 'x': np.array(x_con), 'y': np.array(y_con),
                 'aep_absent': float(aep_con_absent),
                 'aep_present': float(aep_con_present),
                 'seed': seed,
                 'strategy': 'conservative',
-            })
+            }
+            conservative_layouts.append(con_layout)
+
+            # Save immediately to HDF5
+            with h5py.File(layouts_file, 'a') as hf:
+                existing_count = len([k for k in hf.keys() if k.startswith('layout_')])
+                for layout in [lib_layout, con_layout]:
+                    grp = hf.create_group(f"layout_{existing_count}")
+                    grp.create_dataset('x', data=layout['x'])
+                    grp.create_dataset('y', data=layout['y'])
+                    grp.attrs['aep_absent'] = layout['aep_absent']
+                    grp.attrs['aep_present'] = layout['aep_present']
+                    grp.attrs['seed'] = layout['seed']
+                    grp.attrs['strategy'] = layout['strategy']
+                    existing_count += 1
+                hf.attrs['farm_idx'] = farm_idx
+                hf.attrs['n_layouts'] = existing_count
 
             print(f"  Start {seed}: Liberal={aep_lib_absent:.1f}/{aep_lib_present:.1f}, "
-                  f"Conservative={aep_con_absent:.1f}/{aep_con_present:.1f} GWh", flush=True)
+                  f"Conservative={aep_con_absent:.1f}/{aep_con_present:.1f} GWh (saved)", flush=True)
 
         elapsed = time.time() - start_time
 
@@ -557,24 +607,8 @@ def run_single_neighbor_analysis(
             "elapsed_seconds": elapsed,
         }
 
-        # Save layouts for this farm (append if file exists)
-        layouts_file = output_path / f"layouts_farm{farm_idx}.h5"
-        mode = 'a' if layouts_file.exists() and seed_offset > 0 else 'w'
-        with h5py.File(layouts_file, mode) as hf:
-            # Count existing layouts to determine starting index
-            existing_count = len([k for k in hf.keys() if k.startswith('layout_')]) if mode == 'a' else 0
-            for i, layout in enumerate(all_layouts):
-                layout_idx = existing_count + i
-                grp = hf.create_group(f"layout_{layout_idx}")
-                grp.create_dataset('x', data=layout['x'])
-                grp.create_dataset('y', data=layout['y'])
-                grp.attrs['aep_absent'] = layout['aep_absent']
-                grp.attrs['aep_present'] = layout['aep_present']
-                grp.attrs['seed'] = layout['seed']
-                grp.attrs['strategy'] = layout['strategy']
-            hf.attrs['farm_idx'] = farm_idx
-            hf.attrs['n_layouts'] = existing_count + len(all_layouts)
-        print(f"Saved {len(all_layouts)} layouts to {layouts_file} (total: {existing_count + len(all_layouts)})")
+        # Layouts already saved incrementally above
+        print(f"Farm {farm_idx} complete: {len(all_layouts)} total layouts in {layouts_file}")
 
     # Also test all neighbors together for comparison
     if skip_combined:
@@ -595,8 +629,36 @@ def run_single_neighbor_analysis(
 
         start_time = time.time()
 
+        # Save incrementally to HDF5
+        layouts_file = output_path / "layouts_combined.h5"
+
+        # Determine which seeds already exist
+        completed_seeds = set()
+        if layouts_file.exists():
+            with h5py.File(layouts_file, 'r') as hf:
+                for key in hf.keys():
+                    if key.startswith('layout_'):
+                        completed_seeds.add((int(hf[key].attrs['seed']), hf[key].attrs['strategy']))
+
         all_layouts = []
         for seed in range(seed_offset, seed_offset + n_starts):
+            if (seed, 'liberal') in completed_seeds and (seed, 'conservative') in completed_seeds:
+                with h5py.File(layouts_file, 'r') as hf:
+                    for key in hf.keys():
+                        if not key.startswith('layout_'):
+                            continue
+                        grp = hf[key]
+                        if int(grp.attrs['seed']) == seed:
+                            all_layouts.append({
+                                'x': grp['x'][:], 'y': grp['y'][:],
+                                'aep_absent': float(grp.attrs['aep_absent']),
+                                'aep_present': float(grp.attrs['aep_present']),
+                                'seed': int(grp.attrs['seed']),
+                                'strategy': str(grp.attrs['strategy']),
+                            })
+                print(f"  Start {seed}: already completed, skipping", flush=True)
+                continue
+
             x0, y0 = generate_layout(seed)
 
             # Liberal
@@ -604,29 +666,47 @@ def run_single_neighbor_analysis(
             # Re-evaluate with full time series for accurate AEP
             aep_lib_absent = compute_aep_full(x_lib, y_lib, None, None)
             aep_lib_present = compute_aep_full(x_lib, y_lib, x_all_neighbors, y_all_neighbors)
-            all_layouts.append({
+            lib_layout = {
                 'x': np.array(x_lib), 'y': np.array(y_lib),
                 'aep_absent': float(aep_lib_absent),
                 'aep_present': float(aep_lib_present),
                 'seed': seed,
                 'strategy': 'liberal',
-            })
+            }
 
             # Conservative
             x_con, y_con, _ = optimize_layout(x0, y0, x_all_neighbors, y_all_neighbors, max_iter)
             # Re-evaluate with full time series for accurate AEP
             aep_con_absent = compute_aep_full(x_con, y_con, None, None)
             aep_con_present = compute_aep_full(x_con, y_con, x_all_neighbors, y_all_neighbors)
-            all_layouts.append({
+            con_layout = {
                 'x': np.array(x_con), 'y': np.array(y_con),
                 'aep_absent': float(aep_con_absent),
                 'aep_present': float(aep_con_present),
                 'seed': seed,
                 'strategy': 'conservative',
-            })
+            }
+
+            all_layouts.extend([lib_layout, con_layout])
+
+            # Save immediately
+            with h5py.File(layouts_file, 'a') as hf:
+                existing_count = len([k for k in hf.keys() if k.startswith('layout_')])
+                for layout in [lib_layout, con_layout]:
+                    grp = hf.create_group(f"layout_{existing_count}")
+                    grp.create_dataset('x', data=layout['x'])
+                    grp.create_dataset('y', data=layout['y'])
+                    grp.attrs['aep_absent'] = layout['aep_absent']
+                    grp.attrs['aep_present'] = layout['aep_present']
+                    grp.attrs['seed'] = layout['seed']
+                    grp.attrs['strategy'] = layout['strategy']
+                    existing_count += 1
+                hf.attrs['case'] = 'all_neighbors'
+                hf.attrs['n_layouts'] = existing_count
+                hf.attrs['n_neighbor_turbines'] = len(x_all_neighbors)
 
             print(f"  Start {seed}: Liberal={aep_lib_absent:.1f}/{aep_lib_present:.1f}, "
-                  f"Conservative={aep_con_absent:.1f}/{aep_con_present:.1f} GWh", flush=True)
+                  f"Conservative={aep_con_absent:.1f}/{aep_con_present:.1f} GWh (saved)", flush=True)
 
         elapsed = time.time() - start_time
 
@@ -670,24 +750,8 @@ def run_single_neighbor_analysis(
             "elapsed_seconds": elapsed,
         }
 
-        # Save combined layouts for PyWake verification (append if file exists)
-        layouts_file = output_path / "layouts_combined.h5"
-        mode = 'a' if layouts_file.exists() and seed_offset > 0 else 'w'
-        with h5py.File(layouts_file, mode) as hf:
-            existing_count = len([k for k in hf.keys() if k.startswith('layout_')]) if mode == 'a' else 0
-            for i, layout in enumerate(all_layouts):
-                layout_idx = existing_count + i
-                grp = hf.create_group(f"layout_{layout_idx}")
-                grp.create_dataset('x', data=layout['x'])
-                grp.create_dataset('y', data=layout['y'])
-                grp.attrs['aep_absent'] = layout['aep_absent']
-                grp.attrs['aep_present'] = layout['aep_present']
-                grp.attrs['seed'] = layout['seed']
-                grp.attrs['strategy'] = layout['strategy']
-            hf.attrs['case'] = 'all_neighbors'
-            hf.attrs['n_layouts'] = existing_count + len(all_layouts)
-            hf.attrs['n_neighbor_turbines'] = len(x_all_neighbors)
-        print(f"Saved {len(all_layouts)} layouts to {layouts_file} (total: {existing_count + len(all_layouts)})")
+        # Layouts already saved incrementally above
+        print(f"Combined complete: {len(all_layouts)} total layouts in {layouts_file}")
 
     # Summary
     print("\n" + "=" * 70)
