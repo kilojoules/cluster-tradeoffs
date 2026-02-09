@@ -21,3 +21,6 @@ venv/
 
 # JAX cache
 .jax_cache/
+
+# Analysis outputs
+analysis/
