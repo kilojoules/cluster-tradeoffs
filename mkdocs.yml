@@ -12,19 +12,24 @@ theme:
   features:
     - navigation.instant
     - navigation.sections
+    - navigation.expand
     - toc.integrate
   icon:
     repo: fontawesome/brands/github
 
 nav:
   - Home: index.md
-  - Methodology: methodology.md
-  - Results: results.md
-  - DEI Case Study: dei-case-study.md
-  - DEI Nygaard 2022: dei-nygaard2022.md
-  - DEI A=0.02: dei-A0.02.md
-  - DEI A=0.10: dei-A0.10.md
-  - DEI Methodology: dei-methodology.md
+  - Blob Discovery:
+    - Methodology: methodology.md
+    - Results: results.md
+  - Danish Energy Island:
+    - Case Study: dei-case-study.md
+    - Analysis Protocol: dei-methodology.md
+    - Nygaard 2022 Model: dei-nygaard2022.md
+    - Wake Sensitivity A=0.02: dei-A0.02.md
+    - Wake Sensitivity A=0.10: dei-A0.10.md
+  - IFT Bilevel Search:
+    - Cost Tradeoffs: cost_tradeoffs.md
   - Replication: replication.md
 
 markdown_extensions:
