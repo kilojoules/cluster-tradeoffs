@@ -17,7 +17,7 @@ from pixwake import Curve, Turbine, WakeSimulation
 from pixwake.deficit import BastankhahGaussianDeficit
 
 # Paths
-DEI_DIR = Path(__file__).parent.parent / "OMAE_neighbors"
+DEI_DIR = Path(__file__).parent.parent 
 OUTPUT_DIR = Path(__file__).parent.parent / "docs/figures"
 LAYOUTS_FILE = DEI_DIR / "re_precomputed_layouts.h5"
 WIND_DATA_FILE = DEI_DIR / "energy_island_10y_daily_av_wind.csv"

@@ -31,7 +31,7 @@ from py_wake.rotor_avg_models import RotorCenter
 
 
 # Configuration
-DEI_DIR = Path(__file__).parent.parent / "OMAE_neighbors"
+DEI_DIR = Path(__file__).parent.parent 
 WIND_DATA_FILE = DEI_DIR / "energy_island_10y_daily_av_wind.csv"
 LAYOUTS_FILE = DEI_DIR / "re_precomputed_layouts.h5"
 
