@@ -55,20 +55,60 @@ def find_pareto(aep_absent, aep_present):
     return pareto_mask
 
 
+def load_liberal_layouts(h5_path):
+    """Load only liberal layouts from HDF5 file."""
+    layouts = []
+    with h5py.File(h5_path, 'r') as f:
+        n_layouts = f.attrs.get('n_layouts', 0)
+        for i in range(n_layouts):
+            grp = f[f'layout_{i}']
+            if grp.attrs['strategy'] == 'liberal':
+                layouts.append({
+                    'aep_absent': grp.attrs['aep_absent'],
+                    'aep_present': grp.attrs['aep_present'],
+                    'strategy': 'liberal',
+                })
+    return layouts
+
+
+def load_conservative_layouts(h5_path):
+    """Load only conservative layouts from HDF5 file."""
+    layouts = []
+    with h5py.File(h5_path, 'r') as f:
+        n_layouts = f.attrs.get('n_layouts', 0)
+        for i in range(n_layouts):
+            grp = f[f'layout_{i}']
+            if grp.attrs['strategy'] == 'conservative':
+                layouts.append({
+                    'aep_absent': grp.attrs['aep_absent'],
+                    'aep_present': grp.attrs['aep_present'],
+                    'strategy': 'conservative',
+                })
+    return layouts
+
+
 def plot_individual_farms(analysis_dir, output_path, A_value):
     """Create 3x3 grid of individual farm Pareto plots."""
-    fig, axes = plt.subplots(3, 3, figsize=(14, 12))
+    fig, axes = plt.subplots(3, 3, figsize=(14, 12), sharex=True, sharey=True)
 
     for farm_idx in range(1, 10):
         ax = axes[(farm_idx - 1) // 3, (farm_idx - 1) % 3]
 
-        # Load layouts
+        # Load conservative layouts from farm-specific file
         h5_path = analysis_dir / f"layouts_farm{farm_idx}.h5"
         if not h5_path.exists():
             ax.text(0.5, 0.5, f"Farm {farm_idx}\nNo data", ha='center', va='center', transform=ax.transAxes)
             continue
 
-        layouts = load_layouts(h5_path)
+        # Use re-evaluated liberal layouts if available (correct aep_present
+        # for this farm's neighbor), otherwise fall back to farm's own file
+        liberal_h5 = analysis_dir / f"liberal_standard_farm{farm_idx}.h5"
+        if liberal_h5.exists():
+            conservative = load_conservative_layouts(h5_path)
+            liberal = load_liberal_layouts(liberal_h5)
+            layouts = liberal + conservative
+        else:
+            layouts = load_layouts(h5_path)
 
         aep_absent = np.array([l['aep_absent'] for l in layouts])
         aep_present = np.array([l['aep_present'] for l in layouts])
@@ -91,28 +131,35 @@ def plot_individual_farms(analysis_dir, output_path, A_value):
         ax.scatter(aep_absent[con_mask & pareto_mask], aep_present[con_mask & pareto_mask],
                    c='indianred', edgecolors='black', linewidths=1.5, s=60, marker='s')
 
-        # Load JSON for regret info
+        # Compute regret from actual loaded data
+        n_pareto = int(pareto_mask.sum())
+        pareto_indices = np.where(pareto_mask)[0]
+        if len(pareto_indices) > 0:
+            lib_opt_idx = pareto_indices[np.argmax(aep_absent[pareto_mask])]
+            con_opt_idx = pareto_indices[np.argmax(aep_present[pareto_mask])]
+            regret = aep_present[con_opt_idx] - aep_present[lib_opt_idx]
+        else:
+            regret = 0
+
+        # Direction is a geometric constant — read from JSON if available
+        direction = 0
         json_path = analysis_dir / f"dei_single_neighbor_turbopark_farm{farm_idx}.json"
         if json_path.exists():
             with open(json_path) as f:
-                data = json.load(f)
-                farm_data = data.get(str(farm_idx), {})
-                regret = farm_data.get('regret_gwh', 0)
+                farm_data = json.load(f).get(str(farm_idx), {})
                 direction = farm_data.get('direction', 0)
-                n_pareto = farm_data.get('n_pareto', 0)
-        else:
-            regret = 0
-            direction = 0
-            n_pareto = pareto_mask.sum()
 
         ax.set_title(f"Farm {farm_idx}: {direction:.0f}°\nRegret: {regret:.1f} GWh ({n_pareto} Pareto)", fontsize=10)
-        ax.set_xlabel('AEP without neighbor (GWh)')
-        ax.set_ylabel('AEP with neighbor (GWh)')
         ax.grid(True, alpha=0.3)
 
-        # Equal aspect for visual clarity
         if farm_idx == 1:
             ax.legend(loc='lower right', fontsize=8)
+
+    # Shared axis labels on outer edges only
+    for ax in axes[-1, :]:
+        ax.set_xlabel('AEP without neighbor (GWh)')
+    for ax in axes[:, 0]:
+        ax.set_ylabel('AEP with neighbor (GWh)')
 
     fig.suptitle(f'DEI Individual Neighbors Analysis (A={A_value})\nTurboGaussian Wake Model', fontsize=14, y=1.02)
     plt.tight_layout()
@@ -128,7 +175,14 @@ def plot_combined(analysis_dir, output_path, A_value):
         print(f"Combined layouts not found: {h5_path}")
         return
 
-    layouts = load_layouts(h5_path)
+    # Use re-evaluated liberal layouts if available, otherwise fall back
+    liberal_h5 = analysis_dir / "liberal_standard_combined.h5"
+    if liberal_h5.exists():
+        conservative = load_conservative_layouts(h5_path)
+        liberal = load_liberal_layouts(liberal_h5)
+        layouts = liberal + conservative
+    else:
+        layouts = load_layouts(h5_path)
 
     aep_absent = np.array([l['aep_absent'] for l in layouts])
     aep_present = np.array([l['aep_present'] for l in layouts])
@@ -152,19 +206,17 @@ def plot_combined(analysis_dir, output_path, A_value):
     ax.scatter(aep_absent[con_mask & pareto_mask], aep_present[con_mask & pareto_mask],
                c='indianred', edgecolors='black', linewidths=2, s=100, marker='s')
 
-    # Load JSON for regret info
-    json_path = analysis_dir / "dei_single_neighbor_turbopark_farm.json"
-    if json_path.exists():
-        with open(json_path) as f:
-            data = json.load(f)
-            combined = data.get('all_neighbors', {})
-            regret = combined.get('regret_gwh', 0)
-            regret_pct = combined.get('regret_pct', 0)
-            n_pareto = combined.get('n_pareto', pareto_mask.sum())
+    # Compute regret from actual loaded data
+    n_pareto = int(pareto_mask.sum())
+    pareto_indices = np.where(pareto_mask)[0]
+    if len(pareto_indices) > 0:
+        lib_opt_idx = pareto_indices[np.argmax(aep_absent[pareto_mask])]
+        con_opt_idx = pareto_indices[np.argmax(aep_present[pareto_mask])]
+        regret = aep_present[con_opt_idx] - aep_present[lib_opt_idx]
+        regret_pct = regret / aep_present[con_opt_idx] * 100
     else:
         regret = 0
         regret_pct = 0
-        n_pareto = pareto_mask.sum()
 
     ax.set_title(f'DEI All Neighbors Combined (A={A_value})\nRegret: {regret:.1f} GWh ({regret_pct:.2f}%), {n_pareto} Pareto points', fontsize=14)
     ax.set_xlabel('AEP without neighbors (GWh)', fontsize=12)
@@ -222,7 +274,7 @@ def plot_polar_regret(analysis_dir, output_path, A_value):
 
 
 def main():
-    for A_value in ['0.02', '0.10']:
+    for A_value in ['0.02', '0.04', '0.10']:
         analysis_dir = Path(f"analysis/dei_A{A_value}")
         output_dir = Path("docs/figures")
         output_dir.mkdir(exist_ok=True)

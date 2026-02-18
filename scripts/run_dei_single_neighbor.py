@@ -22,6 +22,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.path import Path as MplPath
 
 import jax
 import jax.numpy as jnp
@@ -37,7 +38,7 @@ from pixwake.utils import ct2a_mom1d
 # DEI Study Configuration
 # =============================================================================
 
-DEI_DIR = Path(__file__).parent.parent / "OMAE_neighbors"
+DEI_DIR = Path(__file__).parent.parent 
 WIND_DATA_FILE = DEI_DIR / "energy_island_10y_daily_av_wind.csv"
 LAYOUTS_FILE = DEI_DIR / "re_precomputed_layouts.h5"
 
@@ -97,6 +98,111 @@ def load_target_boundary():
         721593.2420745814, 6257906.998015941,
     ]).reshape((-1, 2)).T
     return dk0w_tender_3
+
+
+def make_polygon_projector(boundary):
+    """Create a JAX-compiled function that projects points inside a convex polygon.
+
+    Implements the signed-distance algorithm from TopFarm's PolygonBoundaryComp:
+    for each point, compute signed distance to each edge (positive = inside),
+    pick the closest edge, and if outside, push back inside along the gradient.
+
+    Parameters
+    ----------
+    boundary : np.ndarray, shape (2, n_vertices)
+        Polygon vertices as returned by load_target_boundary().
+
+    Returns
+    -------
+    project : callable (x, y) -> (x_proj, y_proj)
+        JIT-compiled projection function.
+    """
+    # Normalize to (n_vertices, 2)
+    verts = np.asarray(boundary).T if boundary.shape[0] == 2 else np.asarray(boundary)
+    n_v = len(verts)
+
+    # Ensure counter-clockwise ordering (positive signed area)
+    signed_area_2 = sum(
+        verts[i, 0] * verts[(i + 1) % n_v, 1] - verts[(i + 1) % n_v, 0] * verts[i, 1]
+        for i in range(n_v)
+    )
+    if signed_area_2 < 0:
+        verts = verts[::-1]
+
+    # Close polygon
+    verts_closed = np.vstack([verts, verts[:1]])
+
+    # Edge geometry
+    A = verts_closed[:-1]   # edge start points, (n_edges, 2)
+    B = verts_closed[1:]    # edge end points
+    AB = B - A              # edge vectors
+    AB_len = np.linalg.norm(AB, axis=1)
+
+    # Inward-pointing unit normals (for CCW polygon: rotate edge 90° left)
+    edge_normal = np.stack([-AB[:, 1], AB[:, 0]], axis=1) / AB_len[:, np.newaxis]
+
+    # Vertex normals (mean of adjacent edge normals)
+    n_e = len(A)
+    A_normal = (edge_normal + np.roll(edge_normal, 1, axis=0)) / 2
+    B_normal = np.roll(A_normal, -1, axis=0)
+
+    # Freeze as JAX arrays
+    jA = jnp.array(A)
+    jB = jnp.array(B)
+    jAB = jnp.array(AB)
+    jAB_len = jnp.array(AB_len)
+    j_en = jnp.array(edge_normal)
+    j_An = jnp.array(A_normal)
+    j_Bn = jnp.array(B_normal)
+
+    def _project_single(px, py):
+        """Signed distance + projection for a single point."""
+        P = jnp.array([px, py])
+        AP = P - jA       # (n_edges, 2)
+        BP = P - jB       # (n_edges, 2)
+
+        # Projection parameter along each edge
+        a_tilde = jnp.sum(AP * jAB, axis=1) / jAB_len
+
+        use_A = a_tilde < 0
+        use_B = a_tilde > jAB_len
+
+        # --- Perpendicular distance to edge line ---
+        dist_edge = jnp.sum(AP * j_en, axis=1)
+
+        # --- Distance to vertex A ---
+        AP_len = jnp.sqrt(jnp.sum(AP**2, axis=1) + 1e-20)
+        sign_A = jnp.where(jnp.sum(AP * j_An, axis=1) > 0, 1.0, -1.0)
+        dist_A = AP_len * sign_A
+
+        # --- Distance to vertex B ---
+        BP_len = jnp.sqrt(jnp.sum(BP**2, axis=1) + 1e-20)
+        sign_B = jnp.where(jnp.sum(BP * j_Bn, axis=1) > 0, 1.0, -1.0)
+        dist_B = BP_len * sign_B
+
+        # Pick per-edge distance based on closest feature
+        distance = jnp.where(use_A, dist_A, jnp.where(use_B, dist_B, dist_edge))
+
+        # Gradient (direction to move inward)
+        grad_edge = j_en
+        grad_A = sign_A[:, None] * AP / (AP_len[:, None] + 1e-20)
+        grad_B = sign_B[:, None] * BP / (BP_len[:, None] + 1e-20)
+        grad = jnp.where(use_A[:, None], grad_A,
+                         jnp.where(use_B[:, None], grad_B, grad_edge))
+
+        # Closest edge determines the signed distance
+        closest = jnp.argmin(jnp.abs(distance))
+        dist = distance[closest]
+        g = grad[closest]
+
+        # If outside (dist < 0), push back inside
+        correction = jnp.where(dist < 0, -dist * 1.01, 0.0)
+        return px + correction * g[0], py + correction * g[1]
+
+    def project(x, y):
+        return jax.vmap(_project_single)(x, y)
+
+    return project
 
 
 def create_dei_turbine():
@@ -257,6 +363,7 @@ def run_single_neighbor_analysis(
     farm_indices: list[int] | None = None,
     skip_combined: bool = False,
     seed_offset: int = 0,
+    file_tag: str = "",
 ):
     """Run DEI analysis with each individual neighbor using gradient-based optimization.
 
@@ -323,17 +430,28 @@ def run_single_neighbor_analysis(
     )
     print(f"Full time series: {len(wd_ts)} samples (10 years daily data)")
 
-    # Get boundary extent for layout generation
+    # Polygon boundary constraint (replaces bounding-box clip)
+    D = TARGET_ROTOR_DIAMETER
+    project_to_polygon = make_polygon_projector(target_boundary)
+
+    # Bounding box (only used as envelope for rejection sampling)
     x_min, x_max = float(target_boundary[0].min()), float(target_boundary[0].max())
     y_min, y_max = float(target_boundary[1].min()), float(target_boundary[1].max())
-    D = TARGET_ROTOR_DIAMETER
+    _polygon_path = MplPath(target_boundary.T)
 
     def generate_layout(seed):
-        """Generate random initial layout."""
+        """Generate random initial layout inside the polygon boundary."""
         rng = np.random.default_rng(seed)
-        x = rng.uniform(x_min, x_max, TARGET_N_TURBINES)
-        y = rng.uniform(y_min, y_max, TARGET_N_TURBINES)
-        return jnp.array(x), jnp.array(y)
+        points = []
+        while len(points) < TARGET_N_TURBINES:
+            candidates = rng.uniform(
+                [x_min, y_min], [x_max, y_max],
+                size=(TARGET_N_TURBINES * 3, 2),
+            )
+            inside = _polygon_path.contains_points(candidates)
+            points.extend(candidates[inside].tolist())
+        points = np.array(points[:TARGET_N_TURBINES])
+        return jnp.array(points[:, 0]), jnp.array(points[:, 1])
 
     def compute_aep_binned(x_target, y_target, x_neighbor=None, y_neighbor=None):
         """Compute AEP using binned wind rose (for optimization)."""
@@ -416,8 +534,7 @@ def run_single_neighbor_analysis(
                 x = x - lr * m_x_hat / (jnp.sqrt(v_x_hat) + eps)
                 y = y - lr * m_y_hat / (jnp.sqrt(v_y_hat) + eps)
 
-                x = jnp.clip(x, x_min + D/2, x_max - D/2)
-                y = jnp.clip(y, y_min + D/2, y_max - D/2)
+                x, y = project_to_polygon(x, y)
 
                 return (x, y, m_x, m_y, v_x, v_y), None
 
@@ -438,13 +555,8 @@ def run_single_neighbor_analysis(
     print("Compiling liberal optimizer...", flush=True)
     liberal_optimizer = make_optimizer(None, None)
 
-    def optimize_layout(x_init, y_init, x_neighbor=None, y_neighbor=None, max_iterations=500, lr=50.0):
-        """Optimize layout using JIT-compiled Adam."""
-        if x_neighbor is not None:
-            optimizer = make_optimizer(x_neighbor, y_neighbor)
-        else:
-            optimizer = liberal_optimizer
-
+    def optimize_layout(x_init, y_init, optimizer, max_iterations=500, lr=50.0):
+        """Optimize layout using a pre-compiled JIT optimizer."""
         x_opt, y_opt, aep = optimizer(x_init, y_init, max_iterations, lr)
         return x_opt, y_opt, float(aep)
 
@@ -468,10 +580,15 @@ def run_single_neighbor_analysis(
         print(f"\n--- Farm {farm_idx}: {farm_name} ---")
         print(f"Direction: {direction:.0f}°, Distance: {distance:.1f} km, Turbines: {len(x_neighbor)}")
 
+        # Pre-compile conservative optimizer for this farm (reused across all seeds)
+        print(f"Compiling conservative optimizer for farm {farm_idx}...", flush=True)
+        conservative_optimizer = make_optimizer(x_neighbor, y_neighbor)
+
         start_time = time.time()
 
         # Run multi-start optimization, saving incrementally to HDF5
-        layouts_file = output_path / f"layouts_farm{farm_idx}.h5"
+        tag = f"_{file_tag}" if file_tag else ""
+        layouts_file = output_path / f"layouts_farm{farm_idx}{tag}.h5"
 
         # Determine which seeds already exist in the file
         completed_seeds = set()
@@ -511,7 +628,7 @@ def run_single_neighbor_analysis(
             x0, y0 = generate_layout(seed)
 
             # Liberal: optimize ignoring neighbor
-            x_lib, y_lib, _ = optimize_layout(x0, y0, None, None, max_iter)
+            x_lib, y_lib, _ = optimize_layout(x0, y0, liberal_optimizer, max_iter)
             # Re-evaluate with full time series for accurate AEP
             aep_lib_absent = compute_aep_full(x_lib, y_lib, None, None)
             aep_lib_present = compute_aep_full(x_lib, y_lib, x_neighbor, y_neighbor)
@@ -525,7 +642,7 @@ def run_single_neighbor_analysis(
             liberal_layouts.append(lib_layout)
 
             # Conservative: optimize considering neighbor
-            x_con, y_con, _ = optimize_layout(x0, y0, x_neighbor, y_neighbor, max_iter)
+            x_con, y_con, _ = optimize_layout(x0, y0, conservative_optimizer, max_iter)
             # Re-evaluate with full time series for accurate AEP
             aep_con_absent = compute_aep_full(x_con, y_con, None, None)
             aep_con_present = compute_aep_full(x_con, y_con, x_neighbor, y_neighbor)
@@ -627,10 +744,15 @@ def run_single_neighbor_analysis(
         x_all_neighbors = np.array(x_all_neighbors)
         y_all_neighbors = np.array(y_all_neighbors)
 
+        # Pre-compile conservative optimizer for combined case (reused across all seeds)
+        print(f"Compiling combined conservative optimizer ({len(x_all_neighbors)} neighbor turbines)...", flush=True)
+        combined_conservative_optimizer = make_optimizer(x_all_neighbors, y_all_neighbors)
+
         start_time = time.time()
 
         # Save incrementally to HDF5
-        layouts_file = output_path / "layouts_combined.h5"
+        tag = f"_{file_tag}" if file_tag else ""
+        layouts_file = output_path / f"layouts_combined{tag}.h5"
 
         # Determine which seeds already exist
         completed_seeds = set()
@@ -662,7 +784,7 @@ def run_single_neighbor_analysis(
             x0, y0 = generate_layout(seed)
 
             # Liberal
-            x_lib, y_lib, _ = optimize_layout(x0, y0, None, None, max_iter)
+            x_lib, y_lib, _ = optimize_layout(x0, y0, liberal_optimizer, max_iter)
             # Re-evaluate with full time series for accurate AEP
             aep_lib_absent = compute_aep_full(x_lib, y_lib, None, None)
             aep_lib_present = compute_aep_full(x_lib, y_lib, x_all_neighbors, y_all_neighbors)
@@ -675,7 +797,7 @@ def run_single_neighbor_analysis(
             }
 
             # Conservative
-            x_con, y_con, _ = optimize_layout(x0, y0, x_all_neighbors, y_all_neighbors, max_iter)
+            x_con, y_con, _ = optimize_layout(x0, y0, combined_conservative_optimizer, max_iter)
             # Re-evaluate with full time series for accurate AEP
             aep_con_absent = compute_aep_full(x_con, y_con, None, None)
             aep_con_present = compute_aep_full(x_con, y_con, x_all_neighbors, y_all_neighbors)
@@ -851,6 +973,8 @@ if __name__ == "__main__":
                         help="Skip the 'all neighbors combined' analysis")
     parser.add_argument("--only-combined", action="store_true",
                         help="Skip individual farms, only run 'all neighbors combined' analysis")
+    parser.add_argument("--file-tag", type=str, default="",
+                        help="Tag appended to output HDF5 filename (for parallel writes)")
 
     args = parser.parse_args()
 
@@ -871,4 +995,5 @@ if __name__ == "__main__":
         farm_indices=farm_indices,
         skip_combined=skip_combined,
         seed_offset=args.seed_offset,
+        file_tag=args.file_tag,
     )
