@@ -80,6 +80,7 @@ class AdversarialSearchSettings:
     tol: float = 1e-4
     neighbor_boundary: jnp.ndarray | None = None
     neighbor_min_spacing: float | None = None
+    target_buffer: float | None = None
     sgd_settings: SGDSettings | None = None
     verbose: bool = True
 
@@ -256,14 +257,27 @@ class GradientAdversarialSearch:
             # Regret = liberal - conservative (we want to maximize this)
             return liberal_aep - conservative_aep
 
-        # Gradient ascent on neighbor positions to maximize regret
+        # Gradient ascent on neighbor positions to maximize regret (ADAM optimizer)
         neighbor_params = jnp.concatenate([init_neighbor_x, init_neighbor_y])
         history = []
 
         regret_and_grad = value_and_grad(compute_regret)
 
+        # ADAM state
+        beta1, beta2, adam_eps = 0.9, 0.999, 1e-8
+        m = jnp.zeros_like(neighbor_params)
+        v = jnp.zeros_like(neighbor_params)
+        best_regret = -jnp.inf
+        best_neighbor_params = neighbor_params
+
         for i in range(settings.max_iter):
             regret, grad = regret_and_grad(neighbor_params)
+
+            # NaN guard: break early if gradient is NaN
+            if not jnp.all(jnp.isfinite(grad)):
+                if settings.verbose:
+                    print(f"Iter {i}: NaN gradient detected, stopping early")
+                break
 
             history.append(
                 (
@@ -273,8 +287,17 @@ class GradientAdversarialSearch:
                 )
             )
 
+            # Track best result
+            if float(regret) > float(best_regret):
+                best_regret = regret
+                best_neighbor_params = neighbor_params
+
+            grad_norm = float(jnp.linalg.norm(grad))
             if settings.verbose and i % 10 == 0:
-                print(f"Iter {i}: regret = {regret:.4f} GWh, |grad| = {jnp.linalg.norm(grad):.6f}")
+                print(
+                    f"Iter {i}: regret = {regret:.4f} GWh, "
+                    f"|grad| = {grad_norm:.6f}"
+                )
 
             # Check convergence
             if i > 0 and abs(history[-1][0] - history[-2][0]) < settings.tol:
@@ -282,8 +305,13 @@ class GradientAdversarialSearch:
                     print(f"Converged at iteration {i}")
                 break
 
-            # Gradient ascent step (maximize regret)
-            neighbor_params = neighbor_params + settings.learning_rate * grad
+            # ADAM update (gradient ascent: maximize regret)
+            t = i + 1
+            m = beta1 * m + (1 - beta1) * grad
+            v = beta2 * v + (1 - beta2) * grad ** 2
+            m_hat = m / (1 - beta1 ** t)
+            v_hat = v / (1 - beta2 ** t)
+            neighbor_params = neighbor_params + settings.learning_rate * m_hat / (jnp.sqrt(v_hat) + adam_eps)
 
             # Apply neighbor boundary constraints if specified
             if settings.neighbor_boundary is not None:
@@ -300,6 +328,27 @@ class GradientAdversarialSearch:
                 neighbor_x = jnp.clip(neighbor_x, x_min, x_max)
                 neighbor_y = jnp.clip(neighbor_y, y_min, y_max)
                 neighbor_params = jnp.concatenate([neighbor_x, neighbor_y])
+
+            # Enforce minimum buffer from target boundary
+            if settings.target_buffer is not None:
+                n_neighbors = len(init_neighbor_x)
+                nb_x = neighbor_params[:n_neighbors]
+                nb_y = neighbor_params[n_neighbors:]
+                tb = self.target_boundary
+                # Nearest point on target boundary box to each neighbor
+                cx = jnp.clip(nb_x, tb[:, 0].min(), tb[:, 0].max())
+                cy = jnp.clip(nb_y, tb[:, 1].min(), tb[:, 1].max())
+                dx = nb_x - cx
+                dy = nb_y - cy
+                dist = jnp.sqrt(dx**2 + dy**2)
+                buf = settings.target_buffer
+                scale = jnp.where(dist < 1e-6, 1.0, buf / dist)
+                nb_x = jnp.where(dist < buf, cx + dx * scale, nb_x)
+                nb_y = jnp.where(dist < buf, cy + dy * scale, nb_y)
+                neighbor_params = jnp.concatenate([nb_x, nb_y])
+
+        # Use best params found (in case NaN terminated early)
+        neighbor_params = best_neighbor_params
 
         # Final evaluation
         n_neighbors = len(init_neighbor_x)

@@ -684,22 +684,24 @@ def _sgd_solve_implicit_bwd(
 
     # Compute Jacobian of grad_xy w.r.t. params using finite differences
     # This avoids nested custom_vjp issues that occur with AD-based approaches
-    eps = 1e-5
+    # Adaptive epsilon: scale per-parameter so perturbation is meaningful
+    # at ~1000m positions (eps_base * max(1, |param_i|) ≈ 0.1m)
+    eps_base = 1e-4
     n_params = params.shape[0]
     n_turbines = opt_x.shape[0]
 
-    # Initialize Jacobians
-    jac_x = jnp.zeros((n_turbines, n_params))
-    jac_y = jnp.zeros((n_turbines, n_params))
+    # Per-parameter adaptive epsilon
+    eps_vec = eps_base * jnp.maximum(1.0, jnp.abs(params))  # shape (n_params,)
 
     # Central differences for each parameter dimension
     def compute_jac_col(i: int) -> tuple[jnp.ndarray, jnp.ndarray]:
         """Compute i-th column of Jacobian using central differences."""
+        eps_i = eps_vec[i]
         e_i = jnp.zeros(n_params).at[i].set(1.0)
-        grad_plus = grad_xy_at_params(params + eps * e_i)
-        grad_minus = grad_xy_at_params(params - eps * e_i)
-        jac_col_x = (grad_plus[0] - grad_minus[0]) / (2 * eps)
-        jac_col_y = (grad_plus[1] - grad_minus[1]) / (2 * eps)
+        grad_plus = grad_xy_at_params(params + eps_i * e_i)
+        grad_minus = grad_xy_at_params(params - eps_i * e_i)
+        jac_col_x = (grad_plus[0] - grad_minus[0]) / (2 * eps_i)
+        jac_col_y = (grad_plus[1] - grad_minus[1]) / (2 * eps_i)
         return jac_col_x, jac_col_y
 
     # Use vmap for efficiency
@@ -735,37 +737,54 @@ def _sgd_solve_implicit_bwd(
         hvp_y = (grad_plus[1] - grad_minus[1]) / (2 * eps_scaled)
         return hvp_x, hvp_y
 
-    # Solve H @ v = g using conjugate gradient (simplified: fixed-point iteration)
+    # Solve (H + damping*I) @ v = g using Conjugate Gradient (CG)
+    # Tikhonov damping regularizes near-singular Hessians
+    damping = 0.01
+
     def solve_linear_system(
-        g_x: jnp.ndarray, g_y: jnp.ndarray, max_iter: int = 50, tol: float = 1e-6
+        g_x: jnp.ndarray, g_y: jnp.ndarray, max_iter: int = 100, tol: float = 1e-6
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
-        """Solve H @ v = g approximately using fixed-point iteration."""
+        """Solve (H + damping*I) @ v = g using Conjugate Gradient."""
 
-        def cond_fn(
-            carry: tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, int],
-        ) -> jnp.ndarray:
-            _, _, r_x, r_y, it = carry
-            residual = jnp.max(jnp.abs(r_x)) + jnp.max(jnp.abs(r_y))
-            return jnp.logical_and(residual > tol, it < max_iter)
+        def damped_hvp(vx: jnp.ndarray, vy: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+            hx, hy = hvp(vx, vy)
+            return hx + damping * vx, hy + damping * vy
 
-        def body_fn(
-            carry: tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, int],
-        ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, int]:
-            v_x, v_y, _, _, it = carry
-            hv_x, hv_y = hvp(v_x, v_y)
-            # Damped update: v_new = v + 0.1 * (g - H @ v)
-            r_x = g_x - hv_x
-            r_y = g_y - hv_y
-            v_x_new = v_x + 0.1 * r_x
-            v_y_new = v_y + 0.1 * r_y
-            return (v_x_new, v_y_new, r_x, r_y, it + 1)
+        def dot_xy(ax: jnp.ndarray, ay: jnp.ndarray, bx: jnp.ndarray, by: jnp.ndarray) -> jnp.ndarray:
+            return jnp.sum(ax * bx) + jnp.sum(ay * by)
 
-        # Initial guess: v = g (approximation for H close to identity)
-        init_r_x, init_r_y = hvp(g_x, g_y)
-        init_r_x = g_x - init_r_x
-        init_r_y = g_y - init_r_y
-        init_carry = (g_x, g_y, init_r_x, init_r_y, 0)
-        v_x, v_y, _, _, _ = while_loop(cond_fn, body_fn, init_carry)
+        # CG state: (v_x, v_y, r_x, r_y, p_x, p_y, rs_old, iteration)
+        def cond_fn(carry):
+            _, _, _, _, _, _, rs_old, it = carry
+            return jnp.logical_and(rs_old > tol**2, it < max_iter)
+
+        def body_fn(carry):
+            v_x, v_y, r_x, r_y, p_x, p_y, rs_old, it = carry
+            # A @ p
+            ap_x, ap_y = damped_hvp(p_x, p_y)
+            # step size alpha = rs_old / (p^T A p)
+            pap = dot_xy(p_x, p_y, ap_x, ap_y)
+            alpha = rs_old / jnp.maximum(pap, 1e-30)
+            # update solution and residual
+            v_x_new = v_x + alpha * p_x
+            v_y_new = v_y + alpha * p_y
+            r_x_new = r_x - alpha * ap_x
+            r_y_new = r_y - alpha * ap_y
+            rs_new = dot_xy(r_x_new, r_y_new, r_x_new, r_y_new)
+            # update search direction
+            beta = rs_new / jnp.maximum(rs_old, 1e-30)
+            p_x_new = r_x_new + beta * p_x
+            p_y_new = r_y_new + beta * p_y
+            return (v_x_new, v_y_new, r_x_new, r_y_new, p_x_new, p_y_new, rs_new, it + 1)
+
+        # Initial guess: v = 0, r = g - A@0 = g, p = r
+        v0_x = jnp.zeros_like(g_x)
+        v0_y = jnp.zeros_like(g_y)
+        r0_x, r0_y = g_x, g_y
+        p0_x, p0_y = g_x, g_y
+        rs0 = dot_xy(r0_x, r0_y, r0_x, r0_y)
+        init_carry = (v0_x, v0_y, r0_x, r0_y, p0_x, p0_y, rs0, 0)
+        v_x, v_y, _, _, _, _, _, _ = while_loop(cond_fn, body_fn, init_carry)
         return v_x, v_y
 
     # Solve for the adjoint vector
