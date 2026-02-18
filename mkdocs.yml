@@ -29,7 +29,8 @@ nav:
     - Wake Sensitivity A=0.02: dei-A0.02.md
     - Wake Sensitivity A=0.10: dei-A0.10.md
   - IFT Bilevel Search:
-    - Cost Tradeoffs: cost_tradeoffs.md
+    - Cost Analysis: cost_tradeoffs.md
+    - Multistart Strategies: multistart_strategies.md
   - Replication: replication.md
 
 markdown_extensions:

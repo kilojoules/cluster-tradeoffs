@@ -102,6 +102,25 @@ Options:
   --output-dir, -o      Output directory (auto-generated if not specified)
 ```
 
+### IFT Bilevel Search
+
+```bash
+# Run gradient tests (validates IFT machinery, ~40 seconds)
+pixi run python -m pytest tests/test_ift_gradients.py -v
+
+# Component-level cost benchmarks (~5 minutes)
+pixi run python scripts/explore_cost_tradeoffs.py
+
+# Multistart strategy benchmark (~10 minutes)
+pixi run python scripts/benchmark_multistart.py
+
+# Animated bilevel prototype (generates MP4s, ~3 minutes)
+pixi run python scripts/prototype_bilevel_animated.py
+
+# Inner loop animations (first/last outer iteration, ~3 minutes)
+pixi run python scripts/animate_inner_loop.py
+```
+
 ### Convergence Study: `run_convergence_study.py`
 
 ```bash
