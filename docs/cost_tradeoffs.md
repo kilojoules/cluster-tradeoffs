@@ -217,7 +217,41 @@ cost_per_step = cost_IFT + (K * cost_fwd) / M
 
 This is 12x more expensive than envelope theorem IFT (3.1 min for 50 outer iterations with K=5).
 
-## 8. Projected Costs for 50 Outer Iterations
+## 8. Measured Multistart Benchmark
+
+We implemented and ran all four strategies on the same benchmark case (4 targets, 2 neighbors, K=5 starts, 20 outer ADAM iterations). Reproduce with `pixi run python scripts/benchmark_multistart.py`.
+
+![Multistart comparison](cost_tradeoffs/multistart_comparison.png)
+
+| Strategy | Total time | Per-iter | Final regret | Notes |
+|----------|-----------|---------|-------------|-------|
+| Single-start IFT | 35.6 s | 1.78 s | 8.64 GWh | Steady climb, no multistart |
+| Stochastic single-start | 45.6 s | 2.28 s | 7.16 GWh | High variance, noisy convergence |
+| Envelope theorem (K=5) | 103.5 s | 5.18 s | 10.15 GWh | **Highest regret found** |
+| LogSumExp (K=5, tau=10) | 315.4 s | 15.77 s | 8.51 GWh | 3x slower than envelope, destabilized late |
+
+### Why envelope beats LogSumExp on both cost and quality
+
+**Cost difference:** Envelope runs K forward-only passes (no gradient tracking, just `topfarm_sgd_solve`) then 1 full forward+backward pass through the winner. LogSumExp runs K full forward+backward passes because the softmax weights `w_k = softmax(tau * regrets)` depend on every start's value, so gradients must flow through all K backward passes.
+
+```
+Envelope:   K * t_forward + 1 * (t_forward + t_backward) = 5*0.55 + 1.54 = 4.3 s/iter
+LogSumExp:  K * (t_forward + t_backward)                 = 5*1.54         = 7.7 s/iter
+```
+
+The measured per-iteration costs (5.18 s vs 15.77 s) are higher than this estimate because LogSumExp also recomputes forward-only regrets for the `true_max` diagnostic. But the ratio holds: LogSumExp is ~3x more expensive.
+
+**Quality difference:** Envelope found 10.15 GWh regret vs LogSumExp's 8.51 GWh. LogSumExp destabilized around iteration 14 (regret dropped from 10.3 to 4.3 GWh) because the softmax-weighted gradient can point in a compromise direction that doesn't serve any individual start well. Envelope's gradient always points in the direction that improves the *current best* start, which is more targeted.
+
+### Envelope theorem: start switching
+
+The winning start changed 14 times over 20 iterations, cycling among starts 0, 2, 3, and 4. This is frequent, which means the gradient is technically incorrect at each switch point. Despite this, ADAM momentum smoothed the trajectory and regret climbed steadily.
+
+### Stochastic single-start: high variance
+
+Regret oscillated between 4.0 and 11.0 GWh due to different random starts landing in different local optima. The ADAM momentum cannot fully smooth this because the gradient direction changes drastically when a different local minimum is found. More outer iterations would help, but convergence is slow.
+
+## 9. Projected Costs for 50 Outer Iterations
 
 ![Multistart cost projection](cost_tradeoffs/multistart_cost.png)
 
@@ -245,7 +279,11 @@ These benchmarks use a small problem (4 turbines, NOJ deficit, 1 wind direction)
 ## Reproducing These Results
 
 ```bash
+# Component-level benchmarks and cost projections
 pixi run python scripts/explore_cost_tradeoffs.py
+
+# Multistart strategy benchmark (4 strategies, 20 outer iterations each)
+pixi run python scripts/benchmark_multistart.py
 ```
 
-Outputs are saved to `analysis/cost_tradeoffs/` (gitignored) and `docs/cost_tradeoffs/` (committed).
+Outputs are saved to `analysis/` (gitignored) and `docs/cost_tradeoffs/` (committed).
