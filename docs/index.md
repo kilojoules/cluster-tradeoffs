@@ -168,12 +168,12 @@ pixi run python scripts/run_convergence_study.py
 
 Detailed analysis for each wind rose configuration:
 
-- [Single Direction (270°)](results/#single-direction-270)
-- [Von Mises κ=1 (Broad Spread)](results/#von-mises-1-broad-spread)
-- [Von Mises κ=2 (Optimal)](results/#von-mises-2-optimal)
-- [Von Mises κ=4 (Concentrated)](results/#von-mises-4-concentrated)
-- [Uniform Distribution](results/#uniform-distribution)
-- [Bimodal Distribution](results/#bimodal-distribution)
+- [Single Direction (270°)](results.md#single-direction-270)
+- [Von Mises κ=1 (Broad Spread)](results.md#von-mises-1-broad-spread)
+- [Von Mises κ=2 (Optimal)](results.md#von-mises-2-optimal)
+- [Von Mises κ=4 (Concentrated)](results.md#von-mises-4-concentrated)
+- [Uniform Distribution](results.md#uniform-distribution)
+- [Bimodal Distribution](results.md#bimodal-distribution)
 
 ## Real-World Case Study
 
