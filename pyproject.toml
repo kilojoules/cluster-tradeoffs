@@ -62,3 +62,6 @@ rocm = ["rocm", "test"]
 [tool.coverage.report]
 fail_under = 95
 precision = 2
+
+[activation.env]
+JAX_ENABLE_X64 = "True"
