@@ -21,10 +21,11 @@ imageio = ">=2.37.0,<3"
 git-lfs = ">=3.7.1,<4"
 pre-commit = ">=4.5.1,<5"
 ffmpeg = ">=8.0.1,<9"
+jax = "*"
+jaxlib = "*"
 
 [pypi-dependencies]
 pixwake = { path = ".", editable = true }
-jax = "*"
 silent-killers = ">=0.1.8, <0.2"
 mkdocs = ">=1.5"
 mkdocs-material = ">=9.0"

@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 
 # Paths
-DEI_DIR = Path(__file__).parent.parent / "OMAE_neighbors"
+DEI_DIR = Path(__file__).parent.parent 
 WIND_DATA_FILE = DEI_DIR / "energy_island_10y_daily_av_wind.csv"
 OUTPUT_DIR = Path(__file__).parent.parent / "docs/figures"
 
