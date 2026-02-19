@@ -84,6 +84,12 @@ class SGDSettings:
         ks_rho: KS aggregation smoothness parameter (default: 100.0).
         spacing_weight: Weight for spacing penalty (default: 1.0).
         boundary_weight: Weight for boundary penalty (default: 1.0).
+        additional_constant_lr_iterations: Number of initial iterations to run
+            at the constant initial learning rate before starting the decay
+            schedule. Matches TopFarm's ``additional_constant_lr_iterations``
+            option. During these steps ADAM moments accumulate but the
+            learning rate and constraint multiplier alpha stay fixed
+            (default: 0).
     """
 
     learning_rate: float = 10.0
@@ -98,6 +104,7 @@ class SGDSettings:
     ks_rho: float = 100.0
     spacing_weight: float = 1.0
     boundary_weight: float = 1.0
+    additional_constant_lr_iterations: int = 0
 
 
 def _compute_mid_bisection(
@@ -384,12 +391,18 @@ def _sgd_step(
     x_new = x - state.learning_rate * m_hat_x / (jnp.sqrt(v_hat_x) + eps)
     y_new = y - state.learning_rate * m_hat_y / (jnp.sqrt(v_hat_y) + eps)
 
-    # Learning rate decay: lr *= 1 / (1 + mid * iter)
+    # During the constant-LR phase, keep lr and alpha fixed (TopFarm behavior:
+    # iter_count is not incremented, so decay factor is 1/(1+mid*0) = 1).
+    n_const = settings.additional_constant_lr_iterations
     mid = settings.mid if settings.mid is not None else 1.0 / settings.max_iter
-    new_lr = state.learning_rate * 1.0 / (1 + mid * it)
+    decaying = it > n_const
+    decay_it = jnp.where(decaying, it - n_const, 0)
+
+    # Learning rate decay: lr *= 1 / (1 + mid * decay_iter)
+    new_lr = state.learning_rate * 1.0 / (1 + mid * decay_it)
 
     # Alpha update: alpha = alpha0 * lr0 / lr
-    new_alpha = state.alpha0 * state.lr0 / new_lr
+    new_alpha = jnp.where(decaying, state.alpha0 * state.lr0 / new_lr, state.alpha)
 
     new_state = SGDState(
         m_x=m_x,
@@ -469,6 +482,7 @@ def topfarm_sgd_solve(
             ks_rho=settings.ks_rho,
             spacing_weight=settings.spacing_weight,
             boundary_weight=settings.boundary_weight,
+            additional_constant_lr_iterations=settings.additional_constant_lr_iterations,
         )
 
     rho = settings.ks_rho
@@ -496,14 +510,17 @@ def topfarm_sgd_solve(
     )
 
     # State for while_loop: (x, y, sgd_state, prev_x, prev_y)
+    # Total iterations = additional constant LR steps + max_iter decaying steps
+    total_iter = settings.max_iter + settings.additional_constant_lr_iterations
+
     def cond_fn(
         carry: tuple[jnp.ndarray, jnp.ndarray, SGDState, jnp.ndarray, jnp.ndarray],
     ) -> jnp.ndarray:
         x, y, state, prev_x, prev_y = carry
-        # Continue if not converged and under max iterations
+        # Continue if not converged and under total iterations
         change = jnp.max(jnp.abs(x - prev_x)) + jnp.max(jnp.abs(y - prev_y))
         not_converged = change > settings.tol
-        under_max_iter = state.iteration < settings.max_iter
+        under_max_iter = state.iteration < total_iter
         return jnp.logical_and(not_converged, under_max_iter)
 
     def body_fn(
