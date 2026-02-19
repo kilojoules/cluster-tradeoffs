@@ -45,11 +45,9 @@ from pixwake.optim.sgd import (
 # DEI Configuration
 # =============================================================================
 
-TARGET_N_TURBINES = 10
 TARGET_ROTOR_DIAMETER = 240.0  # m
 TARGET_HUB_HEIGHT = 150.0  # m
 D = TARGET_ROTOR_DIAMETER
-MIN_SPACING = 4 * D  # 960m
 SNAPSHOT_EVERY = 5  # inner SGD snapshot frequency
 
 
@@ -144,7 +142,11 @@ def place_initial_neighbors(boundary, n_neighbors, seed=123):
 
 def sgd_solve_with_history(objective_fn, init_x, init_y, boundary, min_spacing,
                            settings, snapshot_every=SNAPSHOT_EVERY):
-    """Run inner SGD in Python loop, capturing snapshots of (x, y, obj, penalty)."""
+    """Run inner SGD in Python loop, capturing snapshots of (x, y, obj, penalty).
+
+    Total iterations = additional_constant_lr_iterations + max_iter, matching
+    TopFarm's behavior where constant-LR steps are truly additional.
+    """
     if settings.mid is None:
         gamma_min = settings.gamma_min_factor
         computed_mid = _compute_mid_bisection(
@@ -162,8 +164,10 @@ def sgd_solve_with_history(objective_fn, init_x, init_y, boundary, min_spacing,
             ks_rho=settings.ks_rho,
             spacing_weight=settings.spacing_weight,
             boundary_weight=settings.boundary_weight,
+            additional_constant_lr_iterations=settings.additional_constant_lr_iterations,
         )
 
+    total_iter = settings.max_iter + settings.additional_constant_lr_iterations
     rho = settings.ks_rho
     grad_obj_fn = jax.grad(objective_fn, argnums=(0, 1))
 
@@ -180,7 +184,7 @@ def sgd_solve_with_history(objective_fn, init_x, init_y, boundary, min_spacing,
     snapshots = []
     prev_x, prev_y = x - 1.0, y - 1.0
 
-    for step in range(settings.max_iter):
+    for step in range(total_iter):
         change = float(jnp.max(jnp.abs(x - prev_x)) + jnp.max(jnp.abs(y - prev_y)))
         if step > 0 and change < settings.tol:
             break
@@ -314,22 +318,53 @@ def render_inner_animation(snapshots, nb_params, n_neighbor, boundary_np,
 # =============================================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="DEI IFT bilevel optimization")
-    parser.add_argument("--n-outer", type=int, default=100, help="Outer loop iterations")
+    parser = argparse.ArgumentParser(
+        description="DEI IFT bilevel optimization",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    # Problem setup
+    parser.add_argument("--n-target", type=int, default=10, help="Number of target turbines")
     parser.add_argument("--n-neighbors", type=int, default=10, help="Number of neighbor turbines")
-    parser.add_argument("--lr", type=float, default=200.0, help="Outer learning rate")
-    parser.add_argument("--inner-max-iter", type=int, default=500, help="Inner SGD max iterations")
-    parser.add_argument("--output-dir", type=str, default="analysis/dei_ift_bilevel")
+    parser.add_argument("--min-spacing-D", type=float, default=4.0, help="Minimum spacing in rotor diameters")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for initial layout")
+    parser.add_argument("--output-dir", type=str, default="analysis/dei_ift_bilevel")
+
+    # Outer loop SGD settings
+    parser.add_argument("--n-outer", type=int, default=100, help="Outer loop iterations")
+    parser.add_argument("--lr", type=float, default=200.0, help="Outer initial learning rate")
+    parser.add_argument("--outer-gamma-min", type=float, default=0.01, help="Outer final LR as fraction of initial")
+    parser.add_argument("--outer-beta1", type=float, default=0.1, help="Outer ADAM beta1")
+    parser.add_argument("--outer-beta2", type=float, default=0.2, help="Outer ADAM beta2")
+    parser.add_argument("--outer-constant-lr-iters", type=int, default=0,
+                        help="Outer iterations at constant LR before decay")
+
+    # Inner loop SGD settings
+    parser.add_argument("--inner-lr", type=float, default=50.0, help="Inner SGD initial learning rate")
+    parser.add_argument("--inner-max-iter", type=int, default=500, help="Inner SGD max iterations")
+    parser.add_argument("--inner-gamma-min", type=float, default=0.01, help="Inner final LR as fraction of initial")
+    parser.add_argument("--inner-beta1", type=float, default=0.1, help="Inner ADAM beta1")
+    parser.add_argument("--inner-beta2", type=float, default=0.2, help="Inner ADAM beta2")
+    parser.add_argument("--inner-tol", type=float, default=1e-6, help="Inner SGD convergence tolerance")
+    parser.add_argument("--inner-constant-lr-iters", type=int, default=0,
+                        help="Inner iterations at constant LR before decay")
+
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    N_TARGET = args.n_target
+    N_NEIGHBOR = args.n_neighbors
+    min_spacing = args.min_spacing_D * D
+
     print("=" * 70)
     print("DEI IFT BILEVEL OPTIMIZATION")
-    print(f"  {TARGET_N_TURBINES} target turbines, {args.n_neighbors} neighbor turbines")
-    print(f"  {args.n_outer} outer iterations, lr={args.lr}")
+    print(f"  {N_TARGET} target turbines, {N_NEIGHBOR} neighbor turbines")
+    print(f"  {args.n_outer} outer iterations, outer lr={args.lr}")
+    print(f"  Inner: lr={args.inner_lr}, max_iter={args.inner_max_iter}, "
+          f"constant_lr_iters={args.inner_constant_lr_iters}")
+    print(f"  Outer: lr={args.lr}, gamma_min={args.outer_gamma_min}, "
+          f"constant_lr_iters={args.outer_constant_lr_iters}")
     print("=" * 70)
 
     # Load data
@@ -343,20 +378,21 @@ def main():
     print(f"Wind rose: {len(wd)} directions, dominant ~{float(wd[jnp.argmax(weights)]):.0f}°")
 
     # Initial layouts
-    init_x, init_y = generate_initial_layout(boundary_np, TARGET_N_TURBINES, seed=args.seed)
-    init_nb_x, init_nb_y = place_initial_neighbors(boundary_np, args.n_neighbors, seed=args.seed + 1)
+    init_x, init_y = generate_initial_layout(boundary_np, N_TARGET, seed=args.seed)
+    init_nb_x, init_nb_y = place_initial_neighbors(boundary_np, N_NEIGHBOR, seed=args.seed + 1)
 
-    print(f"Target turbines: {TARGET_N_TURBINES}, min spacing: {MIN_SPACING:.0f} m")
-    print(f"Neighbor turbines: {args.n_neighbors}")
+    print(f"Target turbines: {N_TARGET}, min spacing: {min_spacing:.0f} m")
+    print(f"Neighbor turbines: {N_NEIGHBOR}")
 
     sgd_settings = SGDSettings(
-        learning_rate=50.0,
+        learning_rate=args.inner_lr,
+        gamma_min_factor=args.inner_gamma_min,
+        beta1=args.inner_beta1,
+        beta2=args.inner_beta2,
         max_iter=args.inner_max_iter,
-        tol=1e-6,
+        tol=args.inner_tol,
+        additional_constant_lr_iterations=args.inner_constant_lr_iters,
     )
-
-    N_TARGET = TARGET_N_TURBINES
-    N_NEIGHBOR = args.n_neighbors
 
     # Objectives
     def objective_with_neighbors(x, y, neighbor_params):
@@ -380,7 +416,7 @@ def main():
     print("Computing liberal layout (no neighbors)...")
     t0 = time.time()
     liberal_x, liberal_y = topfarm_sgd_solve(
-        liberal_objective, init_x, init_y, boundary, MIN_SPACING, sgd_settings
+        liberal_objective, init_x, init_y, boundary, min_spacing, sgd_settings
     )
     liberal_aep = float(-liberal_objective(liberal_x, liberal_y))
     init_disp = float(jnp.sqrt((liberal_x - init_x)**2 + (liberal_y - init_y)**2).mean())
@@ -391,7 +427,7 @@ def main():
     def compute_regret(neighbor_params):
         opt_x, opt_y = sgd_solve_implicit(
             objective_with_neighbors, liberal_x, liberal_y,
-            boundary, MIN_SPACING, sgd_settings, neighbor_params,
+            boundary, min_spacing, sgd_settings, neighbor_params,
         )
         n_nb = neighbor_params.shape[0] // 2
         nb_x, nb_y = neighbor_params[:n_nb], neighbor_params[n_nb:]
@@ -432,7 +468,7 @@ def main():
     def outer_constraint_penalty(neighbor_params):
         nb_x = neighbor_params[:N_NEIGHBOR]
         nb_y = neighbor_params[N_NEIGHBOR:]
-        sp = spacing_penalty(nb_x, nb_y, MIN_SPACING, rho=100.0)
+        sp = spacing_penalty(nb_x, nb_y, min_spacing, rho=100.0)
         bp = outer_boundary_penalty(nb_x, nb_y)
         return sp + bp
 
@@ -443,13 +479,14 @@ def main():
     # =====================================================================
     outer_sgd_settings = SGDSettings(
         learning_rate=args.lr,
-        gamma_min_factor=0.01,
-        beta1=0.1,
-        beta2=0.2,
+        gamma_min_factor=args.outer_gamma_min,
+        beta1=args.outer_beta1,
+        beta2=args.outer_beta2,
         max_iter=args.n_outer,
         tol=0.0,  # run all iterations, don't stop early
         spacing_weight=1.0,
         boundary_weight=1.0,
+        additional_constant_lr_iterations=args.outer_constant_lr_iters,
     )
     # Compute mid for LR annealing
     outer_mid = _compute_mid_bisection(
@@ -478,8 +515,12 @@ def main():
     m_params = jnp.zeros_like(neighbor_params)
     v_params = jnp.zeros_like(neighbor_params)
 
-    print(f"\nRunning {args.n_outer} outer iterations (TopFarm-style ADAM, lr={args.lr})...")
-    print(f"  LR annealing: {args.lr:.1f} → {args.lr * outer_sgd_settings.gamma_min_factor:.2f}")
+    # Total outer iterations = constant-LR + decaying (matching TopFarm)
+    total_outer = args.n_outer + args.outer_constant_lr_iters
+    print(f"\nRunning {total_outer} outer iterations "
+          f"({args.outer_constant_lr_iters} constant + {args.n_outer} decaying, lr={args.lr})...")
+    print(f"  LR annealing: {args.lr:.1f} → {args.lr * outer_sgd_settings.gamma_min_factor:.2f}"
+          f"  (constant for first {args.outer_constant_lr_iters} iters)")
     print(f"  Constraint penalty: spacing + boundary buffer ({buffer:.0f} m)")
     print(f"{'Iter':>4}  {'Regret':>10}  {'Cons AEP':>10}  {'|grad|':>12}"
           f"  {'LR':>8}  {'Alpha':>10}  {'ConPen':>10}  {'Time':>6}")
@@ -494,7 +535,7 @@ def main():
     alpha = alpha0
     lr_current = outer_sgd_settings.learning_rate
 
-    for i in range(args.n_outer):
+    for i in range(total_outer):
         iter_t0 = time.time()
 
         if i == 0:
@@ -520,7 +561,7 @@ def main():
 
         opt_x, opt_y = sgd_solve_implicit(
             objective_with_neighbors, liberal_x, liberal_y,
-            boundary, MIN_SPACING, sgd_settings, neighbor_params,
+            boundary, min_spacing, sgd_settings, neighbor_params,
         )
         history_target.append((np.array(opt_x), np.array(opt_y)))
 
@@ -529,7 +570,7 @@ def main():
             best_neighbor_params = neighbor_params
 
         elapsed = time.time() - iter_t0
-        if i % 10 == 0 or i == args.n_outer - 1:
+        if i % 10 == 0 or i == total_outer - 1:
             print(f"{i:4d}  {regret_val:10.4f}  {cons_aep:10.4f}  {grad_norm:12.6f}"
                   f"  {lr_current:8.3f}  {alpha:10.4f}  {con_pen:10.2f}  {elapsed:5.1f}s")
 
@@ -548,10 +589,13 @@ def main():
         neighbor_params = neighbor_params - lr_current * m_hat / (jnp.sqrt(v_hat) + eps_adam)
 
         # LR decay: lr *= 1/(1 + mid * t)  (same as inner loop)
-        lr_current = lr_current * 1.0 / (1.0 + outer_mid * it)
-
-        # Alpha update: alpha = alpha0 * lr0 / lr  (constraint weight increases)
-        alpha = alpha0 * outer_sgd_settings.learning_rate / lr_current
+        # During constant-LR phase, keep lr and alpha fixed (TopFarm behavior)
+        n_const = args.outer_constant_lr_iters
+        if it > n_const:
+            decay_it = it - n_const
+            lr_current = lr_current * 1.0 / (1.0 + outer_mid * decay_it)
+            # Alpha update: alpha = alpha0 * lr0 / lr  (constraint weight increases)
+            alpha = alpha0 * outer_sgd_settings.learning_rate / lr_current
 
     last_nb_params = neighbor_params.copy()
     total_elapsed = time.time() - total_t0
@@ -573,14 +617,14 @@ def main():
     print("\nCapturing inner SGD at FIRST outer iteration...")
     _, _, snaps_first = sgd_solve_with_history(
         make_inner_obj(first_nb_params), liberal_x, liberal_y,
-        boundary, MIN_SPACING, sgd_settings,
+        boundary, min_spacing, sgd_settings,
     )
     print(f"  {len(snaps_first)} snapshots, {snaps_first[-1]['step']} steps")
 
     print("Capturing inner SGD at LAST outer iteration...")
     _, _, snaps_last = sgd_solve_with_history(
         make_inner_obj(last_nb_params), liberal_x, liberal_y,
-        boundary, MIN_SPACING, sgd_settings,
+        boundary, min_spacing, sgd_settings,
     )
     print(f"  {len(snaps_last)} snapshots, {snaps_last[-1]['step']} steps")
 
@@ -603,7 +647,9 @@ def main():
     # =====================================================================
     results = {
         "n_target": N_TARGET, "n_neighbors": N_NEIGHBOR,
-        "n_outer": args.n_outer, "lr": args.lr,
+        "n_outer": args.n_outer,
+        "outer_constant_lr_iters": args.outer_constant_lr_iters,
+        "total_outer": total_outer, "lr": args.lr,
         "liberal_aep": liberal_aep,
         "best_regret": float(best_regret),
         "best_regret_pct": float(best_regret / liberal_aep * 100),
