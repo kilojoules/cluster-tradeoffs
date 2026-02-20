@@ -93,7 +93,7 @@ class GradientAdversarialSearch:
     target farm's layout optimization via the Implicit Function Theorem.
 
     The regret is defined as:
-        regret = AEP_liberal - AEP_conservative
+        regret = AEP_conservative(w/ neighbors) - AEP_liberal(w/ neighbors)
 
     where:
         - AEP_liberal: Target farm AEP when optimized without neighbors
@@ -236,7 +236,14 @@ class GradientAdversarialSearch:
 
         # Define regret function (to maximize)
         def compute_regret(neighbor_params: jnp.ndarray) -> jnp.ndarray:
-            """Compute regret = liberal_aep - conservative_aep."""
+            """Compute regret = AEP_conservative(w/ neighbors) - AEP_liberal(w/ neighbors)."""
+            n_neighbors = neighbor_params.shape[0] // 2
+            neighbor_x = neighbor_params[:n_neighbors]
+            neighbor_y = neighbor_params[n_neighbors:]
+
+            # Liberal layout evaluated WITH neighbors (differentiable w.r.t. neighbor_params)
+            liberal_aep_present = self._compute_aep(liberal_x, liberal_y, neighbor_x, neighbor_y)
+
             # Optimize target layout given neighbors (differentiable via IFT)
             opt_x, opt_y = sgd_solve_implicit(
                 objective_with_neighbors,
@@ -248,14 +255,11 @@ class GradientAdversarialSearch:
                 neighbor_params,
             )
 
-            # Compute conservative AEP
-            n_neighbors = neighbor_params.shape[0] // 2
-            neighbor_x = neighbor_params[:n_neighbors]
-            neighbor_y = neighbor_params[n_neighbors:]
+            # Conservative AEP: layout optimized WITH knowledge of neighbors
             conservative_aep = self._compute_aep(opt_x, opt_y, neighbor_x, neighbor_y)
 
-            # Regret = liberal - conservative (we want to maximize this)
-            return liberal_aep - conservative_aep
+            # Regret = benefit of designing with neighbor knowledge (always >= 0)
+            return conservative_aep - liberal_aep_present
 
         # Gradient ascent on neighbor positions to maximize regret (ADAM optimizer)
         neighbor_params = jnp.concatenate([init_neighbor_x, init_neighbor_y])
@@ -369,13 +373,17 @@ class GradientAdversarialSearch:
         final_conservative_aep = float(
             self._compute_aep(final_target_x, final_target_y, final_neighbor_x, final_neighbor_y)
         )
-        final_regret = liberal_aep - final_conservative_aep
+        final_liberal_aep_present = float(
+            self._compute_aep(liberal_x, liberal_y, final_neighbor_x, final_neighbor_y)
+        )
+        final_regret = final_conservative_aep - final_liberal_aep_present
 
         if settings.verbose:
             print(f"\nFinal Results:")
-            print(f"  Liberal AEP: {liberal_aep:.2f} GWh")
-            print(f"  Conservative AEP: {final_conservative_aep:.2f} GWh")
-            print(f"  Regret: {final_regret:.2f} GWh ({100*final_regret/liberal_aep:.1f}%)")
+            print(f"  Liberal AEP (isolated): {liberal_aep:.2f} GWh")
+            print(f"  Liberal AEP (w/ neighbors): {final_liberal_aep_present:.2f} GWh")
+            print(f"  Conservative AEP (w/ neighbors): {final_conservative_aep:.2f} GWh")
+            print(f"  Regret: {final_regret:.4f} GWh")
 
         return AdversarialSearchResult(
             neighbor_x=final_neighbor_x,
