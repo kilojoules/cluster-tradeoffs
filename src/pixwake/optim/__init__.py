@@ -63,6 +63,11 @@ from pixwake.optim.adversarial import (
     CMAAdversarialSearchResult,
     CMAAdversarialSearchSettings,
 )
+from pixwake.optim.boundary import (
+    containment_penalty,
+    exclusion_penalty,
+    polygon_sdf,
+)
 from pixwake.optim.sgd import (
     SGDSettings,
     SGDState,
@@ -85,5 +90,8 @@ __all__ = [
     "create_layout_optimizer",
     "create_bilevel_optimizer",
     "boundary_penalty",
+    "containment_penalty",
+    "exclusion_penalty",
+    "polygon_sdf",
     "spacing_penalty",
 ]

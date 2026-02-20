@@ -191,6 +191,74 @@ pixi run python scripts/run_convergence_study.py
 --output-dir, -o    Output directory (auto-generated if not specified)
 ```
 
+## IFT Bilevel Optimization
+
+### Overview
+
+In addition to the derivative-free blob discovery approach above, this project implements **gradient-based bilevel optimization** using the Implicit Function Theorem (IFT). This differentiates through the inner layout optimizer to directly compute how neighbor positions affect design regret, enabling gradient ascent on neighbor positions.
+
+### Architecture
+
+```
+OUTER LOOP: max_{neighbors}  regret(neighbors)
+  regret = AEP_liberal - AEP_conservative(neighbors)
+
+INNER LOOP: AEP_conservative(neighbors) = AEP(x*(neighbors), neighbors)
+  x* = argmin_x  -AEP(x, neighbors)   [constrained SGD]
+```
+
+The outer loop uses TopFarm-style ADAM with learning rate annealing. Neighbor positions are free to move anywhere outside a buffered exclusion zone around the target wind farm boundary.
+
+### Key Components
+
+- **`sgd_solve_implicit`** (`src/pixwake/optim/sgd.py`): Inner SGD with `custom_vjp` — forward pass runs `topfarm_sgd_solve`, backward pass uses IFT to compute `dx*/d(neighbors)` via conjugate gradient on the adjoint equation. Cross-derivatives computed via finite differences of `jax.grad` through the wake simulation.
+
+- **`run_dei_ift_bilevel.py`** (`scripts/`): Main bilevel script for the Danish Energy Island case study. 50 target + 50 neighbor turbines, 24-sector wind rose, convex polygon boundary. Saves periodic checkpoints for live animation.
+
+- **`animate_checkpoint.py`** (`scripts/`): Renders MP4 animation from the latest checkpoint while the optimization is still running. Shows layout with spacing circles, constraint penalty, and objective convergence.
+
+### Setup
+
+The bilevel optimization uses the following configuration:
+
+- **Target farm**: 50 turbines inside a convex polygon (DEI boundary), 4D minimum spacing
+- **Neighbors**: 50 turbines scattered randomly in a 30D box around the boundary, excluding a 3D buffer zone around the wind farm polygon
+- **Inner SGD**: 500 constant-LR iterations + 1000 decaying-LR iterations (1500 total), lr=50
+- **Outer ADAM**: 300 constant-LR iterations + 200 decaying-LR iterations (500 total), lr=200, TopFarm-style (beta1=0.1, beta2=0.2)
+- **Constraints**: KS-aggregated spacing + boundary exclusion penalties. Neighbors must stay outside the boundary + 3D buffer (720m). Shown as a dashed line in the animation.
+- **Wake model**: BastankhahGaussian (k=0.04), 15 MW DEI turbine (D=240m)
+
+### Running
+
+```bash
+# Full bilevel optimization (50 targets, 50 neighbors, 500 outer iterations)
+pixi run python scripts/run_dei_ift_bilevel.py \
+  --n-target=50 --n-neighbors=50 \
+  --n-outer=200 --outer-constant-lr-iters=300 \
+  --inner-max-iter=1000 --inner-constant-lr-iters=500
+
+# Render animation from checkpoint (can run while optimization is running)
+pixi run python scripts/animate_checkpoint.py
+
+# Multistart regret convergence study (envelope theorem)
+pixi run python scripts/plot_multistart_regret.py --k-values=1,10,50
+```
+
+### Multistart Screening
+
+The inner optimization landscape is multi-modal — different random initial layouts converge to different local optima. The **envelope theorem** approach runs K forward-only starts per outer iteration, picks the winner (highest regret), and differentiates only through that winner:
+
+```
+Cost per outer step: K × forward + 1 × (forward + backward)
+```
+
+Results (50 targets, 50 neighbors, 20 outer iterations, lr=10):
+- **K=1**: Best regret 77 GWh — stuck in one basin
+- **K=10**: Best regret 110 GWh — finds a better basin (+43%)
+- **K=50**: Identical to K=10 (same winning start)
+
+See `scripts/plot_multistart_regret.py` and `scripts/plot_multistart_results.py`.
+
 ## Dependencies
 
 Currently includes `pixwake` source in `src/`. Future work will disentangle this into a proper dependency.
@@ -198,4 +266,6 @@ Currently includes `pixwake` source in `src/`. Future work will disentangle this
 Key modules used:
 - `pixwake.optim.adversarial.PooledBlobDiscovery` — pooled multi-start optimization
 - `pixwake.optim.sgd.topfarm_sgd_solve` — constrained SGD optimizer
+- `pixwake.optim.sgd.sgd_solve_implicit` — SGD with IFT backward pass
 - `pixwake.optim.geometry.BSplineBoundary` — blob geometry representation
+- `pixwake.optim.boundary.exclusion_penalty` — polygon exclusion zone penalty

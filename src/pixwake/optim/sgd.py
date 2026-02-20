@@ -30,6 +30,11 @@ import jax.numpy as jnp
 from jax import custom_vjp, vjp
 from jax.lax import while_loop
 
+from pixwake.optim.boundary import (
+    _signed_distance_to_edge_line,
+    containment_penalty as _containment_penalty,
+)
+
 # =============================================================================
 # SGD State (Optax-style stateless design)
 # =============================================================================
@@ -90,6 +95,15 @@ class SGDSettings:
             option. During these steps ADAM moments accumulate but the
             learning rate and constraint multiplier alpha stay fixed
             (default: 0).
+        ift_eps_base: Base epsilon for finite-difference Jacobian in the IFT
+            backward pass.  Adaptive scaling: ``eps_i = ift_eps_base * max(1, |param_i|)``.
+            (default: 1e-4).
+        ift_eps_hvp: Base epsilon for Hessian-vector products via finite
+            differences in the IFT backward pass (default: 1e-5).
+        ift_cg_damping: Tikhonov damping for the CG solver in the IFT
+            backward pass (default: 0.01).
+        ift_cg_max_iter: Maximum CG iterations in the IFT backward pass
+            (default: 100).
     """
 
     learning_rate: float = 10.0
@@ -105,6 +119,10 @@ class SGDSettings:
     spacing_weight: float = 1.0
     boundary_weight: float = 1.0
     additional_constant_lr_iterations: int = 0
+    ift_eps_base: float = 1e-4
+    ift_eps_hvp: float = 1e-5
+    ift_cg_damping: float = 0.01
+    ift_cg_max_iter: int = 100
 
 
 def _compute_mid_bisection(
@@ -159,42 +177,8 @@ def _compute_mid_bisection(
 # =============================================================================
 
 
-def _signed_distance_to_edge(
-    px: jnp.ndarray,
-    py: jnp.ndarray,
-    x1: float,
-    y1: float,
-    x2: float,
-    y2: float,
-) -> jnp.ndarray:
-    """Compute signed distance from points to a line segment edge.
-
-    Positive distance means inside (to the left of edge when traversing CCW).
-    Negative distance means outside.
-
-    Args:
-        px, py: Point coordinates, shape (n_turbines,).
-        x1, y1: Edge start point.
-        x2, y2: Edge end point.
-
-    Returns:
-        Signed distances, shape (n_turbines,).
-    """
-    # Edge vector
-    edge_x = x2 - x1
-    edge_y = y2 - y1
-    edge_len = jnp.sqrt(edge_x**2 + edge_y**2) + 1e-10
-
-    # Unit normal pointing inward (90 deg CCW rotation of edge direction)
-    normal_x = -edge_y / edge_len
-    normal_y = edge_x / edge_len
-
-    # Vector from edge start to point
-    ap_x = px - x1
-    ap_y = py - y1
-
-    # Signed distance = dot(AP, normal)
-    return ap_x * normal_x + ap_y * normal_y
+# Backward-compatible aliases — delegate to boundary.py
+_signed_distance_to_edge = _signed_distance_to_edge_line
 
 
 def boundary_penalty(
@@ -205,12 +189,7 @@ def boundary_penalty(
 ) -> jnp.ndarray:
     """Compute boundary constraint penalty matching TopFarm's formulation.
 
-    For a convex polygon boundary, computes the signed distance from each
-    turbine to each edge. Violated constraints (negative distance) are
-    penalized using squared distance, matching TopFarm's DistanceConstraintAggregation.
-
-    Penalty: sum(distance²) for turbines outside boundary (distance < 0)
-    Gradient: 2 * distance for violated turbines
+    Delegates to :func:`pixwake.optim.boundary.containment_penalty` (convex path).
 
     Args:
         x: Turbine x positions, shape (n_turbines,).
@@ -221,26 +200,7 @@ def boundary_penalty(
     Returns:
         Scalar penalty value (0 if all constraints satisfied).
     """
-    n_vertices = boundary_vertices.shape[0]
-
-    # Compute signed distance to each edge for all turbines
-    def edge_distances(i: int) -> jnp.ndarray:
-        x1, y1 = boundary_vertices[i]
-        x2, y2 = boundary_vertices[(i + 1) % n_vertices]
-        return _signed_distance_to_edge(x, y, x1, y1, x2, y2)
-
-    # Stack distances: shape (n_edges, n_turbines)
-    all_distances = jax.vmap(edge_distances)(jnp.arange(n_vertices))
-
-    # For convex polygon, turbine is inside if ALL edge distances are positive
-    # The minimum distance determines how "inside" we are
-    min_distances = jnp.min(all_distances, axis=0)  # shape (n_turbines,)
-
-    # TopFarm uses squared distance for boundary violations
-    # Penalty: sum(distance²) where distance < 0
-    # Use softplus for smooth transition at boundary
-    violations = jnp.minimum(0.0, min_distances)  # negative distances only
-    return jnp.sum(violations**2)
+    return _containment_penalty(x, y, boundary_vertices, convex=True)
 
 
 def spacing_penalty(
@@ -468,22 +428,9 @@ def topfarm_sgd_solve(
             lower=settings.bisect_lower,
             upper=settings.bisect_upper,
         )
-        # Create new settings with computed mid
-        settings = SGDSettings(
-            learning_rate=settings.learning_rate,
-            gamma_min_factor=settings.gamma_min_factor,
-            beta1=settings.beta1,
-            beta2=settings.beta2,
-            max_iter=settings.max_iter,
-            tol=settings.tol,
-            mid=computed_mid,
-            bisect_upper=settings.bisect_upper,
-            bisect_lower=settings.bisect_lower,
-            ks_rho=settings.ks_rho,
-            spacing_weight=settings.spacing_weight,
-            boundary_weight=settings.boundary_weight,
-            additional_constant_lr_iterations=settings.additional_constant_lr_iterations,
-        )
+        # Create new settings with computed mid (preserve all other fields)
+        from dataclasses import replace as _dc_replace
+        settings = _dc_replace(settings, mid=computed_mid)
 
     rho = settings.ks_rho
 
@@ -703,7 +650,7 @@ def _sgd_solve_implicit_bwd(
     # This avoids nested custom_vjp issues that occur with AD-based approaches
     # Adaptive epsilon: scale per-parameter so perturbation is meaningful
     # at ~1000m positions (eps_base * max(1, |param_i|) ≈ 0.1m)
-    eps_base = 1e-4
+    eps_base = settings.ift_eps_base
     n_params = params.shape[0]
     n_turbines = opt_x.shape[0]
 
@@ -742,7 +689,7 @@ def _sgd_solve_implicit_bwd(
             )
 
         # Use finite differences for HVP: H @ v ≈ (grad(x + εv) - grad(x - εv)) / (2ε)
-        eps_hvp = 1e-5
+        eps_hvp = settings.ift_eps_hvp
         v_norm = jnp.sqrt(jnp.sum(vx**2) + jnp.sum(vy**2))
         # Scale epsilon by vector norm to maintain numerical stability
         eps_scaled = eps_hvp * jnp.maximum(1.0, v_norm)
@@ -756,10 +703,11 @@ def _sgd_solve_implicit_bwd(
 
     # Solve (H + damping*I) @ v = g using Conjugate Gradient (CG)
     # Tikhonov damping regularizes near-singular Hessians
-    damping = 0.01
+    damping = settings.ift_cg_damping
+    cg_max_iter = settings.ift_cg_max_iter
 
     def solve_linear_system(
-        g_x: jnp.ndarray, g_y: jnp.ndarray, max_iter: int = 100, tol: float = 1e-6
+        g_x: jnp.ndarray, g_y: jnp.ndarray, max_iter: int = cg_max_iter, tol: float = 1e-6
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
         """Solve (H + damping*I) @ v = g using Conjugate Gradient."""
 
