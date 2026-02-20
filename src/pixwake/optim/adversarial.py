@@ -43,9 +43,11 @@ class AdversarialSearchResult(NamedTuple):
         target_y: Target farm layout after optimization with adversarial neighbors.
         liberal_x: Target farm layout without neighbors (liberal case).
         liberal_y: Target farm layout without neighbors (liberal case).
-        regret: AEP loss due to neighbors (liberal_aep - conservative_aep).
-        liberal_aep: AEP without neighbors.
-        conservative_aep: AEP with adversarial neighbors.
+        regret: Design regret (conservative_aep - liberal_aep_present).
+            The liberal layout is optimized in isolation, then evaluated with
+            neighbors present. Positive regret = conservative design is better.
+        liberal_aep: AEP of liberal layout without neighbors.
+        conservative_aep: AEP of conservative layout with adversarial neighbors.
         history: List of (regret, neighbor_x, neighbor_y) tuples per iteration.
     """
 
@@ -236,12 +238,18 @@ class GradientAdversarialSearch:
 
         # Define regret function (to maximize)
         def compute_regret(neighbor_params: jnp.ndarray) -> jnp.ndarray:
-            """Compute regret = AEP_conservative(w/ neighbors) - AEP_liberal(w/ neighbors)."""
+            """Compute regret = AEP_conservative(w/ neighbors) - AEP_liberal(w/ neighbors).
+
+            The liberal layout was optimized in isolation (maximizing AEP without
+            neighbors), but is evaluated here WITH neighbors present to measure
+            the design regret — the AEP benefit of having designed for neighbors.
+            """
             n_neighbors = neighbor_params.shape[0] // 2
             neighbor_x = neighbor_params[:n_neighbors]
             neighbor_y = neighbor_params[n_neighbors:]
 
-            # Liberal layout evaluated WITH neighbors (differentiable w.r.t. neighbor_params)
+            # Liberal layout (optimized in isolation) evaluated WITH neighbors
+            # This is differentiable w.r.t. neighbor_params
             liberal_aep_present = self._compute_aep(liberal_x, liberal_y, neighbor_x, neighbor_y)
 
             # Optimize target layout given neighbors (differentiable via IFT)

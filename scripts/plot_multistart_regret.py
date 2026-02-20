@@ -231,7 +231,13 @@ def run_envelope_multistart(
         result = sim(x_all, y_all, ws_amb=ws, wd_amb=wd)
         power = result.power()[:, :n_target]
         conservative_aep = jnp.sum(power * weights[:, None]) * 8760 / 1e6
-        return liberal_aep - conservative_aep
+        # Liberal layout evaluated WITH neighbors
+        x_lib_all = jnp.concatenate([liberal_x, nb_x])
+        y_lib_all = jnp.concatenate([liberal_y, nb_y])
+        result_lib = sim(x_lib_all, y_lib_all, ws_amb=ws, wd_amb=wd)
+        power_lib = result_lib.power()[:, :n_target]
+        liberal_aep_present = jnp.sum(power_lib * weights[:, None]) * 8760 / 1e6
+        return conservative_aep - liberal_aep_present
 
     # --- Setup parallel screening via vmap ---
     use_vmap = K > 1
@@ -316,7 +322,13 @@ def run_envelope_multistart(
             result = sim(x_all, y_all, ws_amb=ws, wd_amb=wd)
             power = result.power()[:, :n_target]
             conservative_aep = jnp.sum(power * weights[:, None]) * 8760 / 1e6
-            return liberal_aep - conservative_aep
+            # Liberal layout (optimized in isolation) evaluated WITH neighbors
+            x_lib_all = jnp.concatenate([liberal_x, nb_x])
+            y_lib_all = jnp.concatenate([liberal_y, nb_y])
+            result_lib = sim(x_lib_all, y_lib_all, ws_amb=ws, wd_amb=wd)
+            power_lib = result_lib.power()[:, :n_target]
+            liberal_aep_present = jnp.sum(power_lib * weights[:, None]) * 8760 / 1e6
+            return conservative_aep - liberal_aep_present
 
         regret_val, grad = jax.value_and_grad(regret_fn)(nb_params)
         regret_val = float(regret_val)

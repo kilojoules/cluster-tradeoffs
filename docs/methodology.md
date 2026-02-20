@@ -124,8 +124,10 @@ A layout is **Pareto-optimal** if no other layout achieves both:
 
 $$\text{Regret} = \text{AEP}_{\text{present}}(\text{conservative-opt}) - \text{AEP}_{\text{present}}(\text{liberal-opt})$$
 
-- **Liberal-optimal**: Pareto point with maximum AEP_absent
-- **Conservative-optimal**: Pareto point with maximum AEP_present
+- **Liberal-optimal**: Layout optimized to maximize AEP *without* neighbors (i.e., designed in isolation), then *evaluated* with neighbors present
+- **Conservative-optimal**: Layout optimized to maximize AEP *with* neighbors present
+
+Both terms are evaluated under the same conditions (neighbors present). The regret isolates the design effect: how much AEP is lost by having designed in ignorance of the neighbors, not the total AEP impact of the neighbors themselves.
 
 If regret > 0, there exists a fundamental tradeoff between the two objectives.
 

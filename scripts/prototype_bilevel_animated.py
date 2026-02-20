@@ -80,10 +80,13 @@ liberal_x, liberal_y = topfarm_sgd_solve(
 )
 liberal_aep_result = sim(liberal_x, liberal_y, ws_amb=ws, wd_amb=wd)
 liberal_aep = float(liberal_aep_result.aep())
-print(f"Liberal AEP: {liberal_aep:.2f} GWh")
+print(f"Liberal AEP (no neighbors): {liberal_aep:.2f} GWh")
 
 
 # ── Regret function ────────────────────────────────────────────────────
+# Regret = AEP_conservative(w/ neighbors) - AEP_liberal(w/ neighbors)
+# The liberal layout is optimized in isolation (no neighbors), then evaluated
+# with neighbors present to measure the design regret.
 
 def compute_regret(neighbor_params):
     opt_x, opt_y = sgd_solve_implicit(
@@ -97,7 +100,13 @@ def compute_regret(neighbor_params):
     result = sim(x_all, y_all, ws_amb=ws, wd_amb=wd)
     power = result.power()[:, :N_TARGET]
     conservative_aep = jnp.sum(power) * 8760 / 1e6 / power.shape[0]
-    return liberal_aep - conservative_aep
+    # Liberal layout evaluated WITH neighbors (differentiable w.r.t. neighbor_params)
+    x_lib_all = jnp.concatenate([liberal_x, nb_x])
+    y_lib_all = jnp.concatenate([liberal_y, nb_y])
+    result_lib = sim(x_lib_all, y_lib_all, ws_amb=ws, wd_amb=wd)
+    power_lib = result_lib.power()[:, :N_TARGET]
+    liberal_aep_present = jnp.sum(power_lib) * 8760 / 1e6 / power_lib.shape[0]
+    return conservative_aep - liberal_aep_present
 
 
 regret_and_grad = value_and_grad(compute_regret)
@@ -141,8 +150,14 @@ for i in range(OUTER_ITERS):
     opt_x_np, opt_y_np = np.array(opt_x), np.array(opt_y)
     history_target.append((opt_x_np, opt_y_np))
 
-    # Compute conservative AEP and target displacement from liberal
-    cons_aep = liberal_aep - float(regret)
+    # Compute conservative AEP directly (with neighbors present)
+    nb_x_cur = neighbor_params[:N_NEIGHBOR]
+    nb_y_cur = neighbor_params[N_NEIGHBOR:]
+    x_all_cons = jnp.concatenate([opt_x, nb_x_cur])
+    y_all_cons = jnp.concatenate([opt_y, nb_y_cur])
+    result_cons = sim(x_all_cons, y_all_cons, ws_amb=ws, wd_amb=wd)
+    power_cons = result_cons.power()[:, :N_TARGET]
+    cons_aep = float(jnp.sum(power_cons) * 8760 / 1e6 / power_cons.shape[0])
     history_conservative_aep.append(cons_aep)
     target_disp = np.sqrt(
         (opt_x_np - np.array(liberal_x)) ** 2

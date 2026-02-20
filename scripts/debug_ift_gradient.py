@@ -135,15 +135,22 @@ def cons_obj(x, y):
     return objective_with_neighbors(x, y, nb_params)
 cons_x, cons_y = topfarm_sgd_solve(cons_obj, liberal_x, liberal_y, boundary, min_spacing, settings)
 cons_aep_val = float(-cons_obj(cons_x, cons_y))
-regret = liberal_aep - cons_aep_val
+# Liberal layout (optimized in isolation) evaluated WITH neighbors
+x_lib_all = jnp.concatenate([liberal_x, init_nb_x])
+y_lib_all = jnp.concatenate([liberal_y, init_nb_y])
+result_lib = sim(x_lib_all, y_lib_all, ws_amb=ws, wd_amb=wd)
+power_lib = result_lib.power()[:, :N_TARGET]
+liberal_aep_present = float(jnp.sum(power_lib * weights[:, None]) * 8760 / 1e6)
+regret = cons_aep_val - liberal_aep_present
 print(f"Conservative AEP: {cons_aep_val:.4f} GWh")
+print(f"Liberal AEP (with neighbors): {liberal_aep_present:.4f} GWh")
 print(f"Regret: {regret:.6f} GWh")
 
-# ── 1. Direct gradient: d(AEP)/d(neighbors) holding targets fixed ────
+# ── 1. Direct gradient: d(regret)/d(neighbors) holding targets fixed ─
 print("\n" + "=" * 60)
 print("1. DIRECT GRADIENT (targets fixed at conservative optimum)")
 print("=" * 60)
-def direct_aep(p):
+def direct_conservative_aep(p):
     n_nb = p.shape[0] // 2
     nb_x, nb_y = p[:n_nb], p[n_nb:]
     x_all = jnp.concatenate([cons_x, nb_x])
@@ -152,8 +159,22 @@ def direct_aep(p):
     power = result.power()[:, :N_TARGET]
     return jnp.sum(power * weights[:, None]) * 8760 / 1e6
 
-direct_grad = jax.grad(direct_aep)(nb_params)
-print(f"  direct_grad = {np.array(direct_grad)}")
+def direct_liberal_aep(p):
+    """Liberal layout (optimized in isolation) evaluated WITH neighbors."""
+    n_nb = p.shape[0] // 2
+    nb_x, nb_y = p[:n_nb], p[n_nb:]
+    x_all = jnp.concatenate([liberal_x, nb_x])
+    y_all = jnp.concatenate([liberal_y, nb_y])
+    result = sim(x_all, y_all, ws_amb=ws, wd_amb=wd)
+    power = result.power()[:, :N_TARGET]
+    return jnp.sum(power * weights[:, None]) * 8760 / 1e6
+
+direct_cons_grad = jax.grad(direct_conservative_aep)(nb_params)
+direct_lib_grad = jax.grad(direct_liberal_aep)(nb_params)
+direct_grad = direct_cons_grad - direct_lib_grad
+print(f"  direct_cons_grad = {np.array(direct_cons_grad)}")
+print(f"  direct_lib_grad  = {np.array(direct_lib_grad)}")
+print(f"  direct_grad (cons - lib) = {np.array(direct_grad)}")
 print(f"  |direct_grad| = {float(jnp.linalg.norm(direct_grad)):.6e}")
 
 # ── 2. Upstream gradient: d(AEP)/d(target positions) ─────────────────
@@ -188,7 +209,13 @@ def regret_fn(p):
     result = sim(x_all, y_all, ws_amb=ws, wd_amb=wd)
     power = result.power()[:, :N_TARGET]
     conservative_aep = jnp.sum(power * weights[:, None]) * 8760 / 1e6
-    return liberal_aep - conservative_aep
+    # Liberal layout (optimized in isolation) evaluated WITH neighbors
+    x_lib_all = jnp.concatenate([liberal_x, nb_x])
+    y_lib_all = jnp.concatenate([liberal_y, nb_y])
+    result_lib = sim(x_lib_all, y_lib_all, ws_amb=ws, wd_amb=wd)
+    power_lib = result_lib.power()[:, :N_TARGET]
+    liberal_aep_present = jnp.sum(power_lib * weights[:, None]) * 8760 / 1e6
+    return conservative_aep - liberal_aep_present
 
 regret_val, ift_grad = jax.value_and_grad(regret_fn)(nb_params)
 print(f"  regret = {float(regret_val):.6f}")
@@ -199,13 +226,15 @@ print(f"  |ift_grad| = {float(jnp.linalg.norm(ift_grad)):.6e}")
 print("\n" + "=" * 60)
 print("4. DECOMPOSITION")
 print("=" * 60)
-# The full IFT grad should be: -direct_grad + indirect
-# (regret = liberal - conservative, so d(regret)/dp = -d(AEP)/dp)
-# The direct grad of regret w.r.t. p is: -direct_grad
-indirect_grad = ift_grad - (-direct_grad)
-print(f"  direct (d regret/dp)  = {np.array(-direct_grad)}")
-print(f"  indirect (IFT)        = {np.array(indirect_grad)}")
-print(f"  total (IFT full)      = {np.array(ift_grad)}")
+# regret = conservative_aep - liberal_aep_present
+# d(regret)/dp = d(cons)/dp - d(lib_present)/dp
+# Direct part (targets fixed): d(cons)/dp|fixed - d(lib_present)/dp = direct_grad
+# Indirect part (IFT): d(cons)/d(targets) * d(targets)/dp  (from IFT)
+# Total = direct + indirect
+indirect_grad = ift_grad - direct_grad
+print(f"  direct (targets fixed) = {np.array(direct_grad)}")
+print(f"  indirect (IFT)         = {np.array(indirect_grad)}")
+print(f"  total (IFT full)       = {np.array(ift_grad)}")
 print(f"  |direct|   = {float(jnp.linalg.norm(direct_grad)):.6e}")
 print(f"  |indirect| = {float(jnp.linalg.norm(indirect_grad)):.6e}")
 print(f"  |total|    = {float(jnp.linalg.norm(ift_grad)):.6e}")
@@ -217,15 +246,30 @@ print("=" * 60)
 fd_step = 1.0
 n_params = nb_params.shape[0]
 grad_fd = np.zeros(n_params)
+def fd_regret(nb_p):
+    """Compute regret via forward solve for FD ground truth."""
+    n_nb = nb_p.shape[0] // 2
+    nb_x, nb_y = nb_p[:n_nb], nb_p[n_nb:]
+    def obj_fn(x, y): return objective_with_neighbors(x, y, nb_p)
+    ox, oy = topfarm_sgd_solve(obj_fn, liberal_x, liberal_y, boundary, min_spacing, settings)
+    # Conservative AEP (with neighbors)
+    x_all = jnp.concatenate([ox, nb_x])
+    y_all = jnp.concatenate([oy, nb_y])
+    result = sim(x_all, y_all, ws_amb=ws, wd_amb=wd)
+    power = result.power()[:, :N_TARGET]
+    cons_aep = float(jnp.sum(power * weights[:, None]) * 8760 / 1e6)
+    # Liberal layout (optimized in isolation) evaluated WITH neighbors
+    x_lib_all = jnp.concatenate([liberal_x, nb_x])
+    y_lib_all = jnp.concatenate([liberal_y, nb_y])
+    result_lib = sim(x_lib_all, y_lib_all, ws_amb=ws, wd_amb=wd)
+    power_lib = result_lib.power()[:, :N_TARGET]
+    lib_aep_present = float(jnp.sum(power_lib * weights[:, None]) * 8760 / 1e6)
+    return cons_aep - lib_aep_present
+
 for i in range(n_params):
     e = jnp.zeros(n_params).at[i].set(fd_step)
-    def obj_p(x, y): return objective_with_neighbors(x, y, nb_params + e)
-    ox_p, oy_p = topfarm_sgd_solve(obj_p, liberal_x, liberal_y, boundary, min_spacing, settings)
-    r_plus = liberal_aep - float(-objective_with_neighbors(ox_p, oy_p, nb_params + e))
-
-    def obj_m(x, y): return objective_with_neighbors(x, y, nb_params - e)
-    ox_m, oy_m = topfarm_sgd_solve(obj_m, liberal_x, liberal_y, boundary, min_spacing, settings)
-    r_minus = liberal_aep - float(-objective_with_neighbors(ox_m, oy_m, nb_params - e))
+    r_plus = fd_regret(nb_params + e)
+    r_minus = fd_regret(nb_params - e)
 
     grad_fd[i] = (r_plus - r_minus) / (2 * fd_step)
     label = f"nb_x[{i}]" if i < N_NEIGHBOR else f"nb_y[{i-N_NEIGHBOR}]"

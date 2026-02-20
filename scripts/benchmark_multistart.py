@@ -133,6 +133,17 @@ def eval_conservative_aep(opt_x, opt_y, nb_params):
     return jnp.sum(power) * 8760 / 1e6 / power.shape[0]
 
 
+def eval_liberal_aep_present(nb_params):
+    """Evaluate liberal layout (optimized in isolation) WITH neighbors present."""
+    n_nb = nb_params.shape[0] // 2
+    nbx, nby = nb_params[:n_nb], nb_params[n_nb:]
+    x_all = jnp.concatenate([liberal_x, nbx])
+    y_all = jnp.concatenate([liberal_y, nby])
+    result = sim(x_all, y_all, ws_amb=ws, wd_amb=wd)
+    power = result.power()[:, :N_TARGET]
+    return jnp.sum(power) * 8760 / 1e6 / power.shape[0]
+
+
 # ── ADAM helper ──────────────────────────────────────────────────────────
 
 def adam_init(params):
@@ -177,7 +188,8 @@ def run_single_start_ift():
             boundary, min_spacing, sgd_settings, nb_params,
         )
         cons_aep = eval_conservative_aep(opt_x, opt_y, nb_params)
-        return liberal_aep - cons_aep
+        lib_aep_present = eval_liberal_aep_present(nb_params)
+        return cons_aep - lib_aep_present
 
     regret_and_grad = value_and_grad(compute_regret)
 
@@ -232,7 +244,8 @@ def run_stochastic_single_start():
                 boundary, min_spacing, sgd_settings, nb_params,
             )
             cons_aep = eval_conservative_aep(opt_x, opt_y, nb_params)
-            return liberal_aep - cons_aep
+            lib_aep_present = eval_liberal_aep_present(nb_params)
+            return cons_aep - lib_aep_present
 
         regret, grad = value_and_grad(compute_regret)(nb_params)
         regret = float(regret)
@@ -273,7 +286,8 @@ def run_envelope_theorem():
                 ix, iy, boundary, min_spacing, sgd_settings,
             )
             cons_aep = float(eval_conservative_aep(opt_x, opt_y, nb_params))
-            start_regrets.append(liberal_aep - cons_aep)
+            lib_aep_present = float(eval_liberal_aep_present(nb_params))
+            start_regrets.append(cons_aep - lib_aep_present)
 
         best_k = int(np.argmax(start_regrets))
         best_ix, best_iy = random_inits[best_k]
@@ -285,7 +299,8 @@ def run_envelope_theorem():
                 boundary, min_spacing, sgd_settings, nb_params,
             )
             cons_aep = eval_conservative_aep(opt_x, opt_y, nb_params)
-            return liberal_aep - cons_aep
+            lib_aep_present = eval_liberal_aep_present(nb_params)
+            return cons_aep - lib_aep_present
 
         regret, grad = value_and_grad(compute_regret_winner)(nb_params)
         regret = float(regret)
@@ -328,7 +343,8 @@ def run_logsumexp():
                 boundary, min_spacing, sgd_settings, nb_params,
             )
             cons_aep = eval_conservative_aep(opt_x, opt_y, nb_params)
-            regrets.append(liberal_aep - cons_aep)
+            lib_aep_present = eval_liberal_aep_present(nb_params)
+            regrets.append(cons_aep - lib_aep_present)
         regrets_arr = jnp.stack(regrets)
         # Smooth max: (1/tau) * logsumexp(tau * regrets)
         return (1.0 / LOGSUMEXP_TAU) * jax.nn.logsumexp(LOGSUMEXP_TAU * regrets_arr)
@@ -349,7 +365,8 @@ def run_logsumexp():
                 ix, iy, boundary, min_spacing, sgd_settings,
             )
             cons_aep = float(eval_conservative_aep(opt_x, opt_y, nb_params))
-            true_regrets.append(liberal_aep - cons_aep)
+            lib_aep_present = float(eval_liberal_aep_present(nb_params))
+            true_regrets.append(cons_aep - lib_aep_present)
         true_max = max(true_regrets)
 
         history.append({
@@ -383,10 +400,10 @@ results = {}
 
 # Warm up JIT
 print("Warming up JIT...")
-_ = value_and_grad(lambda p: liberal_aep - eval_conservative_aep(
+_ = value_and_grad(lambda p: eval_conservative_aep(
     *sgd_solve_implicit(objective_with_neighbors, init_x, init_y,
                         boundary, min_spacing, sgd_settings, p),
-    p))(nb_params_init)
+    p) - eval_liberal_aep_present(p))(nb_params_init)
 print("Done.\n")
 
 for name, fn in [
