@@ -260,7 +260,13 @@ def main():
         result = sim(x_all, y_all, ws_amb=ws, wd_amb=wd)
         power = result.power()[:, :N_TARGET]
         conservative_aep = float(jnp.sum(power * weights[:, None]) * 8760 / 1e6)
-        return liberal_aep - conservative_aep
+        # Liberal layout evaluated WITH neighbors
+        x_lib_all = jnp.concatenate([liberal_x, nb_x])
+        y_lib_all = jnp.concatenate([liberal_y, nb_y])
+        result_lib = sim(x_lib_all, y_lib_all, ws_amb=ws, wd_amb=wd)
+        power_lib = result_lib.power()[:, :N_TARGET]
+        liberal_aep_present = float(jnp.sum(power_lib * weights[:, None]) * 8760 / 1e6)
+        return conservative_aep - liberal_aep_present
 
     print(f"\nComputing ground-truth gradient via outer FD (step={fd_step}m)...")
     print(f"  This requires {2 * n_params} inner SGD solves...")
@@ -295,7 +301,13 @@ def main():
             result = sim(x_all, y_all, ws_amb=ws, wd_amb=wd)
             power = result.power()[:, :N_TARGET]
             conservative_aep = jnp.sum(power * weights[:, None]) * 8760 / 1e6
-            return liberal_aep - conservative_aep
+            # Liberal layout evaluated WITH neighbors
+            x_lib_all = jnp.concatenate([liberal_x, nb_x])
+            y_lib_all = jnp.concatenate([liberal_y, nb_y])
+            result_lib = sim(x_lib_all, y_lib_all, ws_amb=ws, wd_amb=wd)
+            power_lib = result_lib.power()[:, :N_TARGET]
+            liberal_aep_present = jnp.sum(power_lib * weights[:, None]) * 8760 / 1e6
+            return conservative_aep - liberal_aep_present
 
         regret, grad = jax.value_and_grad(regret_fn)(nb_params)
         return float(regret), np.array(grad)

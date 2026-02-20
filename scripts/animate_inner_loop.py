@@ -164,9 +164,12 @@ liberal_x, liberal_y = topfarm_sgd_solve(
 )
 liberal_aep_result = sim(liberal_x, liberal_y, ws_amb=ws, wd_amb=wd)
 liberal_aep = float(liberal_aep_result.aep())
-print(f"Liberal AEP: {liberal_aep:.2f} GWh")
+print(f"Liberal AEP (no neighbors): {liberal_aep:.2f} GWh")
 
 
+# Regret = AEP_conservative(w/ neighbors) - AEP_liberal(w/ neighbors)
+# The liberal layout is optimized in isolation (no neighbors), then evaluated
+# with neighbors present to measure the design regret.
 def compute_regret(neighbor_params):
     opt_x, opt_y = sgd_solve_implicit(
         objective_with_neighbors, init_x, init_y,
@@ -179,7 +182,13 @@ def compute_regret(neighbor_params):
     result = sim(x_all, y_all, ws_amb=ws, wd_amb=wd)
     power = result.power()[:, :N_TARGET]
     conservative_aep = jnp.sum(power) * 8760 / 1e6 / power.shape[0]
-    return liberal_aep - conservative_aep
+    # Liberal layout evaluated WITH neighbors (differentiable w.r.t. neighbor_params)
+    x_lib_all = jnp.concatenate([liberal_x, nb_x])
+    y_lib_all = jnp.concatenate([liberal_y, nb_y])
+    result_lib = sim(x_lib_all, y_lib_all, ws_amb=ws, wd_amb=wd)
+    power_lib = result_lib.power()[:, :N_TARGET]
+    liberal_aep_present = jnp.sum(power_lib) * 8760 / 1e6 / power_lib.shape[0]
+    return conservative_aep - liberal_aep_present
 
 
 regret_and_grad = value_and_grad(compute_regret)

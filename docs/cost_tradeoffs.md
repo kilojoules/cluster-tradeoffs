@@ -14,11 +14,13 @@ The bilevel optimization has two nested levels:
 
 ```
 OUTER: max_{neighbors}  regret(neighbors)
-         where regret = AEP_liberal - AEP_conservative(neighbors)
+         where regret = AEP_conservative(neighbors) - AEP_liberal(neighbors)
 
 INNER: AEP_conservative(neighbors) = AEP(x*(neighbors), neighbors)
          where x* = argmin_x  -AEP(x, neighbors)   s.t. boundary, spacing
 ```
+
+The liberal layout is optimized in isolation (maximizing AEP without neighbors), then evaluated with neighbors present when computing regret. Both terms use the same neighbor configuration.
 
 One call to `value_and_grad(compute_regret)(neighbor_params)` requires:
 

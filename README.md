@@ -201,11 +201,13 @@ In addition to the derivative-free blob discovery approach above, this project i
 
 ```
 OUTER LOOP: max_{neighbors}  regret(neighbors)
-  regret = AEP_liberal - AEP_conservative(neighbors)
+  regret = AEP_conservative(neighbors) - AEP_liberal(neighbors)
 
 INNER LOOP: AEP_conservative(neighbors) = AEP(x*(neighbors), neighbors)
   x* = argmin_x  -AEP(x, neighbors)   [constrained SGD]
 ```
+
+The liberal layout is optimized in isolation (maximizing AEP without neighbors), then evaluated with neighbors present. Regret measures the AEP benefit of having designed for the neighbors.
 
 The outer loop uses TopFarm-style ADAM with learning rate annealing. Neighbor positions are free to move anywhere outside a buffered exclusion zone around the target wind farm boundary.
 

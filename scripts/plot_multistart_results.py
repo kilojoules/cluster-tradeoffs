@@ -226,7 +226,15 @@ def main():
                 obj_fn, ix, iy, boundary, min_spacing, sgd_settings,
             )
             conservative_aep = float(-obj_fn(opt_x, opt_y))
-            regret_k = liberal_aep - conservative_aep
+            # Liberal layout (optimized in isolation) evaluated WITH neighbors
+            n_nb = nb_params.shape[0] // 2
+            nb_x_, nb_y_ = nb_params[:n_nb], nb_params[n_nb:]
+            x_lib_all = jnp.concatenate([liberal_x, nb_x_])
+            y_lib_all = jnp.concatenate([liberal_y, nb_y_])
+            result_lib = sim(x_lib_all, y_lib_all, ws_amb=ws, wd_amb=wd)
+            power_lib = result_lib.power()[:, :N_TARGET]
+            liberal_aep_present = float(jnp.sum(power_lib * weights[:, None]) * 8760 / 1e6)
+            regret_k = conservative_aep - liberal_aep_present
             dt = time.time() - t0
 
             regrets.append(regret_k)

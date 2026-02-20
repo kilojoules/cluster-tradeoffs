@@ -481,7 +481,13 @@ def main():
         result = sim(x_all, y_all, ws_amb=ws, wd_amb=wd)
         power = result.power()[:, :N_TARGET]
         conservative_aep = jnp.sum(power * weights[:, None]) * 8760 / 1e6
-        return liberal_aep - conservative_aep
+        # Liberal layout (optimized in isolation) evaluated WITH neighbors
+        x_lib_all = jnp.concatenate([liberal_x, nb_x])
+        y_lib_all = jnp.concatenate([liberal_y, nb_y])
+        result_lib = sim(x_lib_all, y_lib_all, ws_amb=ws, wd_amb=wd)
+        power_lib = result_lib.power()[:, :N_TARGET]
+        liberal_aep_present = jnp.sum(power_lib * weights[:, None]) * 8760 / 1e6
+        return conservative_aep - liberal_aep_present
 
     regret_and_grad = jax.value_and_grad(compute_regret)
 
@@ -581,7 +587,14 @@ def main():
 
         grad_norm = float(jnp.linalg.norm(grad_regret))
         regret_val = float(regret)
-        cons_aep = liberal_aep - regret_val
+        # Compute conservative AEP directly (with neighbors present)
+        nb_x_cur = neighbor_params[:N_NEIGHBOR]
+        nb_y_cur = neighbor_params[N_NEIGHBOR:]
+        x_all_cons = jnp.concatenate([opt_x, nb_x_cur])
+        y_all_cons = jnp.concatenate([opt_y, nb_y_cur])
+        result_cons = sim(x_all_cons, y_all_cons, ws_amb=ws, wd_amb=wd)
+        power_cons = result_cons.power()[:, :N_TARGET]
+        cons_aep = float(jnp.sum(power_cons * weights[:, None]) * 8760 / 1e6)
 
         history_regret.append(regret_val)
         history_grad_norm.append(grad_norm)

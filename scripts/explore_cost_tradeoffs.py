@@ -162,7 +162,13 @@ def compute_regret(nb_params, settings):
     result = sim(x_all, y_all, ws_amb=ws, wd_amb=wd)
     power = result.power()[:, :N_TARGET]
     conservative_aep = jnp.sum(power) * 8760 / 1e6 / power.shape[0]
-    return liberal_aep - conservative_aep
+    # Liberal layout evaluated WITH neighbors (differentiable w.r.t. neighbor_params)
+    x_lib_all = jnp.concatenate([liberal_x, nbx])
+    y_lib_all = jnp.concatenate([liberal_y, nby])
+    result_lib = sim(x_lib_all, y_lib_all, ws_amb=ws, wd_amb=wd)
+    power_lib = result_lib.power()[:, :N_TARGET]
+    liberal_aep_present = jnp.sum(power_lib) * 8760 / 1e6 / power_lib.shape[0]
+    return conservative_aep - liberal_aep_present
 
 
 def bench_outer_grad(settings=ref_settings):
@@ -517,7 +523,13 @@ for n_nb in nb_counts:
         result = sim(x_all, y_all, ws_amb=ws, wd_amb=wd)
         power = result.power()[:, :n_target_local]
         cons_aep = jnp.sum(power) * 8760 / 1e6 / power.shape[0]
-        return liberal_aep - cons_aep
+        # Liberal layout (optimized in isolation) evaluated WITH neighbors
+        x_lib_all = jnp.concatenate([liberal_x, nb_x])
+        y_lib_all = jnp.concatenate([liberal_y, nb_y])
+        result_lib = sim(x_lib_all, y_lib_all, ws_amb=ws, wd_amb=wd)
+        power_lib = result_lib.power()[:, :n_target_local]
+        lib_aep_present = jnp.sum(power_lib) * 8760 / 1e6 / power_lib.shape[0]
+        return cons_aep - lib_aep_present
 
     # Warm up
     _ = value_and_grad(regret_nb)(test_nb_params)
