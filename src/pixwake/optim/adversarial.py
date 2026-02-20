@@ -83,6 +83,7 @@ class AdversarialSearchSettings:
     target_buffer: float | None = None
     sgd_settings: SGDSettings | None = None
     verbose: bool = True
+    n_starts: int = 1
 
 
 class GradientAdversarialSearch:
@@ -177,6 +178,56 @@ class GradientAdversarialSearch:
             return weighted_power * 8760 / 1e6  # GWh
         return jnp.sum(power) * 8760 / 1e6 / power.shape[0]
 
+    def _solve_inner_multi(
+        self,
+        init_x_multi: jnp.ndarray,
+        init_y_multi: jnp.ndarray,
+        neighbor_params: jnp.ndarray,
+        sgd_settings: SGDSettings,
+    ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+        """Solve inner optimization for multiple starts in parallel.
+
+        Parameters
+        ----------
+        init_x_multi, init_y_multi : jnp.ndarray
+            Initial positions for each start, shape (n_starts, n_turbines).
+        neighbor_params : jnp.ndarray
+            Neighbor configuration parameters.
+        sgd_settings : SGDSettings
+            Inner optimizer settings.
+
+        Returns
+        -------
+        tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]
+            (opt_x_multi, opt_y_multi, aep_multi)
+        """
+        def objective_with_neighbors(x, y, p):
+            n_nb = p.shape[0] // 2
+            nb_x, nb_y = p[:n_nb], p[n_nb:]
+            return -self._compute_aep(x, y, nb_x, nb_y)
+
+        # Vectorize over initializations
+        v_solve = jax.vmap(
+            lambda x0, y0: sgd_solve_implicit(
+                objective_with_neighbors,
+                x0, y0,
+                jnp.array(self.target_boundary),
+                self.target_min_spacing,
+                sgd_settings,
+                neighbor_params,
+            )
+        )
+
+        opt_x_multi, opt_y_multi = v_solve(init_x_multi, init_y_multi)
+
+        # Compute AEP for each result
+        n_nb = neighbor_params.shape[0] // 2
+        nb_x, nb_y = neighbor_params[:n_nb], neighbor_params[n_nb:]
+        v_aep = jax.vmap(lambda x, y: self._compute_aep(x, y, nb_x, nb_y))
+        aep_multi = v_aep(opt_x_multi, opt_y_multi)
+
+        return opt_x_multi, opt_y_multi, aep_multi
+
     def search(
         self,
         init_target_x: jnp.ndarray,
@@ -206,56 +257,72 @@ class GradientAdversarialSearch:
 
         sgd_settings = settings.sgd_settings or SGDSettings()
 
-        # Define objective function for inner SGD (with neighbor params)
-        def objective_with_neighbors(
-            x: jnp.ndarray, y: jnp.ndarray, neighbor_params: jnp.ndarray
-        ) -> jnp.ndarray:
-            n_neighbors = neighbor_params.shape[0] // 2
-            neighbor_x = neighbor_params[:n_neighbors]
-            neighbor_y = neighbor_params[n_neighbors:]
-            return -self._compute_aep(x, y, neighbor_x, neighbor_y)
+        # Generate multi-start initializations
+        n_target = init_target_x.shape[0]
+        if settings.n_starts > 1:
+            key = jax.random.PRNGKey(42)
+            tb = self.target_boundary
+            x_min, x_max = tb[:, 0].min() + self.target_min_spacing, tb[:, 0].max() - self.target_min_spacing
+            y_min, y_max = tb[:, 1].min() + self.target_min_spacing, tb[:, 1].max() - self.target_min_spacing
+            
+            key_x, key_y = jax.random.split(key)
+            rand_x = jax.random.uniform(key_x, (settings.n_starts - 1, n_target), minval=x_min, maxval=x_max)
+            rand_y = jax.random.uniform(key_y, (settings.n_starts - 1, n_target), minval=y_min, maxval=y_max)
+            
+            init_x_multi = jnp.concatenate([init_target_x[None, :], rand_x], axis=0)
+            init_y_multi = jnp.concatenate([init_target_y[None, :], rand_y], axis=0)
+        else:
+            init_x_multi = init_target_x[None, :]
+            init_y_multi = init_target_y[None, :]
 
-        # Compute liberal layout (no neighbors) - only once
+        # 1. Optimize LIBERAL layout (multi-start isolation)
+        if settings.verbose:
+            print(f"Optimizing Liberal Layout ({settings.n_starts} starts)...")
+            
         def liberal_objective(x: jnp.ndarray, y: jnp.ndarray) -> jnp.ndarray:
             return -self._compute_aep(x, y)
 
         from pixwake.optim.sgd import topfarm_sgd_solve
-
-        liberal_x, liberal_y = topfarm_sgd_solve(
-            liberal_objective,
-            init_target_x,
-            init_target_y,
-            self.target_boundary,
-            self.target_min_spacing,
-            sgd_settings,
-        )
-        liberal_aep = float(self._compute_aep(liberal_x, liberal_y))
-
-        if settings.verbose:
-            print(f"Liberal AEP (no neighbors): {liberal_aep:.2f} GWh")
-
-        # Define regret function (to maximize)
-        def compute_regret(neighbor_params: jnp.ndarray) -> jnp.ndarray:
-            """Compute regret = liberal_aep - conservative_aep."""
-            # Optimize target layout given neighbors (differentiable via IFT)
-            opt_x, opt_y = sgd_solve_implicit(
-                objective_with_neighbors,
-                init_target_x,
-                init_target_y,
-                self.target_boundary,
+        
+        # Vectorize over initializations for liberal baseline
+        v_solve_lib = jax.vmap(
+            lambda x0, y0: topfarm_sgd_solve(
+                liberal_objective,
+                x0, y0,
+                jnp.array(self.target_boundary),
                 self.target_min_spacing,
                 sgd_settings,
-                neighbor_params,
             )
+        )
+        lib_x_multi, lib_y_multi = v_solve_lib(init_x_multi, init_y_multi)
+        lib_aep_multi = jax.vmap(lambda x, y: self._compute_aep(x, y))(lib_x_multi, lib_y_multi)
+        
+        # Pick the best liberal layout
+        best_lib_idx = jnp.argmax(lib_aep_multi)
+        liberal_x = lib_x_multi[best_lib_idx]
+        liberal_y = lib_y_multi[best_lib_idx]
+        liberal_aep_iso = float(lib_aep_multi[best_lib_idx])
 
-            # Compute conservative AEP
-            n_neighbors = neighbor_params.shape[0] // 2
-            neighbor_x = neighbor_params[:n_neighbors]
-            neighbor_y = neighbor_params[n_neighbors:]
-            conservative_aep = self._compute_aep(opt_x, opt_y, neighbor_x, neighbor_y)
+        if settings.verbose:
+            print(f"Liberal AEP (isolated): {liberal_aep_iso:.2f} GWh")
 
-            # Regret = liberal - conservative (we want to maximize this)
-            return liberal_aep - conservative_aep
+        # 2. Define REGRET function (to maximize)
+        def compute_regret(neighbor_params: jnp.ndarray) -> jnp.ndarray:
+            """Compute design regret = AEP_con_present - AEP_lib_present."""
+            n_nb = neighbor_params.shape[0] // 2
+            nb_x, nb_y = neighbor_params[:n_nb], neighbor_params[n_nb:]
+            
+            # AEP_lib_present: Liberal design evaluated with these neighbors
+            aep_lib_present = self._compute_aep(liberal_x, liberal_y, nb_x, nb_y)
+            
+            # AEP_con_present: Best possible design with these neighbors (IFT multi-start)
+            _, _, aep_multi = self._solve_inner_multi(
+                init_x_multi, init_y_multi, neighbor_params, sgd_settings
+            )
+            aep_con_present = jnp.max(aep_multi)
+            
+            # Regret is the benefit of having known the neighbors in advance
+            return aep_con_present - aep_lib_present
 
         # Gradient ascent on neighbor positions to maximize regret (ADAM optimizer)
         neighbor_params = jnp.concatenate([init_neighbor_x, init_neighbor_y])
@@ -355,27 +422,24 @@ class GradientAdversarialSearch:
         final_neighbor_x = neighbor_params[:n_neighbors]
         final_neighbor_y = neighbor_params[n_neighbors:]
 
-        # Get final optimized target layout
-        final_target_x, final_target_y = sgd_solve_implicit(
-            objective_with_neighbors,
-            init_target_x,
-            init_target_y,
-            self.target_boundary,
-            self.target_min_spacing,
-            sgd_settings,
-            neighbor_params,
+        # Get final optimized target layout (pick best start)
+        opt_x_multi, opt_y_multi, aep_multi = self._solve_inner_multi(
+            init_x_multi, init_y_multi, neighbor_params, sgd_settings
         )
+        best_idx = jnp.argmax(aep_multi)
+        final_target_x = opt_x_multi[best_idx]
+        final_target_y = opt_y_multi[best_idx]
 
-        final_conservative_aep = float(
-            self._compute_aep(final_target_x, final_target_y, final_neighbor_x, final_neighbor_y)
-        )
-        final_regret = liberal_aep - final_conservative_aep
+        aep_con_present = float(aep_multi[best_idx])
+        aep_lib_present = float(self._compute_aep(liberal_x, liberal_y, final_neighbor_x, final_neighbor_y))
+        final_regret = aep_con_present - aep_lib_present
 
         if settings.verbose:
             print(f"\nFinal Results:")
-            print(f"  Liberal AEP: {liberal_aep:.2f} GWh")
-            print(f"  Conservative AEP: {final_conservative_aep:.2f} GWh")
-            print(f"  Regret: {final_regret:.2f} GWh ({100*final_regret/liberal_aep:.1f}%)")
+            print(f"  Liberal AEP (isolated): {liberal_aep_iso:.2f} GWh")
+            print(f"  Liberal AEP (w/ neighbors): {aep_lib_present:.2f} GWh")
+            print(f"  Conservative AEP (w/ neighbors): {aep_con_present:.2f} GWh")
+            print(f"  Regret: {final_regret:.4f} GWh")
 
         return AdversarialSearchResult(
             neighbor_x=final_neighbor_x,
@@ -385,8 +449,8 @@ class GradientAdversarialSearch:
             liberal_x=liberal_x,
             liberal_y=liberal_y,
             regret=final_regret,
-            liberal_aep=liberal_aep,
-            conservative_aep=final_conservative_aep,
+            liberal_aep=liberal_aep_iso,
+            conservative_aep=aep_con_present,
             history=history,
         )
 
