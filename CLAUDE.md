@@ -119,7 +119,7 @@ Load IFT results + `blob_discovery/results.json`, produce comparison bar chart a
 
 **`GradientAdversarialSearch.search()` flow:**
 1. Compute liberal layout (no neighbors) via `topfarm_sgd_solve` — fixed baseline
-2. Define `compute_regret(neighbor_params)`: calls `sgd_solve_implicit` to get conservative layout, computes `liberal_aep - conservative_aep`
+2. Define `compute_regret(neighbor_params)`: evaluates liberal layout WITH neighbors, calls `sgd_solve_implicit` to get conservative layout, computes `conservative_aep - liberal_aep_present` (both evaluated with neighbors present, isolating the design effect)
 3. `value_and_grad(compute_regret)` gives regret + gradient w.r.t. neighbor positions
 4. Gradient ascent on neighbor positions (maximize regret)
 5. Optional: clip neighbor positions to boundary box (post-step projection — does not affect gradients)
@@ -162,11 +162,17 @@ The bilevel problem has two nested levels of optimization:
 
 ```
 OUTER: max_{neighbors}  regret(neighbors)
-         where regret = AEP_liberal - AEP_conservative(neighbors)
+         where regret = AEP(x*(neighbors), neighbors) - AEP(x_lib, neighbors)
 
-INNER: AEP_conservative(neighbors) = AEP(x*(neighbors), neighbors)
-         where x* = argmin_x  -AEP(x, neighbors)   [SGD with constraints]
+INNER: x*(neighbors) = argmax_x  AEP(x, neighbors)   [SGD with constraints]
+       x_lib         = argmax_x  AEP(x)               [optimized in isolation, fixed]
 ```
+
+Here `x_lib` is the layout optimized under the **liberal formulation** (no neighbors),
+then evaluated under the **conservative formulation** (neighbors present). Regret
+measures the AEP gap between the best-possible layout (designed with neighbor
+knowledge) and the naive layout (designed in isolation), both evaluated with
+the same neighbors present.
 
 For one call to `value_and_grad(compute_regret)(neighbor_params)`:
 
@@ -228,7 +234,7 @@ This is safe: each level only requires first-order AD through the level below. N
 IFT assumes a unique, smooth mapping `params -> x*(params)`. With K random starts, the inner optimization finds K local optima, and the true regret uses the best:
 
 ```
-true_regret(p) = AEP_liberal - max_k AEP(x*_k(p), p)
+true_regret(p) = max_k AEP(x*_k(p), p) - AEP(x_lib, p)
 ```
 
 The `max` over starts is non-differentiable at start-switching boundaries.
