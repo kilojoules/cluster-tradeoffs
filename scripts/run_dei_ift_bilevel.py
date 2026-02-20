@@ -34,10 +34,11 @@ from matplotlib.patches import Polygon as MplPolygon
 
 from pixwake import Curve, Turbine, WakeSimulation
 from pixwake.deficit import BastankhahGaussianDeficit
+from pixwake.optim.boundary import exclusion_penalty
 from pixwake.optim.sgd import (
     SGDSettings, sgd_solve_implicit, topfarm_sgd_solve,
     _compute_mid_bisection, _init_sgd_state, _sgd_step,
-    _signed_distance_to_edge, boundary_penalty, spacing_penalty,
+    boundary_penalty, spacing_penalty,
 )
 
 
@@ -125,15 +126,57 @@ def generate_initial_layout(boundary, n_turbines, seed=42):
     return jnp.array(pts[:, 0]), jnp.array(pts[:, 1])
 
 
-def place_initial_neighbors(boundary, n_neighbors, seed=123):
-    """Place neighbors upwind (west) of the target boundary."""
-    cy = boundary[:, 1].mean()
-    x_offset = boundary[:, 0].min() - 5 * D
+def place_initial_neighbors(boundary, n_neighbors, buffer, seed=123, pad_D=30.0):
+    """Scatter neighbors randomly in a large box, rejecting those inside the buffered boundary.
+
+    Samples uniformly from a box extending pad_D rotor diameters beyond the
+    boundary bounding box.  Any sample landing inside the boundary + buffer
+    exclusion zone is rejected and re-sampled.
+    """
+    from matplotlib.path import Path as MplPath
+
+    # Offset boundary outward by buffer to build the exclusion polygon
+    n_verts = len(boundary)
+    centroid = boundary.mean(axis=0)
+    offset_verts = []
+    edges_list = []
+    for j in range(n_verts):
+        p0 = boundary[j]
+        p1 = boundary[(j + 1) % n_verts]
+        edge = p1 - p0
+        normal = np.array([-edge[1], edge[0]])
+        normal /= np.linalg.norm(normal)
+        if np.dot(normal, p0 - centroid) < 0:
+            normal = -normal
+        edges_list.append((p0 + normal * buffer, p1 + normal * buffer))
+    for j in range(n_verts):
+        a0, a1 = edges_list[j]
+        b0, b1 = edges_list[(j + 1) % n_verts]
+        da, db = a1 - a0, b1 - b0
+        denom = da[0] * db[1] - da[1] * db[0]
+        if abs(denom) < 1e-12:
+            offset_verts.append(a1)
+        else:
+            t = ((b0[0] - a0[0]) * db[1] - (b0[1] - a0[1]) * db[0]) / denom
+            offset_verts.append(a0 + t * da)
+    exclusion = np.array(offset_verts)
+    exclusion_path = MplPath(exclusion)
+
+    # Large sampling box
+    pad = pad_D * D
+    x_min = boundary[:, 0].min() - pad
+    x_max = boundary[:, 0].max() + pad
+    y_min = boundary[:, 1].min() - pad
+    y_max = boundary[:, 1].max() + pad
+
     rng = np.random.default_rng(seed)
-    y_spread = (boundary[:, 1].max() - boundary[:, 1].min()) * 0.5
-    nb_x = np.full(n_neighbors, x_offset) + rng.uniform(-2 * D, 0, n_neighbors)
-    nb_y = cy + rng.uniform(-y_spread, y_spread, n_neighbors)
-    return jnp.array(nb_x), jnp.array(nb_y)
+    pts = []
+    while len(pts) < n_neighbors:
+        cands = rng.uniform([x_min, y_min], [x_max, y_max], size=(n_neighbors * 5, 2))
+        outside = ~exclusion_path.contains_points(cands)
+        pts.extend(cands[outside].tolist())
+    pts = np.array(pts[:n_neighbors])
+    return jnp.array(pts[:, 0]), jnp.array(pts[:, 1])
 
 
 # =============================================================================
@@ -377,9 +420,11 @@ def main():
     print(f"\nBoundary: {boundary_np.shape[0]} vertices (convex hull, CCW)")
     print(f"Wind rose: {len(wd)} directions, dominant ~{float(wd[jnp.argmax(weights)]):.0f}°")
 
+    buffer = 3 * D
+
     # Initial layouts
     init_x, init_y = generate_initial_layout(boundary_np, N_TARGET, seed=args.seed)
-    init_nb_x, init_nb_y = place_initial_neighbors(boundary_np, N_NEIGHBOR, seed=args.seed + 1)
+    init_nb_x, init_nb_y = place_initial_neighbors(boundary_np, N_NEIGHBOR, buffer, seed=args.seed + 1)
 
     print(f"Target turbines: {N_TARGET}, min spacing: {min_spacing:.0f} m")
     print(f"Neighbor turbines: {N_NEIGHBOR}")
@@ -444,26 +489,9 @@ def main():
     # Outer loop constraint penalties (neighbors must satisfy spacing and
     # stay outside target boundary + buffer)
     # =====================================================================
-    buffer = 2 * D
-
     def outer_boundary_penalty(nb_x, nb_y):
-        """Penalize neighbors that are inside the target boundary + buffer.
-
-        Uses the same signed-distance approach as boundary_penalty but
-        *inverted*: positive penalty when a neighbor is too close to or
-        inside the target polygon. We shrink the boundary inward by
-        `buffer` and penalize points inside that expanded region.
-        """
-        n_vertices = boundary.shape[0]
-        def edge_distances(i):
-            x1, y1 = boundary[i]
-            x2, y2 = boundary[(i + 1) % n_vertices]
-            return _signed_distance_to_edge(nb_x, nb_y, x1, y1, x2, y2)
-        all_distances = jax.vmap(edge_distances)(jnp.arange(n_vertices))
-        min_distances = jnp.min(all_distances, axis=0)
-        # Penalize if inside boundary + buffer (min_distance > -buffer)
-        violations = jnp.maximum(0.0, min_distances + buffer)
-        return jnp.sum(violations ** 2)
+        """Penalize neighbors inside the target boundary + buffer."""
+        return exclusion_penalty(nb_x, nb_y, boundary, buffer=buffer, convex=True)
 
     def outer_constraint_penalty(neighbor_params):
         nb_x = neighbor_params[:N_NEIGHBOR]
@@ -504,6 +532,7 @@ def main():
     first_nb_params = neighbor_params.copy()
 
     history_regret, history_grad_norm = [], []
+    history_con_pen, history_objective = [], []
     history_nb, history_target = [], []
     best_regret = -np.inf
     best_neighbor_params = neighbor_params
@@ -556,6 +585,8 @@ def main():
 
         history_regret.append(regret_val)
         history_grad_norm.append(grad_norm)
+        history_con_pen.append(con_pen)
+        history_objective.append(-regret_val + alpha * con_pen)
         history_nb.append((np.array(neighbor_params[:N_NEIGHBOR]).copy(),
                            np.array(neighbor_params[N_NEIGHBOR:]).copy()))
 
@@ -573,6 +604,29 @@ def main():
         if i % 10 == 0 or i == total_outer - 1:
             print(f"{i:4d}  {regret_val:10.4f}  {cons_aep:10.4f}  {grad_norm:12.6f}"
                   f"  {lr_current:8.3f}  {alpha:10.4f}  {con_pen:10.2f}  {elapsed:5.1f}s")
+
+        # Save checkpoint every 10 iterations (readable by animate_checkpoint.py)
+        if i % 10 == 0 or i == total_outer - 1:
+            nb_x_hist = np.array([nb[0] for nb in history_nb])
+            nb_y_hist = np.array([nb[1] for nb in history_nb])
+            tgt_x_hist = np.array([t[0] for t in history_target])
+            tgt_y_hist = np.array([t[1] for t in history_target])
+            np.savez(
+                output_dir / "checkpoint.npz",
+                regret=np.array(history_regret),
+                grad_norm=np.array(history_grad_norm),
+                con_pen=np.array(history_con_pen),
+                objective=np.array(history_objective),
+                nb_x=nb_x_hist, nb_y=nb_y_hist,
+                tgt_x=tgt_x_hist, tgt_y=tgt_y_hist,
+                liberal_x=np.array(liberal_x),
+                liberal_y=np.array(liberal_y),
+                liberal_aep=liberal_aep,
+                boundary=boundary_np,
+                n_target=N_TARGET, n_neighbor=N_NEIGHBOR,
+                min_spacing=min_spacing,
+                buffer=buffer,
+            )
 
         # Combined gradient: minimize (-regret) + alpha * constraint
         neg_grad = -grad_regret + alpha * grad_con
