@@ -204,8 +204,9 @@ def test_wake_sim_ift_gradient():
         f_minus = compute_conservative_aep(neighbor_params - e)
         grad_fd = grad_fd.at[i].set((f_plus - f_minus) / (2 * eps_fd))
 
-    # Allow generous tolerance: sign and order of magnitude agreement
-    # 50% relative error is acceptable for validating direction
+    # With pure AD (no FD in backward pass), expect tighter agreement
+    # ~10% relative error is reasonable (remaining error from inner SGD tolerance
+    # and outer FD reference accuracy)
     for i in range(len(neighbor_params)):
         ad_val = float(grad_ad[i])
         fd_val = float(grad_fd[i])
@@ -213,10 +214,16 @@ def test_wake_sim_ift_gradient():
         # Check no NaN
         assert jnp.isfinite(grad_ad[i]), f"IFT gradient[{i}] is NaN/Inf"
 
-        # If FD gradient is non-negligible, check sign agreement
+        # If FD gradient is non-negligible, check sign agreement and magnitude
         if abs(fd_val) > 1e-8:
             assert ad_val * fd_val > 0 or abs(ad_val) < 1e-6, (
                 f"Sign mismatch at [{i}]: IFT={ad_val:.6e}, FD={fd_val:.6e}"
+            )
+            # Tighter relative error check (pure AD should be more accurate than FD)
+            rel_err = abs(ad_val - fd_val) / max(abs(fd_val), 1e-10)
+            assert rel_err < 0.5, (
+                f"Relative error too large at [{i}]: IFT={ad_val:.6e}, "
+                f"FD={fd_val:.6e}, rel_err={rel_err:.2f}"
             )
 
 
@@ -480,3 +487,99 @@ def test_search_multistart_smoke():
     assert jnp.all(jnp.isfinite(result.neighbor_y)), "neighbor_y NaN"
     assert jnp.isfinite(result.regret), "regret NaN"
     assert result.liberal_aep > 0, "liberal AEP should be positive"
+
+
+# ---------------------------------------------------------------------------
+# Test 8: JVP through _fixed_point_raw
+# ---------------------------------------------------------------------------
+
+
+def test_fixed_point_jvp():
+    """Verify JVP through _fixed_point_raw returns correct tangent.
+
+    Simple fixed-point: x* = f(x*, p) where f(x, p) = 0.5 * (x + p).
+    Solution: x* = p, so dx*/dp = 1.
+    """
+    from pixwake.core import _fixed_point_raw
+
+    def f(x, ctx):
+        p = ctx
+        return 0.5 * (x + p)
+
+    p = jnp.array([3.0])
+    x_guess = jnp.array([0.0])
+
+    # Forward: should converge to p
+    x_star = _fixed_point_raw(f, x_guess, p, tol=1e-10, damp=1.0, max_iter=100)
+    assert jnp.allclose(x_star, p, atol=1e-6), f"x*={x_star}, expected {p}"
+
+    # JVP: dx*/dp should be 1.0
+    def solve(p_val):
+        return _fixed_point_raw(f, x_guess, p_val, tol=1e-10, damp=1.0, max_iter=100)
+
+    tangent_in = jnp.array([1.0])
+    _, tangent_out = jax.jvp(solve, (p,), (tangent_in,))
+    assert jnp.allclose(tangent_out, jnp.array([1.0]), atol=0.05), (
+        f"JVP tangent={tangent_out}, expected [1.0]"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test 9: HVP via jax.jvp matches full Hessian
+# ---------------------------------------------------------------------------
+
+
+def test_hvp_matches_full_hessian():
+    """For a small problem, verify JVP-based HVP matches jax.hessian."""
+    sim = WakeSimulation(vestas_v80, NOJDeficit(k=0.1))
+
+    ws = jnp.array([9.0])
+    wd = jnp.array([270.0])
+
+    n_target = 4
+    spacing = 4 * D
+    # Fixed turbine positions (not optimized, just checking HVP)
+    x = jnp.array([0.0, spacing, 0.0, spacing])
+    y = jnp.array([0.0, 0.0, spacing, spacing])
+
+    # 1 neighbor
+    nb_x = jnp.array([-2 * D])
+    nb_y = jnp.array([0.0])
+    params = jnp.concatenate([nb_x, nb_y])
+
+    def total_obj(xx, yy):
+        x_all = jnp.concatenate([xx, params[:1]])
+        y_all = jnp.concatenate([yy, params[1:]])
+        result = sim(x_all, y_all, ws_amb=ws, wd_amb=wd)
+        power = result.power()[:, :n_target]
+        return -jnp.sum(power) * 8760 / 1e6 / power.shape[0]
+
+    # Full Hessian via jacfwd(jacrev(...)) = jax.hessian
+    # This works because fixed_point_fwd calls _fixed_point_raw (no custom_vjp),
+    # allowing JVP to propagate through the VJP trace.
+    def obj_flat(xy_flat):
+        n = len(x)
+        return total_obj(xy_flat[:n], xy_flat[n:])
+
+    xy = jnp.concatenate([x, y])
+    hess = jax.hessian(obj_flat)(xy)  # shape (2n, 2n)
+
+    # HVP via jax.jvp(jax.grad(...))
+    def grad_obj(xx, yy):
+        return jax.grad(lambda a, b: total_obj(a, b), argnums=(0, 1))(xx, yy)
+
+    # Random direction
+    key = jax.random.PRNGKey(0)
+    v = jax.random.normal(key, (2 * n_target,))
+    vx, vy = v[:n_target], v[n_target:]
+
+    _, (hvp_x, hvp_y) = jax.jvp(grad_obj, (x, y), (vx, vy))
+    hvp_jvp = jnp.concatenate([hvp_x, hvp_y])
+
+    # Reference: H @ v
+    hvp_ref = hess @ v
+
+    # Should match closely
+    assert jnp.allclose(hvp_jvp, hvp_ref, atol=1e-4, rtol=0.01), (
+        f"HVP mismatch: jvp={hvp_jvp}, hessian@v={hvp_ref}"
+    )

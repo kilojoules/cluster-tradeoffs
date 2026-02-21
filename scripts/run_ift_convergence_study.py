@@ -1,16 +1,12 @@
-"""IFT gradient convergence study: sweep FD epsilons and inner tolerance.
+"""IFT gradient convergence study: sweep inner tolerance.
 
 At a fixed neighbor configuration, compares the IFT gradient (from
-sgd_solve_implicit's custom_vjp) against the "ground truth" outer
-finite-difference gradient for different combinations of:
-
-  - ift_eps_base  (Jacobian FD epsilon)
-  - ift_eps_hvp   (Hessian-vector product FD epsilon)
-  - inner tol     (SGD convergence tolerance)
+sgd_solve_implicit's custom_vjp with pure AD) against the "ground truth"
+outer finite-difference gradient for different inner SGD tolerances.
 
 Outputs:
   - analysis/ift_convergence/results.json    (all metrics)
-  - analysis/ift_convergence/heatmaps.png    (cosine sim & rel error)
+  - analysis/ift_convergence/convergence.png (cosine sim & rel error vs tol)
   - analysis/ift_convergence/summary.txt     (human-readable table)
 
 Usage:
@@ -175,18 +171,14 @@ def main():
     N_NEIGHBOR = args.n_neighbors
     min_spacing = 4.0 * D
 
-    # --- Sweep grid ---
-    eps_base_values = [1e-5, 1e-4, 1e-3, 1e-2]
-    eps_hvp_values = [1e-6, 1e-5, 1e-4, 1e-3]
-    tol_values = [1e-6, 1e-8, 1e-10]
+    # --- Sweep grid (inner tolerance only — AD is exact, no FD epsilons) ---
+    tol_values = [1e-4, 1e-6, 1e-8, 1e-10]
 
     print("=" * 70)
-    print("IFT GRADIENT CONVERGENCE STUDY")
+    print("IFT GRADIENT CONVERGENCE STUDY (pure AD)")
     print(f"  {N_TARGET} targets, {N_NEIGHBOR} neighbors")
     print(f"  Inner: lr={args.inner_lr}, max_iter={args.inner_max_iter}")
     print(f"  Outer FD step: {args.fd_step} m")
-    print(f"  eps_base sweep: {eps_base_values}")
-    print(f"  eps_hvp sweep:  {eps_hvp_values}")
     print(f"  tol sweep:      {tol_values}")
     print("=" * 70)
 
@@ -313,62 +305,56 @@ def main():
         return float(regret), np.array(grad)
 
     results = []
-    total_configs = len(eps_base_values) * len(eps_hvp_values) * len(tol_values)
+    total_configs = len(tol_values)
     config_i = 0
 
-    print(f"\nSweeping {total_configs} IFT configurations...")
-    print(f"{'#':>3}  {'eps_base':>10}  {'eps_hvp':>10}  {'tol':>10}  "
+    print(f"\nSweeping {total_configs} IFT configurations (pure AD, inner tol only)...")
+    print(f"{'#':>3}  {'tol':>10}  "
           f"{'cos_sim':>8}  {'rel_err':>10}  {'|grad|':>12}  {'regret':>10}  {'time':>6}")
-    print("-" * 95)
+    print("-" * 70)
 
     for tol in tol_values:
-        for eps_base in eps_base_values:
-            for eps_hvp in eps_hvp_values:
-                config_i += 1
-                settings = SGDSettings(
-                    learning_rate=args.inner_lr,
-                    max_iter=args.inner_max_iter,
-                    tol=tol,
-                    ift_eps_base=eps_base,
-                    ift_eps_hvp=eps_hvp,
-                )
+        config_i += 1
+        settings = SGDSettings(
+            learning_rate=args.inner_lr,
+            max_iter=args.inner_max_iter,
+            tol=tol,
+        )
 
-                t0 = time.time()
-                try:
-                    regret, grad_ift = compute_ift_gradient(neighbor_params, settings)
-                    elapsed = time.time() - t0
+        t0 = time.time()
+        try:
+            regret, grad_ift = compute_ift_gradient(neighbor_params, settings)
+            elapsed = time.time() - t0
 
-                    grad_norm = float(np.linalg.norm(grad_ift))
-                    cos_sim = cosine_similarity(grad_ift, grad_fd)
-                    rel_err = relative_error(grad_ift, grad_fd)
-                    has_nan = bool(np.any(~np.isfinite(grad_ift)))
-                except Exception as e:
-                    elapsed = time.time() - t0
-                    regret = float("nan")
-                    grad_ift = np.full(n_params, np.nan)
-                    grad_norm = float("nan")
-                    cos_sim = float("nan")
-                    rel_err = float("nan")
-                    has_nan = True
-                    print(f"  !! Error: {e}")
+            grad_norm = float(np.linalg.norm(grad_ift))
+            cos_sim = cosine_similarity(grad_ift, grad_fd)
+            rel_err = relative_error(grad_ift, grad_fd)
+            has_nan = bool(np.any(~np.isfinite(grad_ift)))
+        except Exception as e:
+            elapsed = time.time() - t0
+            regret = float("nan")
+            grad_ift = np.full(n_params, np.nan)
+            grad_norm = float("nan")
+            cos_sim = float("nan")
+            rel_err = float("nan")
+            has_nan = True
+            print(f"  !! Error: {e}")
 
-                row = {
-                    "eps_base": eps_base,
-                    "eps_hvp": eps_hvp,
-                    "tol": tol,
-                    "regret": regret,
-                    "grad_norm": grad_norm,
-                    "cos_sim": cos_sim,
-                    "rel_err": rel_err,
-                    "has_nan": has_nan,
-                    "time_s": elapsed,
-                    "grad_ift": grad_ift.tolist(),
-                }
-                results.append(row)
+        row = {
+            "tol": tol,
+            "regret": regret,
+            "grad_norm": grad_norm,
+            "cos_sim": cos_sim,
+            "rel_err": rel_err,
+            "has_nan": has_nan,
+            "time_s": elapsed,
+            "grad_ift": grad_ift.tolist(),
+        }
+        results.append(row)
 
-                print(f"{config_i:3d}  {eps_base:10.0e}  {eps_hvp:10.0e}  {tol:10.0e}  "
-                      f"{cos_sim:8.4f}  {rel_err:10.4f}  {grad_norm:12.6e}  "
-                      f"{regret:10.4f}  {elapsed:5.1f}s")
+        print(f"{config_i:3d}  {tol:10.0e}  "
+              f"{cos_sim:8.4f}  {rel_err:10.4f}  {grad_norm:12.6e}  "
+              f"{regret:10.4f}  {elapsed:5.1f}s")
 
     # --- Save results ---
     output = {
@@ -390,87 +376,48 @@ def main():
     print(f"\nSaved results to {output_dir / 'results.json'}")
 
     # --- Summary table ---
-    print("\n" + "=" * 95)
-    print("SUMMARY — Best configuration per tolerance level")
-    print("=" * 95)
-    for tol in tol_values:
-        tol_rows = [r for r in results if r["tol"] == tol and not r["has_nan"]]
-        if not tol_rows:
-            print(f"  tol={tol:.0e}: all NaN")
+    print("\n" + "=" * 70)
+    print("SUMMARY — Results per tolerance level (pure AD)")
+    print("=" * 70)
+    for r in results:
+        if r["has_nan"]:
+            print(f"  tol={r['tol']:.0e}: NaN")
             continue
-        best = max(tol_rows, key=lambda r: r["cos_sim"] if np.isfinite(r["cos_sim"]) else -999)
-        print(f"  tol={tol:.0e}:  best cos_sim={best['cos_sim']:.4f}  "
-              f"(eps_base={best['eps_base']:.0e}, eps_hvp={best['eps_hvp']:.0e})  "
-              f"rel_err={best['rel_err']:.4f}  |grad|={best['grad_norm']:.4e}  "
-              f"time={best['time_s']:.1f}s")
+        print(f"  tol={r['tol']:.0e}:  cos_sim={r['cos_sim']:.4f}  "
+              f"rel_err={r['rel_err']:.4f}  |grad|={r['grad_norm']:.4e}  "
+              f"time={r['time_s']:.1f}s")
 
-    # --- Heatmap plots ---
-    fig, axes = plt.subplots(len(tol_values), 2,
-                             figsize=(14, 4 * len(tol_values)),
-                             squeeze=False)
+    # --- Convergence plot: cos_sim and rel_err vs inner tolerance ---
+    tols = [r["tol"] for r in results]
+    cos_sims = [r["cos_sim"] for r in results]
+    rel_errs = [r["rel_err"] for r in results]
 
-    for ti, tol in enumerate(tol_values):
-        # Build matrices
-        n_eb = len(eps_base_values)
-        n_eh = len(eps_hvp_values)
-        cos_mat = np.full((n_eb, n_eh), np.nan)
-        err_mat = np.full((n_eb, n_eh), np.nan)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
 
-        for r in results:
-            if r["tol"] != tol:
-                continue
-            i = eps_base_values.index(r["eps_base"])
-            j = eps_hvp_values.index(r["eps_hvp"])
-            cos_mat[i, j] = r["cos_sim"]
-            err_mat[i, j] = r["rel_err"]
+    ax1.semilogx(tols, cos_sims, "o-", color="steelblue", markersize=8)
+    ax1.set_xlabel("Inner SGD tolerance")
+    ax1.set_ylabel("Cosine similarity with FD reference")
+    ax1.set_title("Gradient direction accuracy")
+    ax1.set_ylim(-1.1, 1.1)
+    ax1.axhline(1.0, color="green", ls="--", alpha=0.5, label="Perfect")
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+    ax1.invert_xaxis()
 
-        # Cosine similarity heatmap
-        ax = axes[ti, 0]
-        im = ax.imshow(cos_mat, cmap="RdYlGn", vmin=-1, vmax=1,
-                        aspect="auto", origin="lower")
-        ax.set_xticks(range(n_eh))
-        ax.set_xticklabels([f"{v:.0e}" for v in eps_hvp_values], fontsize=8)
-        ax.set_yticks(range(n_eb))
-        ax.set_yticklabels([f"{v:.0e}" for v in eps_base_values], fontsize=8)
-        ax.set_xlabel("eps_hvp")
-        ax.set_ylabel("eps_base")
-        ax.set_title(f"Cosine similarity (tol={tol:.0e})")
-        for i in range(n_eb):
-            for j in range(n_eh):
-                val = cos_mat[i, j]
-                if np.isfinite(val):
-                    ax.text(j, i, f"{val:.2f}", ha="center", va="center",
-                            fontsize=8, color="black" if abs(val) < 0.7 else "white")
-        fig.colorbar(im, ax=ax)
+    ax2.loglog(tols, rel_errs, "o-", color="coral", markersize=8)
+    ax2.set_xlabel("Inner SGD tolerance")
+    ax2.set_ylabel("Relative error vs FD reference")
+    ax2.set_title("Gradient magnitude accuracy")
+    ax2.grid(True, alpha=0.3)
+    ax2.invert_xaxis()
 
-        # Relative error heatmap (log scale)
-        ax = axes[ti, 1]
-        with np.errstate(divide="ignore", invalid="ignore"):
-            log_err = np.log10(np.clip(err_mat, 1e-10, None))
-        im = ax.imshow(log_err, cmap="RdYlGn_r", vmin=-2, vmax=2,
-                        aspect="auto", origin="lower")
-        ax.set_xticks(range(n_eh))
-        ax.set_xticklabels([f"{v:.0e}" for v in eps_hvp_values], fontsize=8)
-        ax.set_yticks(range(n_eb))
-        ax.set_yticklabels([f"{v:.0e}" for v in eps_base_values], fontsize=8)
-        ax.set_xlabel("eps_hvp")
-        ax.set_ylabel("eps_base")
-        ax.set_title(f"Relative error (tol={tol:.0e})")
-        for i in range(n_eb):
-            for j in range(n_eh):
-                val = err_mat[i, j]
-                if np.isfinite(val):
-                    ax.text(j, i, f"{val:.1f}", ha="center", va="center",
-                            fontsize=8, color="black" if val > 0.5 else "white")
-        fig.colorbar(im, ax=ax)
-
-    fig.suptitle(f"IFT Gradient Accuracy: {N_TARGET} targets, {N_NEIGHBOR} neighbors\n"
+    fig.suptitle(f"IFT Gradient Accuracy (pure AD): {N_TARGET} targets, {N_NEIGHBOR} neighbors\n"
                  f"GT |grad|={gt_grad_norm:.4e}, FD step={fd_step}m",
                  fontsize=13, fontweight="bold")
-    fig.tight_layout(rect=[0, 0, 1, 0.95])
-    fig.savefig(output_dir / "heatmaps.png", dpi=150, bbox_inches="tight")
+    fig.tight_layout(rect=[0, 0, 1, 0.93])
+    fig.savefig(output_dir / "convergence.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
-    print(f"Saved heatmaps to {output_dir / 'heatmaps.png'}")
+    print(f"Saved convergence plot to {output_dir / 'convergence.png'}")
 
     # --- Per-component comparison plot ---
     # Show the best configuration's gradient vs ground truth, component by component
@@ -484,13 +431,12 @@ def main():
     x_pos = np.arange(n_params)
     width = 0.35
     ax.bar(x_pos - width / 2, grad_fd, width, label="Ground truth (outer FD)", color="steelblue")
-    ax.bar(x_pos + width / 2, best_grad, width, label="IFT (best config)", color="coral")
+    ax.bar(x_pos + width / 2, best_grad, width, label="IFT (pure AD, best tol)", color="coral")
     labels = [f"x{i}" for i in range(N_NEIGHBOR)] + [f"y{i}" for i in range(N_NEIGHBOR)]
     ax.set_xticks(x_pos)
     ax.set_xticklabels(labels, fontsize=9)
     ax.set_ylabel("d(regret)/d(param)")
-    ax.set_title(f"Best IFT config: eps_base={best_overall['eps_base']:.0e}, "
-                 f"eps_hvp={best_overall['eps_hvp']:.0e}, tol={best_overall['tol']:.0e}\n"
+    ax.set_title(f"Best IFT config: tol={best_overall['tol']:.0e}\n"
                  f"cos_sim={best_overall['cos_sim']:.4f}, rel_err={best_overall['rel_err']:.4f}")
     ax.legend()
     ax.grid(True, alpha=0.3)
@@ -501,7 +447,7 @@ def main():
 
     # --- Summary text file ---
     with open(output_dir / "summary.txt", "w") as f:
-        f.write("IFT Gradient Convergence Study\n")
+        f.write("IFT Gradient Convergence Study (pure AD)\n")
         f.write("=" * 70 + "\n\n")
         f.write(f"Setup: {N_TARGET} targets, {N_NEIGHBOR} neighbors\n")
         f.write(f"Inner SGD: lr={args.inner_lr}, max_iter={args.inner_max_iter}\n")
@@ -510,11 +456,11 @@ def main():
                 f"|grad|={gt_grad_norm:.6e}\n")
         f.write(f"Ground truth computation: {gt_time:.1f}s "
                 f"({2*n_params} inner solves)\n\n")
-        f.write(f"{'eps_base':>10}  {'eps_hvp':>10}  {'tol':>10}  "
+        f.write(f"{'tol':>10}  "
                 f"{'cos_sim':>8}  {'rel_err':>10}  {'|grad|':>12}  {'time':>6}\n")
-        f.write("-" * 80 + "\n")
+        f.write("-" * 55 + "\n")
         for r in sorted(results, key=lambda r: -(r["cos_sim"] if np.isfinite(r["cos_sim"]) else -999)):
-            f.write(f"{r['eps_base']:10.0e}  {r['eps_hvp']:10.0e}  {r['tol']:10.0e}  "
+            f.write(f"{r['tol']:10.0e}  "
                     f"{r['cos_sim']:8.4f}  {r['rel_err']:10.4f}  "
                     f"{r['grad_norm']:12.6e}  {r['time_s']:5.1f}s\n")
     print(f"Saved summary to {output_dir / 'summary.txt'}")
