@@ -1237,6 +1237,65 @@ class WakeSimulation:
         return total_aep, (grad_x_accum, grad_y_accum)
 
 
+def _fixed_point_raw(
+    f: Callable,
+    x_guess: tuple[jnp.ndarray, jnp.ndarray | None],
+    ctx,
+    tol: float = 1e-6,
+    damp: float = 1.0,
+    max_iter: int | None = None,
+) -> tuple[jnp.ndarray, jnp.ndarray | None]:
+    """Raw fixed-point iteration without custom_vjp.
+
+    This is the core while_loop logic used by both ``fixed_point`` (which wraps
+    it with a custom_vjp for VJP support) and ``fixed_point_rev`` (the adjoint
+    fixed-point solve).  Because it has **no** custom_vjp decorator, JAX can
+    automatically derive a JVP through the while_loop, which is needed for
+    exact Hessian-vector products in the IFT backward pass.
+
+    Args:
+        f: The function to iterate: ``f(x, ctx) -> x_new``.
+        x_guess: Initial guess (tuple or array).
+        ctx: Context passed to *f* (can be ``None``).
+        tol: Convergence tolerance on max absolute change.
+        damp: Damping factor (1.0 = no damping).
+        max_iter: Maximum iterations.  If ``None``, derived from array size
+            (``max(20, first_leaf.size)``).
+
+    Returns:
+        The converged fixed point with the same structure as *x_guess*.
+    """
+    if max_iter is None:
+        first_leaf = x_guess[0] if isinstance(x_guess, tuple) else x_guess
+        first_leaf_arr = jnp.atleast_1d(first_leaf)
+        max_iter = max(20, first_leaf_arr.size)
+
+    def cond_fun(carry: tuple) -> jnp.ndarray:
+        x_prev, x, it = carry
+        ws_prev = x_prev[0] if isinstance(x_prev, tuple) else x_prev
+        ws = x[0] if isinstance(x, tuple) else x
+        tol_cond = jnp.max(jnp.abs(ws_prev - ws)) > tol
+        iter_cond = it < max_iter
+        return jnp.logical_and(tol_cond, iter_cond)
+
+    if damp == 1.0:
+
+        def body_fun(carry: tuple) -> tuple:
+            _, x, it = carry
+            x_new = f(x, ctx)
+            return x, x_new, it + 1
+    else:
+
+        def body_fun(carry: tuple) -> tuple:
+            _, x, it = carry
+            x_new = f(x, ctx)
+            x_damped = jax.tree.map(lambda n, o: damp * n + (1 - damp) * o, x_new, x)
+            return x, x_damped, it + 1
+
+    _, x_star, _ = while_loop(cond_fun, body_fun, (x_guess, f(x_guess, ctx), 0))
+    return x_star
+
+
 @partial(
     custom_vjp,
     nondiff_argnums=(0, 3, 4),  # older jax syntax for rocm
@@ -1281,38 +1340,7 @@ def fixed_point(
         The fixed point as a tuple of (wind_speed, turbulence_intensity) with the
         same structure as `x_guess`.
     """
-    # Get array size from first leaf of x_guess
-    # x_guess can be a tuple (ws_array, ti_array_or_none) or a scalar for general use
-    first_leaf = x_guess[0] if isinstance(x_guess, tuple) else x_guess
-    first_leaf_arr = jnp.atleast_1d(first_leaf)
-    max_iter = max(20, first_leaf_arr.size)
-
-    def cond_fun(carry: tuple) -> jnp.ndarray:
-        x_prev, x, it = carry
-        # Extract wind speed component for convergence check
-        ws_prev = x_prev[0] if isinstance(x_prev, tuple) else x_prev
-        ws = x[0] if isinstance(x, tuple) else x
-        tol_cond = jnp.max(jnp.abs(ws_prev - ws)) > tol
-        iter_cond = it < max_iter
-        return jnp.logical_and(tol_cond, iter_cond)
-
-    # Optimize for common case where damp=1.0 (no damping)
-    if damp == 1.0:
-
-        def body_fun(carry: tuple) -> tuple:
-            _, x, it = carry
-            x_new = f(x, ctx)
-            return x, x_new, it + 1
-    else:
-
-        def body_fun(carry: tuple) -> tuple:
-            _, x, it = carry
-            x_new = f(x, ctx)
-            x_damped = jax.tree.map(lambda n, o: damp * n + (1 - damp) * o, x_new, x)
-            return x, x_damped, it + 1
-
-    _, x_star, _ = while_loop(cond_fun, body_fun, (x_guess, f(x_guess, ctx), 0))
-    return x_star
+    return _fixed_point_raw(f, x_guess, ctx, tol=tol, damp=damp)
 
 
 def fixed_point_fwd(
@@ -1327,7 +1355,10 @@ def fixed_point_fwd(
     Returns:
         Tuple of (fixed_point_solution, residuals_for_backward_pass).
     """
-    x_star = fixed_point(f, x_guess, ctx, tol=tol, damp=damp)
+    # Use _fixed_point_raw (not fixed_point) so that higher-order AD
+    # (e.g., VJP-of-VJP for Hessians) can auto-differentiate through the
+    # forward pass without hitting the custom_vjp barrier again.
+    x_star = _fixed_point_raw(f, x_guess, ctx, tol=tol, damp=damp)
     return x_star, (ctx, x_star)
 
 
@@ -1360,7 +1391,14 @@ def fixed_point_rev(
 
     # Solve another fixed-point problem to compute the gradient.
     # This is derived from the implicit function theorem.
-    a_bar_sum = vjp_a(fixed_point(_inner_f, x_star_bar, None, tol=tol, damp=damp))[0]
+    # Use _fixed_point_raw (no custom_vjp) so that jax.jvp can propagate
+    # tangents through this adjoint solve — required for exact HVP in the
+    # IFT backward pass of the bilevel optimizer.
+    first_leaf = x_star[0] if isinstance(x_star, tuple) else x_star
+    max_iter = max(20, jnp.atleast_1d(first_leaf).size)
+    a_bar_sum = vjp_a(
+        _fixed_point_raw(_inner_f, x_star_bar, None, tol=tol, damp=damp, max_iter=max_iter)
+    )[0]
 
     # The gradient with respect to `x_guess` is zero, as the fixed point
     # does not depend on the initial guess.

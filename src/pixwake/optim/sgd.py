@@ -95,11 +95,6 @@ class SGDSettings:
             option. During these steps ADAM moments accumulate but the
             learning rate and constraint multiplier alpha stay fixed
             (default: 0).
-        ift_eps_base: Base epsilon for finite-difference Jacobian in the IFT
-            backward pass.  Adaptive scaling: ``eps_i = ift_eps_base * max(1, |param_i|)``.
-            (default: 1e-4).
-        ift_eps_hvp: Base epsilon for Hessian-vector products via finite
-            differences in the IFT backward pass (default: 1e-5).
         ift_cg_damping: Tikhonov damping for the CG solver in the IFT
             backward pass (default: 0.01).
         ift_cg_max_iter: Maximum CG iterations in the IFT backward pass
@@ -119,8 +114,6 @@ class SGDSettings:
     spacing_weight: float = 1.0
     boundary_weight: float = 1.0
     additional_constant_lr_iterations: int = 0
-    ift_eps_base: float = 1e-4
-    ift_eps_hvp: float = 1e-5
     ift_cg_damping: float = 0.01
     ift_cg_max_iter: int = 100
 
@@ -634,71 +627,30 @@ def _sgd_solve_implicit_bwd(
     # Using the implicit function theorem:
     # d(x*,y*)/d(params) = -H^{-1} @ (d^2 L / d(x,y) d(params))
     #
-    # NOTE: We use finite differences to compute d(grad_xy)/d(params) instead of
-    # nested AD (vjp or jacfwd). The objective function may use custom_vjp internally
-    # (e.g., for fixed-point iteration in wake models). Nested AD through custom_vjp
-    # functions fails due to closed-over values in backward passes, and forward-mode
-    # AD requires a custom_jvp rule which may not be defined. Finite differences
-    # only require first-order AD to compute grad_xy at each perturbed point.
+    # Uses pure AD via jax.jacfwd(jax.grad(...)) for the cross-Jacobian and
+    # jax.jvp(jax.grad(...)) for Hessian-vector products. This is possible
+    # because both fixed_point_fwd and fixed_point_rev now use
+    # _fixed_point_raw (no custom_vjp), allowing JVP to propagate through
+    # the VJP trace of the wake simulation.
 
-    def grad_xy_at_params(p: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+    def grad_xy_fn(p: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
         """Compute gradient of total_obj w.r.t. (x, y) at given params."""
-        grad_fn = jax.grad(lambda x, y: total_obj(x, y, p), argnums=(0, 1))
-        return grad_fn(opt_x, opt_y)
+        return jax.grad(lambda x, y: total_obj(x, y, p), argnums=(0, 1))(opt_x, opt_y)
 
-    # Compute Jacobian of grad_xy w.r.t. params using finite differences
-    # This avoids nested custom_vjp issues that occur with AD-based approaches
-    # Adaptive epsilon: scale per-parameter so perturbation is meaningful
-    # at ~1000m positions (eps_base * max(1, |param_i|) ≈ 0.1m)
-    eps_base = settings.ift_eps_base
-    n_params = params.shape[0]
-    n_turbines = opt_x.shape[0]
+    # Cross-Jacobian d(grad_xy)/d(params) via forward-over-reverse AD (jacfwd)
+    # This works because fixed_point_fwd now calls _fixed_point_raw (no custom_vjp),
+    # so JVP can propagate through the VJP trace of the wake simulation.
+    jac = jax.jacfwd(grad_xy_fn)(params)
+    jac_x = jac[0]  # shape (n_turbines, n_params)
+    jac_y = jac[1]  # shape (n_turbines, n_params)
 
-    # Per-parameter adaptive epsilon
-    eps_vec = eps_base * jnp.maximum(1.0, jnp.abs(params))  # shape (n_params,)
-
-    # Central differences for each parameter dimension
-    def compute_jac_col(i: int) -> tuple[jnp.ndarray, jnp.ndarray]:
-        """Compute i-th column of Jacobian using central differences."""
-        eps_i = eps_vec[i]
-        e_i = jnp.zeros(n_params).at[i].set(1.0)
-        grad_plus = grad_xy_at_params(params + eps_i * e_i)
-        grad_minus = grad_xy_at_params(params - eps_i * e_i)
-        jac_col_x = (grad_plus[0] - grad_minus[0]) / (2 * eps_i)
-        jac_col_y = (grad_plus[1] - grad_minus[1]) / (2 * eps_i)
-        return jac_col_x, jac_col_y
-
-    # Use vmap for efficiency
-    all_cols = jax.vmap(compute_jac_col)(jnp.arange(n_params))
-    jac_x = all_cols[0].T  # Shape: (n_turbines, n_params)
-    jac_y = all_cols[1].T  # Shape: (n_turbines, n_params)
-
-    # Solve the linear system H @ v = g using fixed-point iteration
-    # v = g - (H - I) @ v, which converges for well-conditioned H
-
+    # Hessian-vector product via forward-over-reverse AD (jvp of grad)
     def hvp(vx: jnp.ndarray, vy: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
-        """Hessian-vector product using finite differences.
-
-        Computes H @ v where H is the Hessian of total_obj w.r.t. (x, y).
-        Uses finite differences to avoid jvp through custom_vjp functions.
-        """
-
+        """Exact Hessian-vector product via jax.jvp(jax.grad(...))."""
         def grad_obj(x: jnp.ndarray, y: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
-            return jax.grad(lambda xx, yy: total_obj(xx, yy, params), argnums=(0, 1))(
-                x, y
-            )
+            return jax.grad(lambda xx, yy: total_obj(xx, yy, params), argnums=(0, 1))(x, y)
 
-        # Use finite differences for HVP: H @ v ≈ (grad(x + εv) - grad(x - εv)) / (2ε)
-        eps_hvp = settings.ift_eps_hvp
-        v_norm = jnp.sqrt(jnp.sum(vx**2) + jnp.sum(vy**2))
-        # Scale epsilon by vector norm to maintain numerical stability
-        eps_scaled = eps_hvp * jnp.maximum(1.0, v_norm)
-
-        grad_plus = grad_obj(opt_x + eps_scaled * vx, opt_y + eps_scaled * vy)
-        grad_minus = grad_obj(opt_x - eps_scaled * vx, opt_y - eps_scaled * vy)
-
-        hvp_x = (grad_plus[0] - grad_minus[0]) / (2 * eps_scaled)
-        hvp_y = (grad_plus[1] - grad_minus[1]) / (2 * eps_scaled)
+        _, (hvp_x, hvp_y) = jax.jvp(grad_obj, (opt_x, opt_y), (vx, vy))
         return hvp_x, hvp_y
 
     # Solve (H + damping*I) @ v = g using Conjugate Gradient (CG)
@@ -757,7 +709,6 @@ def _sgd_solve_implicit_bwd(
 
     # Compute gradient with respect to params using the Jacobian
     # grad_params = adj_x^T @ jac_x + adj_y^T @ jac_y
-    # (jac_x and jac_y were computed above via finite differences)
     grad_params = jnp.sum(adj_x[:, None] * jac_x, axis=0) + jnp.sum(
         adj_y[:, None] * jac_y, axis=0
     )
