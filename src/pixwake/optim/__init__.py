@@ -58,11 +58,6 @@ References:
         Blondel et al., "Efficient and Modular Implicit Differentiation", NeurIPS 2022
 """
 
-from pixwake.optim.adversarial import (
-    CMAAdversarialSearch,
-    CMAAdversarialSearchResult,
-    CMAAdversarialSearchSettings,
-)
 from pixwake.optim.boundary import (
     containment_penalty,
     exclusion_penalty,
@@ -74,19 +69,22 @@ from pixwake.optim.sgd import (
     boundary_penalty,
     create_bilevel_optimizer,
     create_layout_optimizer,
+    generate_random_starts,
     sgd_solve_implicit,
+    sgd_solve_implicit_multistart,
     spacing_penalty,
     topfarm_sgd_solve,
+    topfarm_sgd_solve_multistart,
 )
 
 __all__ = [
-    "CMAAdversarialSearch",
-    "CMAAdversarialSearchResult",
-    "CMAAdversarialSearchSettings",
     "SGDSettings",
     "SGDState",
     "topfarm_sgd_solve",
+    "topfarm_sgd_solve_multistart",
     "sgd_solve_implicit",
+    "sgd_solve_implicit_multistart",
+    "generate_random_starts",
     "create_layout_optimizer",
     "create_bilevel_optimizer",
     "boundary_penalty",

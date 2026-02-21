@@ -770,6 +770,248 @@ sgd_solve_implicit.defvjp(_sgd_solve_implicit_fwd, _sgd_solve_implicit_bwd)
 
 
 # =============================================================================
+# Multistart Helpers
+# =============================================================================
+
+
+def generate_random_starts(
+    key: jnp.ndarray,
+    k: int,
+    n_turbines: int,
+    boundary: jnp.ndarray,
+    min_spacing: float,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Generate K random initial turbine layouts within a boundary polygon.
+
+    Uses uniform sampling within the bounding box of the polygon with a
+    margin of min_spacing/2 from the edges.
+
+    Args:
+        key: JAX PRNG key.
+        k: Number of random starts to generate.
+        n_turbines: Number of turbines per layout.
+        boundary: Polygon vertices (CCW), shape (n_vertices, 2).
+        min_spacing: Minimum inter-turbine distance (used for margin).
+
+    Returns:
+        Tuple of (init_x_batch, init_y_batch), each shape (k, n_turbines).
+    """
+    x_min = float(boundary[:, 0].min())
+    x_max = float(boundary[:, 0].max())
+    y_min = float(boundary[:, 1].min())
+    y_max = float(boundary[:, 1].max())
+
+    margin = min_spacing / 2
+    keys = jax.random.split(key, 2 * k)
+
+    xs = []
+    ys = []
+    for i in range(k):
+        x = jax.random.uniform(
+            keys[2 * i], (n_turbines,),
+            minval=x_min + margin, maxval=x_max - margin,
+        )
+        y = jax.random.uniform(
+            keys[2 * i + 1], (n_turbines,),
+            minval=y_min + margin, maxval=y_max - margin,
+        )
+        xs.append(x)
+        ys.append(y)
+
+    return jnp.stack(xs), jnp.stack(ys)
+
+
+# =============================================================================
+# Multistart SGD Solver
+# =============================================================================
+
+
+def topfarm_sgd_solve_multistart(
+    objective_fn: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
+    init_x_batch: jnp.ndarray,
+    init_y_batch: jnp.ndarray,
+    boundary: jnp.ndarray,
+    min_spacing: float,
+    settings: SGDSettings | None = None,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Solve layout optimization with K parallel starts via vmap.
+
+    Runs topfarm_sgd_solve for each of the K initial layouts in parallel.
+    The ``mid`` parameter is precomputed once (pure Python bisection) and
+    passed explicitly so no trace-time computation occurs inside vmap.
+
+    Args:
+        objective_fn: Function (x, y) -> scalar to minimize.
+        init_x_batch: Initial x positions, shape (K, n_turbines).
+        init_y_batch: Initial y positions, shape (K, n_turbines).
+        boundary: Polygon vertices (CCW), shape (n_vertices, 2).
+        min_spacing: Minimum inter-turbine distance.
+        settings: SGD configuration.
+
+    Returns:
+        Tuple of (all_x, all_y, all_objs) where:
+            all_x: shape (K, n_turbines) — optimized x for each start
+            all_y: shape (K, n_turbines) — optimized y for each start
+            all_objs: shape (K,) — objective value at each optimum
+    """
+    if settings is None:
+        settings = SGDSettings()
+
+    # Precompute mid ONCE (pure Python, not traceable)
+    if settings.mid is None:
+        gamma_min = settings.gamma_min_factor
+        computed_mid = _compute_mid_bisection(
+            learning_rate=settings.learning_rate,
+            gamma_min=gamma_min,
+            max_iter=settings.max_iter,
+            lower=settings.bisect_lower,
+            upper=settings.bisect_upper,
+        )
+        from dataclasses import replace as _dc_replace
+        settings = _dc_replace(settings, mid=computed_mid)
+
+    def solve_one(init_x: jnp.ndarray, init_y: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+        return topfarm_sgd_solve(
+            objective_fn, init_x, init_y, boundary, min_spacing, settings
+        )
+
+    all_x, all_y = jax.vmap(solve_one)(init_x_batch, init_y_batch)
+
+    # Evaluate objective at each optimum
+    all_objs = jax.vmap(objective_fn)(all_x, all_y)
+
+    return all_x, all_y, all_objs
+
+
+# =============================================================================
+# Multistart Implicit Differentiation (Envelope Theorem)
+# =============================================================================
+
+
+@partial(custom_vjp, nondiff_argnums=(0, 4, 5, 6))
+def sgd_solve_implicit_multistart(
+    objective_fn: Callable[[jnp.ndarray, jnp.ndarray, jnp.ndarray], jnp.ndarray],
+    init_x_batch: jnp.ndarray,
+    init_y_batch: jnp.ndarray,
+    params: jnp.ndarray,
+    boundary: jnp.ndarray,
+    min_spacing: float,
+    settings: SGDSettings | None = None,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Multistart SGD solver with implicit differentiation (envelope theorem).
+
+    Forward pass: vmaps K inner solves, picks the winner (lowest objective).
+    Backward pass: IFT through the winning start only. The envelope theorem
+    guarantees correctness when the winning start is locally stable:
+        d/dp min_k f_k(p) = d/dp f_{k*}(p)
+
+    Args:
+        objective_fn: Function (x, y, params) -> scalar to minimize.
+        init_x_batch: Initial x positions, shape (K, n_turbines).
+        init_y_batch: Initial y positions, shape (K, n_turbines).
+        params: External parameters to differentiate w.r.t.
+        boundary: Polygon vertices (CCW), shape (n_vertices, 2).
+        min_spacing: Minimum inter-turbine distance.
+        settings: SGD configuration.
+
+    Returns:
+        Tuple of (winner_x, winner_y) — optimized layout from best start.
+    """
+    if settings is None:
+        settings = SGDSettings()
+
+    # Precompute mid
+    if settings.mid is None:
+        gamma_min = settings.gamma_min_factor
+        computed_mid = _compute_mid_bisection(
+            learning_rate=settings.learning_rate,
+            gamma_min=gamma_min,
+            max_iter=settings.max_iter,
+            lower=settings.bisect_lower,
+            upper=settings.bisect_upper,
+        )
+        from dataclasses import replace as _dc_replace
+        settings = _dc_replace(settings, mid=computed_mid)
+
+    def obj_fn(x, y):
+        return objective_fn(x, y, params)
+
+    def solve_one(init_x, init_y):
+        return topfarm_sgd_solve(obj_fn, init_x, init_y, boundary, min_spacing, settings)
+
+    all_x, all_y = jax.vmap(solve_one)(init_x_batch, init_y_batch)
+    all_objs = jax.vmap(obj_fn)(all_x, all_y)
+    k_star = jnp.argmin(all_objs)
+
+    return all_x[k_star], all_y[k_star]
+
+
+def _sgd_solve_implicit_multistart_fwd(
+    objective_fn, init_x_batch, init_y_batch, params,
+    boundary, min_spacing, settings,
+):
+    """Forward pass for multistart implicit differentiation."""
+    if settings is None:
+        settings = SGDSettings()
+
+    if settings.mid is None:
+        gamma_min = settings.gamma_min_factor
+        computed_mid = _compute_mid_bisection(
+            learning_rate=settings.learning_rate,
+            gamma_min=gamma_min,
+            max_iter=settings.max_iter,
+            lower=settings.bisect_lower,
+            upper=settings.bisect_upper,
+        )
+        from dataclasses import replace as _dc_replace
+        settings = _dc_replace(settings, mid=computed_mid)
+
+    def obj_fn(x, y):
+        return objective_fn(x, y, params)
+
+    def solve_one(init_x, init_y):
+        return topfarm_sgd_solve(obj_fn, init_x, init_y, boundary, min_spacing, settings)
+
+    all_x, all_y = jax.vmap(solve_one)(init_x_batch, init_y_batch)
+    all_objs = jax.vmap(obj_fn)(all_x, all_y)
+    k_star = jnp.argmin(all_objs)
+
+    winner_x, winner_y = all_x[k_star], all_y[k_star]
+    # Store residuals: winner solution + params + batch shape for zero grads
+    return (winner_x, winner_y), (winner_x, winner_y, params, init_x_batch, init_y_batch)
+
+
+def _sgd_solve_implicit_multistart_bwd(
+    objective_fn, boundary, min_spacing, settings, res, g,
+):
+    """Backward pass: IFT through winning start only (envelope theorem).
+
+    Reuses the exact same IFT backward logic as single-start
+    ``_sgd_solve_implicit_bwd``. The envelope theorem guarantees this is
+    correct: d/dp min_k f_k(p) = d/dp f_{k*}(p).
+    """
+    winner_x, winner_y, params, init_x_batch, init_y_batch = res
+    # Delegate to the single-start backward — same math applies at the winner
+    single_res = (winner_x, winner_y, params)
+    _, _, grad_params = _sgd_solve_implicit_bwd(
+        objective_fn, boundary, min_spacing, settings, single_res, g,
+    )
+    # Gradients w.r.t. init_x_batch and init_y_batch are zero
+    # (fixed point doesn't depend on initial guess)
+    return (
+        jnp.zeros_like(init_x_batch),
+        jnp.zeros_like(init_y_batch),
+        grad_params,
+    )
+
+
+sgd_solve_implicit_multistart.defvjp(
+    _sgd_solve_implicit_multistart_fwd,
+    _sgd_solve_implicit_multistart_bwd,
+)
+
+
+# =============================================================================
 # Convenience Wrapper for Common Use Case
 # =============================================================================
 

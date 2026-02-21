@@ -26,6 +26,7 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 from jax import value_and_grad
+from jax.lax import while_loop
 
 from pixwake.optim.sgd import (
     SGDSettings,
@@ -396,6 +397,307 @@ class GradientAdversarialSearch:
         return AdversarialSearchResult(
             neighbor_x=final_neighbor_x,
             neighbor_y=final_neighbor_y,
+            target_x=final_target_x,
+            target_y=final_target_y,
+            liberal_x=liberal_x,
+            liberal_y=liberal_y,
+            regret=final_regret,
+            liberal_aep=liberal_aep,
+            conservative_aep=final_conservative_aep,
+            history=history,
+        )
+
+    def _build_regret_fn(
+        self,
+        liberal_x: jnp.ndarray,
+        liberal_y: jnp.ndarray,
+        init_target_x: jnp.ndarray,
+        init_target_y: jnp.ndarray,
+        sgd_settings: SGDSettings,
+        use_multistart: bool = False,
+        init_x_batch: jnp.ndarray | None = None,
+        init_y_batch: jnp.ndarray | None = None,
+    ):
+        """Build a pure-JAX regret function for use in while_loop.
+
+        Returns a function ``regret_and_grad(neighbor_params) -> (regret, grad)``.
+        """
+        if use_multistart and init_x_batch is not None:
+            from pixwake.optim.sgd import sgd_solve_implicit_multistart
+
+            def objective_with_neighbors(x, y, neighbor_params):
+                n_nb = neighbor_params.shape[0] // 2
+                nb_x, nb_y = neighbor_params[:n_nb], neighbor_params[n_nb:]
+                return -self._compute_aep(x, y, nb_x, nb_y)
+
+            def compute_regret(neighbor_params):
+                n_nb = neighbor_params.shape[0] // 2
+                nb_x, nb_y = neighbor_params[:n_nb], neighbor_params[n_nb:]
+                liberal_aep_present = self._compute_aep(
+                    liberal_x, liberal_y, nb_x, nb_y
+                )
+                opt_x, opt_y = sgd_solve_implicit_multistart(
+                    objective_with_neighbors,
+                    init_x_batch, init_y_batch, neighbor_params,
+                    self.target_boundary, self.target_min_spacing, sgd_settings,
+                )
+                conservative_aep = self._compute_aep(opt_x, opt_y, nb_x, nb_y)
+                return conservative_aep - liberal_aep_present
+        else:
+            def objective_with_neighbors(x, y, neighbor_params):
+                n_nb = neighbor_params.shape[0] // 2
+                nb_x, nb_y = neighbor_params[:n_nb], neighbor_params[n_nb:]
+                return -self._compute_aep(x, y, nb_x, nb_y)
+
+            def compute_regret(neighbor_params):
+                n_nb = neighbor_params.shape[0] // 2
+                nb_x, nb_y = neighbor_params[:n_nb], neighbor_params[n_nb:]
+                liberal_aep_present = self._compute_aep(
+                    liberal_x, liberal_y, nb_x, nb_y
+                )
+                opt_x, opt_y = sgd_solve_implicit(
+                    objective_with_neighbors,
+                    init_target_x, init_target_y,
+                    self.target_boundary, self.target_min_spacing, sgd_settings,
+                    neighbor_params,
+                )
+                conservative_aep = self._compute_aep(opt_x, opt_y, nb_x, nb_y)
+                return conservative_aep - liberal_aep_present
+
+        return value_and_grad(compute_regret)
+
+    def _search_single_jax(
+        self,
+        neighbor_params: jnp.ndarray,
+        liberal_x: jnp.ndarray,
+        liberal_y: jnp.ndarray,
+        init_target_x: jnp.ndarray,
+        init_target_y: jnp.ndarray,
+        regret_and_grad_fn,
+        max_iter: int,
+        learning_rate: float,
+        neighbor_clip_min: jnp.ndarray | None = None,
+        neighbor_clip_max: jnp.ndarray | None = None,
+    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+        """Pure JAX outer ADAM loop using jax.lax.while_loop.
+
+        Returns (best_params, best_regret).
+        """
+        beta1, beta2, adam_eps = 0.9, 0.999, 1e-8
+        n = neighbor_params.shape[0]
+
+        m = jnp.zeros(n)
+        v = jnp.zeros(n)
+        best_params = neighbor_params
+        best_regret = jnp.array(-jnp.inf)
+
+        # State: (params, m, v, best_params, best_regret, iteration, converged)
+        init_carry = (neighbor_params, m, v, best_params, best_regret, 0, False)
+
+        def cond_fn(carry):
+            _, _, _, _, _, it, converged = carry
+            return jnp.logical_and(~converged, it < max_iter)
+
+        def body_fn(carry):
+            params, m, v, best_params, best_regret, it, converged = carry
+            regret, grad = regret_and_grad_fn(params)
+
+            # NaN guard
+            is_finite = jnp.all(jnp.isfinite(grad))
+            converged = jnp.logical_or(converged, ~is_finite)
+            grad = jnp.where(is_finite, grad, jnp.zeros_like(grad))
+
+            # ADAM update (gradient ascent: maximize regret)
+            t = it + 1
+            m_new = beta1 * m + (1 - beta1) * grad
+            v_new = beta2 * v + (1 - beta2) * grad ** 2
+            m_hat = m_new / (1 - beta1 ** t)
+            v_hat = v_new / (1 - beta2 ** t)
+            params_new = params + learning_rate * m_hat / (jnp.sqrt(v_hat) + adam_eps)
+
+            # Boundary clipping if provided
+            if neighbor_clip_min is not None and neighbor_clip_max is not None:
+                params_new = jnp.clip(params_new, neighbor_clip_min, neighbor_clip_max)
+
+            # Only update if not converged
+            params = jnp.where(converged, params, params_new)
+            m = jnp.where(converged, m, m_new)
+            v = jnp.where(converged, v, v_new)
+
+            # Track best
+            is_better = jnp.logical_and(regret > best_regret, ~converged)
+            best_params = jnp.where(is_better, params, best_params)
+            best_regret = jnp.where(is_better, regret, best_regret)
+
+            return (params, m, v, best_params, best_regret, t, converged)
+
+        final = while_loop(cond_fn, body_fn, init_carry)
+        _, _, _, best_params, best_regret, _, _ = final
+        return best_params, best_regret
+
+    def search_multistart(
+        self,
+        init_target_x: jnp.ndarray,
+        init_target_y: jnp.ndarray,
+        init_neighbor_x_batch: jnp.ndarray,
+        init_neighbor_y_batch: jnp.ndarray,
+        settings: AdversarialSearchSettings | None = None,
+        inner_k: int = 1,
+        inner_init_x_batch: jnp.ndarray | None = None,
+        inner_init_y_batch: jnp.ndarray | None = None,
+    ) -> AdversarialSearchResult:
+        """Run M parallel outer trajectories, each with optional K inner starts.
+
+        Parameters
+        ----------
+        init_target_x, init_target_y : jnp.ndarray
+            Initial target farm layout, shape (n_turbines,).
+        init_neighbor_x_batch : jnp.ndarray
+            M initial neighbor x configs, shape (M, n_neighbors).
+        init_neighbor_y_batch : jnp.ndarray
+            M initial neighbor y configs, shape (M, n_neighbors).
+        settings : AdversarialSearchSettings | None
+            Search settings.
+        inner_k : int
+            Number of inner multistarts (default 1 = single start).
+        inner_init_x_batch : jnp.ndarray | None
+            K inner initial x layouts, shape (K, n_turbines). Required if inner_k > 1.
+        inner_init_y_batch : jnp.ndarray | None
+            K inner initial y layouts, shape (K, n_turbines). Required if inner_k > 1.
+
+        Returns
+        -------
+        AdversarialSearchResult
+            Best result across all M outer starts.
+        """
+        from jax.lax import while_loop as _wl
+
+        if settings is None:
+            settings = AdversarialSearchSettings()
+
+        sgd_settings = settings.sgd_settings or SGDSettings()
+
+        # Compute liberal layout (no neighbors) — shared across all starts
+        def liberal_objective(x, y):
+            return -self._compute_aep(x, y)
+
+        from pixwake.optim.sgd import topfarm_sgd_solve
+
+        liberal_x, liberal_y = topfarm_sgd_solve(
+            liberal_objective, init_target_x, init_target_y,
+            self.target_boundary, self.target_min_spacing, sgd_settings,
+        )
+        liberal_aep = float(self._compute_aep(liberal_x, liberal_y))
+
+        if settings.verbose:
+            print(f"Liberal AEP (no neighbors): {liberal_aep:.2f} GWh")
+
+        # Build regret function
+        use_multistart = inner_k > 1 and inner_init_x_batch is not None
+        regret_and_grad_fn = self._build_regret_fn(
+            liberal_x, liberal_y, init_target_x, init_target_y, sgd_settings,
+            use_multistart=use_multistart,
+            init_x_batch=inner_init_x_batch,
+            init_y_batch=inner_init_y_batch,
+        )
+
+        # Build clip bounds from neighbor_boundary
+        n_neighbors = init_neighbor_x_batch.shape[1]
+        clip_min = clip_max = None
+        if settings.neighbor_boundary is not None:
+            x_min = float(settings.neighbor_boundary[:, 0].min())
+            x_max = float(settings.neighbor_boundary[:, 0].max())
+            y_min = float(settings.neighbor_boundary[:, 1].min())
+            y_max = float(settings.neighbor_boundary[:, 1].max())
+            clip_min = jnp.concatenate([
+                jnp.full(n_neighbors, x_min),
+                jnp.full(n_neighbors, y_min),
+            ])
+            clip_max = jnp.concatenate([
+                jnp.full(n_neighbors, x_max),
+                jnp.full(n_neighbors, y_max),
+            ])
+
+        M = init_neighbor_x_batch.shape[0]
+
+        if settings.verbose:
+            print(f"Running {M} outer starts (inner_k={inner_k})...")
+
+        # Run M starts sequentially (vmap over outer starts would require
+        # the entire regret_and_grad_fn to be vmappable, which it is NOT
+        # because the wake sim has Python-level validation at trace time).
+        # Instead, we run each start via _search_single_jax (while_loop).
+        all_best_params = []
+        all_best_regrets = []
+
+        for m_idx in range(M):
+            nb_params = jnp.concatenate([
+                init_neighbor_x_batch[m_idx],
+                init_neighbor_y_batch[m_idx],
+            ])
+
+            best_params, best_regret = self._search_single_jax(
+                nb_params, liberal_x, liberal_y,
+                init_target_x, init_target_y,
+                regret_and_grad_fn,
+                max_iter=settings.max_iter,
+                learning_rate=settings.learning_rate,
+                neighbor_clip_min=clip_min,
+                neighbor_clip_max=clip_max,
+            )
+
+            all_best_params.append(best_params)
+            all_best_regrets.append(float(best_regret))
+
+            if settings.verbose:
+                print(f"  Start {m_idx}: best regret = {float(best_regret):.4f} GWh")
+
+        # Pick overall best
+        best_m = int(np.argmax(all_best_regrets))
+        winner_params = all_best_params[best_m]
+        winner_regret = all_best_regrets[best_m]
+
+        if settings.verbose:
+            print(f"Best start: {best_m} with regret = {winner_regret:.4f} GWh")
+
+        # Final evaluation with the winning neighbor config
+        final_nb_x = winner_params[:n_neighbors]
+        final_nb_y = winner_params[n_neighbors:]
+
+        def objective_with_neighbors(x, y, neighbor_params):
+            n_nb = neighbor_params.shape[0] // 2
+            nb_x, nb_y = neighbor_params[:n_nb], neighbor_params[n_nb:]
+            return -self._compute_aep(x, y, nb_x, nb_y)
+
+        final_target_x, final_target_y = sgd_solve_implicit(
+            objective_with_neighbors,
+            init_target_x, init_target_y,
+            self.target_boundary, self.target_min_spacing, sgd_settings,
+            winner_params,
+        )
+
+        final_conservative_aep = float(
+            self._compute_aep(final_target_x, final_target_y, final_nb_x, final_nb_y)
+        )
+        final_liberal_aep_present = float(
+            self._compute_aep(liberal_x, liberal_y, final_nb_x, final_nb_y)
+        )
+        final_regret = final_conservative_aep - final_liberal_aep_present
+
+        if settings.verbose:
+            print(f"\nFinal Results (M={M}, K={inner_k}):")
+            print(f"  Liberal AEP (isolated): {liberal_aep:.2f} GWh")
+            print(f"  Liberal AEP (w/ neighbors): {final_liberal_aep_present:.2f} GWh")
+            print(f"  Conservative AEP (w/ neighbors): {final_conservative_aep:.2f} GWh")
+            print(f"  Regret: {final_regret:.4f} GWh")
+
+        # Build history from all starts
+        history = [(r, all_best_params[i][:n_neighbors], all_best_params[i][n_neighbors:])
+                   for i, r in enumerate(all_best_regrets)]
+
+        return AdversarialSearchResult(
+            neighbor_x=final_nb_x,
+            neighbor_y=final_nb_y,
             target_x=final_target_x,
             target_y=final_target_y,
             liberal_x=liberal_x,
@@ -1179,374 +1481,3 @@ class PooledBlobDiscovery:
             same_best_layout=same_best,
         )
 
-
-# =============================================================================
-# CMA-ES Bilevel Adversarial Search
-# =============================================================================
-
-
-class CMAAdversarialSearchResult(NamedTuple):
-    """Result of CMA-ES bilevel adversarial search.
-
-    Attributes:
-        best_phi: Best 4D design vector [bearing, distance, rotation, aspect_ratio].
-        best_control_points: B-spline control points for best blob.
-        best_objective: Best irreducible tradeoff (GWh).
-        best_inner_result: PooledBlobDiscoveryResult for best coarse evaluation.
-        coarse_history: List of (phi, objective) from all CMA-ES evaluations.
-        refined_result: PooledBlobDiscoveryResult from full-fidelity re-evaluation, or None.
-    """
-
-    best_phi: np.ndarray
-    best_control_points: jnp.ndarray
-    best_objective: float
-    best_inner_result: PooledBlobDiscoveryResult
-    coarse_history: list[tuple[np.ndarray, float]]
-    refined_result: PooledBlobDiscoveryResult | None
-
-
-@dataclass
-class CMAAdversarialSearchSettings:
-    """Settings for CMA-ES bilevel adversarial search.
-
-    Attributes:
-        phi_bounds: Box bounds for design vector as ((lo, lo, lo, lo), (hi, hi, hi, hi)).
-        fixed_area: Fixed blob area in m^2.
-        target_center: (x, y) center of the target farm.
-        n_control: Number of B-spline control points.
-        cma_sigma0: Initial CMA-ES step size.
-        cma_popsize: CMA-ES population size (None for default).
-        cma_maxiter: Maximum CMA-ES iterations.
-        cma_seed: CMA-ES random seed.
-        coarse_n_starts: Number of starts per strategy in coarse inner loop.
-        coarse_sgd_settings: SGD settings for coarse inner loop.
-        refine: Whether to run full-fidelity refinement at best_phi.
-        refine_n_starts: Number of starts per strategy in refinement.
-        refine_sgd_settings: SGD settings for refinement.
-        neighbor_grid_extent: Half-extent of neighbor reference grid.
-        neighbor_grid_spacing: Spacing of neighbor reference grid.
-        verbose: Print progress.
-    """
-
-    phi_bounds: tuple[tuple[float, ...], tuple[float, ...]] = (
-        (0.0, 2000.0, 0.0, 1.0),
-        (2 * np.pi, 10000.0, 2 * np.pi, 3.0),
-    )
-    fixed_area: float = 50.0 * 200.0 ** 2
-    target_center: tuple[float, float] = (1600.0, 1600.0)
-    n_control: int = 8
-    cma_sigma0: float = 0.5
-    cma_popsize: int | None = None
-    cma_maxiter: int = 50
-    cma_seed: int = 42
-    coarse_n_starts: int = 5
-    coarse_sgd_settings: SGDSettings | None = None
-    refine: bool = True
-    refine_n_starts: int = 20
-    refine_sgd_settings: SGDSettings | None = None
-    neighbor_grid_extent: float = 1200.0
-    neighbor_grid_spacing: float = 600.0
-    verbose: bool = True
-
-
-class CMAAdversarialSearch:
-    """CMA-ES bilevel adversarial search for worst-case neighbor blobs.
-
-    Uses CMA-ES to optimize over a 4D blob parameterization
-    (bearing, distance, rotation, aspect_ratio) to find the neighbor
-    configuration that maximizes the irreducible design tradeoff.
-    The inner loop reuses PooledBlobDiscovery.discover() unchanged.
-
-    Parameters
-    ----------
-    sim : WakeSimulation
-        Wake simulation engine.
-    target_boundary : jnp.ndarray
-        Target farm boundary polygon, shape (n_vertices, 2).
-    target_min_spacing : float
-        Minimum spacing between target turbines.
-    ws_amb : jnp.ndarray
-        Ambient wind speeds.
-    wd_amb : jnp.ndarray
-        Wind directions.
-    ti_amb : jnp.ndarray | None
-        Ambient turbulence intensity.
-    weights : jnp.ndarray | None
-        Probability weights for wind conditions.
-    """
-
-    def __init__(
-        self,
-        sim,
-        target_boundary: jnp.ndarray,
-        target_min_spacing: float,
-        ws_amb: jnp.ndarray,
-        wd_amb: jnp.ndarray,
-        ti_amb: jnp.ndarray | None = None,
-        weights: jnp.ndarray | None = None,
-    ):
-        self.sim = sim
-        self.target_boundary = target_boundary
-        self.target_min_spacing = target_min_spacing
-        self.ws_amb = ws_amb
-        self.wd_amb = wd_amb
-        self.ti_amb = ti_amb
-        self.weights = weights
-
-    @staticmethod
-    def _extract_irreducible_tradeoff(result: PooledBlobDiscoveryResult) -> float:
-        """Extract the irreducible tradeoff from an inner loop result.
-
-        The irreducible tradeoff is:
-            conservative_best_present - liberal_best_present
-
-        where liberal_best is the layout maximizing AEP absent and
-        conservative_best is the layout maximizing AEP present.
-        A positive value means the liberal design suffers under neighbor presence.
-
-        CMA-ES minimizes, so we return the negative.
-        """
-        all_layouts = result.all_layouts
-        liberal_best = max(all_layouts, key=lambda l: l['aep_absent'])
-        conservative_best = max(all_layouts, key=lambda l: l['aep_present'])
-        tradeoff = conservative_best['aep_present'] - liberal_best['aep_present']
-        return -tradeoff  # CMA-ES minimizes
-
-    def search(
-        self,
-        init_target_x: jnp.ndarray,
-        init_target_y: jnp.ndarray,
-        settings: CMAAdversarialSearchSettings | None = None,
-    ) -> CMAAdversarialSearchResult:
-        """Run CMA-ES bilevel adversarial search.
-
-        Parameters
-        ----------
-        init_target_x, init_target_y : jnp.ndarray
-            Initial target farm turbine positions.
-        settings : CMAAdversarialSearchSettings | None
-            Search settings. Uses defaults if None.
-
-        Returns
-        -------
-        CMAAdversarialSearchResult
-            Search results.
-        """
-        import cma
-
-        from pixwake.optim.geometry import phi_to_control_points
-        from pixwake.optim.soft_packing import create_reference_grid
-
-        if settings is None:
-            settings = CMAAdversarialSearchSettings()
-
-        # Coarse inner loop settings
-        coarse_sgd = settings.coarse_sgd_settings or SGDSettings(
-            max_iter=500, learning_rate=40.0,
-        )
-        coarse_pool_settings = PooledBlobDiscoverySettings(
-            n_starts=settings.coarse_n_starts,
-            sgd_settings=coarse_sgd,
-            verbose=False,
-        )
-
-        # CMA-ES setup
-        lo = np.array(settings.phi_bounds[0])
-        hi = np.array(settings.phi_bounds[1])
-        x0 = (lo + hi) / 2.0
-
-        # Scale sigma0 to the normalized [0, 1] space
-        opts = {
-            'bounds': [list(lo), list(hi)],
-            'maxiter': settings.cma_maxiter,
-            'seed': settings.cma_seed,
-            'verbose': -9,  # suppress CMA-ES internal output
-        }
-        if settings.cma_popsize is not None:
-            opts['popsize'] = settings.cma_popsize
-
-        es = cma.CMAEvolutionStrategy(x0.tolist(), settings.cma_sigma0, opts)
-
-        # Track best
-        best_phi = None
-        best_objective = float('inf')  # CMA-ES minimizes
-        best_control_points = None
-        best_inner_result = None
-        coarse_history = []
-        eval_count = 0
-
-        if settings.verbose:
-            print("=" * 60)
-            print("CMA-ES Bilevel Adversarial Search")
-            print("=" * 60)
-            print(f"  phi_bounds: {settings.phi_bounds}")
-            print(f"  fixed_area: {settings.fixed_area:.0f} m^2")
-            print(f"  cma_sigma0: {settings.cma_sigma0}, maxiter: {settings.cma_maxiter}")
-            print(f"  coarse inner: {settings.coarse_n_starts} starts, "
-                  f"{coarse_sgd.max_iter} SGD iters")
-            print("=" * 60, flush=True)
-
-        generation = 0
-        while not es.stop():
-            candidates = es.ask()
-            fitnesses = []
-
-            for phi_list in candidates:
-                phi = np.array(phi_list)
-
-                # Map to control points
-                cp = phi_to_control_points(
-                    phi,
-                    target_center=settings.target_center,
-                    fixed_area=settings.fixed_area,
-                    n_control=settings.n_control,
-                )
-
-                # Build neighbor grid centered on this blob
-                bearing, distance, rotation, aspect_ratio = phi
-                blob_cx = settings.target_center[0] + distance * np.sin(bearing)
-                blob_cy = settings.target_center[1] + distance * np.cos(bearing)
-                neighbor_grid = create_reference_grid(
-                    center=(float(blob_cx), float(blob_cy)),
-                    extent=settings.neighbor_grid_extent,
-                    spacing=settings.neighbor_grid_spacing,
-                )
-
-                # Filter out grid points inside the target boundary
-                tb = self.target_boundary
-                x_min, x_max = float(tb[:, 0].min()), float(tb[:, 0].max())
-                y_min, y_max = float(tb[:, 1].min()), float(tb[:, 1].max())
-                outside = ~(
-                    (neighbor_grid[:, 0] >= x_min)
-                    & (neighbor_grid[:, 0] <= x_max)
-                    & (neighbor_grid[:, 1] >= y_min)
-                    & (neighbor_grid[:, 1] <= y_max)
-                )
-                neighbor_grid = neighbor_grid[outside]
-
-                if len(neighbor_grid) == 0:
-                    # No valid neighbor positions — skip this candidate
-                    fitnesses.append(0.0)
-                    coarse_history.append((phi.copy(), 0.0))
-                    eval_count += 1
-                    continue
-
-                # Run coarse inner loop
-                discoverer = PooledBlobDiscovery(
-                    sim=self.sim,
-                    target_boundary=self.target_boundary,
-                    target_min_spacing=self.target_min_spacing,
-                    neighbor_grid=neighbor_grid,
-                    ws_amb=self.ws_amb,
-                    wd_amb=self.wd_amb,
-                    ti_amb=self.ti_amb,
-                    weights=self.weights,
-                )
-
-                inner_result = discoverer.discover(
-                    init_target_x,
-                    init_target_y,
-                    cp,
-                    settings=coarse_pool_settings,
-                    seed=settings.cma_seed + eval_count,
-                )
-
-                obj = self._extract_irreducible_tradeoff(inner_result)
-                fitnesses.append(obj)
-                coarse_history.append((phi.copy(), float(-obj)))  # store positive tradeoff
-
-                # Track best
-                if obj < best_objective:
-                    best_objective = obj
-                    best_phi = phi.copy()
-                    best_control_points = cp
-                    best_inner_result = inner_result
-
-                eval_count += 1
-
-            es.tell(candidates, fitnesses)
-
-            if settings.verbose:
-                best_so_far = -best_objective
-                gen_best = -min(fitnesses)
-                print(
-                    f"Gen {generation}: best_this_gen={gen_best:.3f} GWh, "
-                    f"best_overall={best_so_far:.3f} GWh, evals={eval_count}",
-                    flush=True,
-                )
-            generation += 1
-
-        if settings.verbose:
-            print(f"\nCMA-ES finished after {eval_count} evaluations")
-            print(f"Best tradeoff: {-best_objective:.3f} GWh")
-            print(f"Best phi: bearing={best_phi[0]:.3f} rad, dist={best_phi[1]:.0f} m, "
-                  f"rot={best_phi[2]:.3f} rad, alpha={best_phi[3]:.2f}")
-
-        # Refinement
-        refined_result = None
-        if settings.refine and best_phi is not None:
-            if settings.verbose:
-                print("\nRunning refinement at best_phi...", flush=True)
-
-            refine_sgd = settings.refine_sgd_settings or SGDSettings(
-                max_iter=3000, learning_rate=40.0,
-            )
-            refine_pool_settings = PooledBlobDiscoverySettings(
-                n_starts=settings.refine_n_starts,
-                sgd_settings=refine_sgd,
-                verbose=settings.verbose,
-            )
-
-            # Rebuild grid and control points for best phi
-            bearing, distance, rotation, aspect_ratio = best_phi
-            blob_cx = settings.target_center[0] + distance * np.sin(bearing)
-            blob_cy = settings.target_center[1] + distance * np.cos(bearing)
-            neighbor_grid = create_reference_grid(
-                center=(float(blob_cx), float(blob_cy)),
-                extent=settings.neighbor_grid_extent,
-                spacing=settings.neighbor_grid_spacing,
-            )
-
-            # Filter out grid points inside the target boundary
-            tb = self.target_boundary
-            x_min, x_max = float(tb[:, 0].min()), float(tb[:, 0].max())
-            y_min, y_max = float(tb[:, 1].min()), float(tb[:, 1].max())
-            outside = ~(
-                (neighbor_grid[:, 0] >= x_min)
-                & (neighbor_grid[:, 0] <= x_max)
-                & (neighbor_grid[:, 1] >= y_min)
-                & (neighbor_grid[:, 1] <= y_max)
-            )
-            neighbor_grid = neighbor_grid[outside]
-
-            discoverer = PooledBlobDiscovery(
-                sim=self.sim,
-                target_boundary=self.target_boundary,
-                target_min_spacing=self.target_min_spacing,
-                neighbor_grid=neighbor_grid,
-                ws_amb=self.ws_amb,
-                wd_amb=self.wd_amb,
-                ti_amb=self.ti_amb,
-                weights=self.weights,
-            )
-
-            refined_result = discoverer.discover(
-                init_target_x,
-                init_target_y,
-                best_control_points,
-                settings=refine_pool_settings,
-                seed=settings.cma_seed + 999999,
-            )
-
-            refined_tradeoff = -self._extract_irreducible_tradeoff(refined_result)
-            if settings.verbose:
-                print(f"Refined tradeoff: {refined_tradeoff:.3f} GWh")
-
-        return CMAAdversarialSearchResult(
-            best_phi=best_phi,
-            best_control_points=best_control_points,
-            best_objective=float(-best_objective),
-            best_inner_result=best_inner_result,
-            coarse_history=coarse_history,
-            refined_result=refined_result,
-        )
