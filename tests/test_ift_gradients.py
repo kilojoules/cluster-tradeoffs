@@ -284,3 +284,199 @@ def test_gradient_adversarial_search_smoke():
         assert all(abs(r) < 1e6 for r in all_regrets), (
             f"Regret diverged: {all_regrets}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Test 5: Multistart inner finds better-or-equal objective
+# ---------------------------------------------------------------------------
+
+
+def test_multistart_inner_finds_better():
+    """K=3 inner starts find equal-or-better objective than single start."""
+    from pixwake.optim.sgd import (
+        generate_random_starts,
+        topfarm_sgd_solve_multistart,
+    )
+
+    sim = WakeSimulation(vestas_v80, NOJDeficit(k=0.1))
+
+    ws = jnp.array([9.0])
+    wd = jnp.array([270.0])
+
+    spacing = 4 * D
+    init_x = jnp.array([0.0, spacing, 0.0, spacing])
+    init_y = jnp.array([0.0, 0.0, spacing, spacing])
+
+    boundary = _square_boundary(spacing + 2 * D)
+    min_spacing_val = 2 * D
+
+    def neg_aep(x, y):
+        result = sim(x, y, ws_amb=ws, wd_amb=wd)
+        return -result.aep()
+
+    settings = SGDSettings(learning_rate=10.0, max_iter=500, tol=1e-6)
+
+    # Single start
+    single_x, single_y = topfarm_sgd_solve(
+        neg_aep, init_x, init_y, boundary, min_spacing_val, settings
+    )
+    single_obj = float(neg_aep(single_x, single_y))
+
+    # Multistart: K=3 (first start = same as single, plus 2 random)
+    key = jax.random.PRNGKey(42)
+    rand_x, rand_y = generate_random_starts(
+        key, 2, len(init_x), boundary, min_spacing_val
+    )
+    batch_x = jnp.concatenate([init_x[None, :], rand_x], axis=0)
+    batch_y = jnp.concatenate([init_y[None, :], rand_y], axis=0)
+
+    all_x, all_y, all_objs = topfarm_sgd_solve_multistart(
+        neg_aep, batch_x, batch_y, boundary, min_spacing_val, settings
+    )
+
+    best_multi_obj = float(jnp.min(all_objs))
+
+    # Multi should be at least as good as single (lower obj = better)
+    assert best_multi_obj <= single_obj + 0.01, (
+        f"Multistart ({best_multi_obj:.4f}) worse than single ({single_obj:.4f})"
+    )
+    # All results should be finite
+    assert jnp.all(jnp.isfinite(all_x)), "all_x contains NaN"
+    assert jnp.all(jnp.isfinite(all_y)), "all_y contains NaN"
+
+
+# ---------------------------------------------------------------------------
+# Test 6: Multistart implicit gradient correctness
+# ---------------------------------------------------------------------------
+
+
+def test_multistart_gradient_correctness():
+    """Compare sgd_solve_implicit_multistart grad vs single-start FD at winner."""
+    from pixwake.optim.sgd import sgd_solve_implicit_multistart
+
+    sim = WakeSimulation(vestas_v80, NOJDeficit(k=0.1))
+
+    ws = jnp.array([9.0])
+    wd = jnp.array([270.0])
+
+    n_target = 4
+    spacing = 4 * D
+    init_x = jnp.array([0.0, spacing, 0.0, spacing])
+    init_y = jnp.array([0.0, 0.0, spacing, spacing])
+
+    boundary = _square_boundary(spacing + 2 * D)
+    min_spacing_val = 2 * D
+    settings = SGDSettings(learning_rate=10.0, max_iter=500, tol=1e-6)
+
+    def objective_with_neighbors(x, y, neighbor_params):
+        n_nb = neighbor_params.shape[0] // 2
+        nb_x, nb_y = neighbor_params[:n_nb], neighbor_params[n_nb:]
+        x_all = jnp.concatenate([x, nb_x])
+        y_all = jnp.concatenate([y, nb_y])
+        result = sim(x_all, y_all, ws_amb=ws, wd_amb=wd)
+        power = result.power()[:, :n_target]
+        return -jnp.sum(power) * 8760 / 1e6 / power.shape[0]
+
+    neighbor_params = jnp.array([-2 * D, 0.0])  # 1 neighbor upwind
+
+    # K=2 starts (one deterministic, one shifted)
+    init_x2 = init_x + 10.0
+    init_y2 = init_y + 10.0
+    batch_x = jnp.stack([init_x, init_x2])
+    batch_y = jnp.stack([init_y, init_y2])
+
+    def compute_aep_multistart(nb_params):
+        opt_x, opt_y = sgd_solve_implicit_multistart(
+            objective_with_neighbors,
+            batch_x, batch_y, nb_params,
+            boundary, min_spacing_val, settings,
+        )
+        n_nb = nb_params.shape[0] // 2
+        nb_x, nb_y = nb_params[:n_nb], nb_params[n_nb:]
+        x_all = jnp.concatenate([opt_x, nb_x])
+        y_all = jnp.concatenate([opt_y, nb_y])
+        result = sim(x_all, y_all, ws_amb=ws, wd_amb=wd)
+        power = result.power()[:, :n_target]
+        return jnp.sum(power) * 8760 / 1e6 / power.shape[0]
+
+    # AD gradient
+    grad_ad = jax.grad(compute_aep_multistart)(neighbor_params)
+
+    # FD gradient
+    eps_fd = 1.0
+    grad_fd = jnp.zeros_like(neighbor_params)
+    for i in range(len(neighbor_params)):
+        e = jnp.zeros_like(neighbor_params).at[i].set(eps_fd)
+        f_plus = compute_aep_multistart(neighbor_params + e)
+        f_minus = compute_aep_multistart(neighbor_params - e)
+        grad_fd = grad_fd.at[i].set((f_plus - f_minus) / (2 * eps_fd))
+
+    # Check finite
+    assert jnp.all(jnp.isfinite(grad_ad)), f"AD grad has NaN: {grad_ad}"
+
+    # Check sign agreement where FD is non-negligible
+    for i in range(len(neighbor_params)):
+        ad_val, fd_val = float(grad_ad[i]), float(grad_fd[i])
+        if abs(fd_val) > 1e-8:
+            assert ad_val * fd_val > 0 or abs(ad_val) < 1e-6, (
+                f"Sign mismatch [{i}]: AD={ad_val:.6e}, FD={fd_val:.6e}"
+            )
+
+
+# ---------------------------------------------------------------------------
+# Test 7: search_multistart smoke test
+# ---------------------------------------------------------------------------
+
+
+def test_search_multistart_smoke():
+    """M=2 outer starts — verify result is valid and no NaN."""
+    from pixwake.optim.adversarial import (
+        AdversarialSearchSettings,
+        GradientAdversarialSearch,
+    )
+
+    sim = WakeSimulation(vestas_v80, NOJDeficit(k=0.1))
+
+    ws = jnp.array([9.0])
+    wd = jnp.array([270.0])
+
+    spacing = 4 * D
+    init_x = jnp.array([0.0, spacing, 0.0, spacing])
+    init_y = jnp.array([0.0, 0.0, spacing, spacing])
+
+    boundary = _square_boundary(spacing + 2 * D)
+
+    # M=2 outer starts with different neighbor positions
+    nb_x_batch = jnp.array([
+        [-3 * D, -5 * D],
+        [-4 * D, -6 * D],
+    ])
+    nb_y_batch = jnp.array([
+        [0.0, spacing],
+        [spacing / 2, spacing / 2],
+    ])
+
+    sgd_settings = SGDSettings(learning_rate=10.0, max_iter=500, tol=1e-6)
+    search_settings = AdversarialSearchSettings(
+        max_iter=5,
+        learning_rate=10.0,
+        sgd_settings=sgd_settings,
+        verbose=False,
+    )
+
+    searcher = GradientAdversarialSearch(
+        sim=sim,
+        target_boundary=boundary,
+        target_min_spacing=2 * D,
+        ws_amb=ws,
+        wd_amb=wd,
+    )
+
+    result = searcher.search_multistart(
+        init_x, init_y, nb_x_batch, nb_y_batch, settings=search_settings,
+    )
+
+    assert jnp.all(jnp.isfinite(result.neighbor_x)), "neighbor_x NaN"
+    assert jnp.all(jnp.isfinite(result.neighbor_y)), "neighbor_y NaN"
+    assert jnp.isfinite(result.regret), "regret NaN"
+    assert result.liberal_aep > 0, "liberal AEP should be positive"
