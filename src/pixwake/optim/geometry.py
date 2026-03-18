@@ -333,8 +333,7 @@ def phi_to_control_points(
 ) -> jnp.ndarray:
     """Map a 4D design vector to B-spline control points for an elliptical blob.
 
-    The design vector uses polar coordinates relative to the target farm center,
-    making it natural for CMA-ES box-bounded search.
+    The design vector uses polar coordinates relative to the target farm center.
 
     Args:
         phi: Design vector (4,): [bearing_rad, distance_m, rotation_rad, aspect_ratio].

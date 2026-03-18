@@ -20,7 +20,7 @@ pixi run python ...   # run scripts in the project environment
 - **`core.py`** — `Curve`, `Turbine`, `WakeSimulation`, fixed-point wake iteration with `custom_vjp`
 - **`deficit/`** — Wake deficit models (BastankhahGaussian, TurboGaussian, NOJ)
 - **`optim/sgd.py`** — `topfarm_sgd_solve` (constrained SGD), `sgd_solve_implicit` (SGD with IFT `custom_vjp` for bilevel optimization)
-- **`optim/adversarial.py`** — `GradientAdversarialSearch` (IFT bilevel), `BlobAdversarialDiscovery` (FD bilevel over blob shapes), `PooledBlobDiscovery` (multi-start pooling), `CMAAdversarialSearch` (CMA-ES outer loop)
+- **`optim/adversarial.py`** — `GradientAdversarialSearch` (IFT bilevel), `BlobAdversarialDiscovery` (FD bilevel over blob shapes), `PooledBlobDiscovery` (multi-start pooling)
 - **`optim/geometry.py`** — `BSplineBoundary`, `phi_to_control_points`, `sample_random_blob`
 - **`optim/soft_packing.py`** — `create_reference_grid`, soft neighbor farm representation
 - **`definitions/v80.py`** — Vestas V80 turbine definition (good for tests)
@@ -40,7 +40,7 @@ pixi run python ...   # run scripts in the project environment
 
 ### Background
 
-`sgd_solve_implicit` (`sgd.py:537`) implements IFT-based implicit differentiation through the inner SGD optimizer via JAX `custom_vjp`. `GradientAdversarialSearch` (`adversarial.py:87`) uses this to do gradient ascent on neighbor positions to maximize regret. **Neither has ever been run or tested.** All existing results come from `PooledBlobDiscovery` (random blobs + multi-start) and `CMAAdversarialSearch` (CMA-ES).
+`sgd_solve_implicit` (`sgd.py:537`) implements IFT-based implicit differentiation through the inner SGD optimizer via JAX `custom_vjp`. `GradientAdversarialSearch` (`adversarial.py:87`) uses this to do gradient ascent on neighbor positions to maximize regret.
 
 The goal: run `GradientAdversarialSearch` end-to-end, validate gradients, and show it finds higher-regret configurations than derivative-free methods.
 
@@ -253,8 +253,6 @@ d/dp max_k regret_k(p) = d/dp regret_{k*}(p)
 ```
 Cost: K x forward + 1 x backward. At K=5: 3.1 min for 50 outer iterations (only 2.4x more than single-start).
 
-**4. CMA-ES (derivative-free baseline):** No gradients needed, but 100 gens x 10 pop x K starts = 45 min at K=5.
-
 ### Projected Costs (50 outer iterations)
 
 | Strategy | K=1 | K=5 | K=10 | K=20 |
@@ -262,7 +260,6 @@ Cost: K x forward + 1 x backward. At K=5: 3.1 min for 50 outer iterations (only 
 | Single-start IFT | 1.3 min | - | - | - |
 | Envelope theorem | 1.3 min | 3.1 min | 5.4 min | 9.9 min |
 | LogSumExp | 1.3 min | 6.4 min | 12.8 min | 25.6 min |
-| CMA-ES | 9.1 min | 45.5 min | 91.1 min | 182.1 min |
 
 ### Recommended Path Forward
 

@@ -114,8 +114,10 @@ class SGDSettings:
     spacing_weight: float = 1.0
     boundary_weight: float = 1.0
     additional_constant_lr_iterations: int = 0
-    ift_cg_damping: float = 0.01
+    ift_cg_damping: float = 1.0
     ift_cg_max_iter: int = 100
+    ift_polish_max_iter: int = 20
+    ift_polish_tol: float = 1e-8
 
 
 def _compute_mid_bisection(
@@ -487,6 +489,67 @@ def topfarm_sgd_solve(
 
 
 # =============================================================================
+# Newton-CG Polishing (drives gradient residual to zero for IFT)
+# =============================================================================
+
+
+def _newton_polish(
+    total_obj_fn: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
+    x: jnp.ndarray,
+    y: jnp.ndarray,
+    max_iter: int = 20,
+    tol: float = 1e-8,
+    cg_max_iter: int = 50,
+    damping: float = 0.01,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Gradient descent polishing to drive gradient residual toward zero.
+
+    After SGD converges (position change < tol), the gradient residual may
+    still be large (~0.01) due to the decaying learning rate.  Constant-LR
+    gradient descent steps can reduce |grad|, improving the IFT assumption
+    grad L(x*, params) ≈ 0.
+
+    Uses backtracking line search for step size selection.
+    Python-level loop (runs at trace time inside custom_vjp forward pass).
+    """
+    grad_fn = jax.grad(total_obj_fn, argnums=(0, 1))
+    best_norm = float('inf')
+    best_x, best_y = x, y
+
+    for it in range(max_iter):
+        gx, gy = grad_fn(x, y)
+        grad_norm = float(jnp.sqrt(jnp.sum(gx**2) + jnp.sum(gy**2)))
+
+        if grad_norm < best_norm:
+            best_norm = grad_norm
+            best_x, best_y = x, y
+
+        if it == 0 or it % 5 == 0 or grad_norm < tol:
+            print(f"    Polish iter {it}: |grad| = {grad_norm:.6e}", flush=True)
+
+        if grad_norm < tol:
+            break
+
+        # Backtracking line search along -gradient
+        obj_current = float(total_obj_fn(x, y))
+        gnorm_sq = float(jnp.sum(gx**2) + jnp.sum(gy**2))
+        step = 1.0  # start with step=1, halve until Armijo satisfied
+        for _ in range(30):
+            obj_new = float(total_obj_fn(x - step * gx, y - step * gy))
+            if obj_new <= obj_current - 1e-4 * step * gnorm_sq:
+                break
+            step *= 0.5
+        else:
+            break  # line search failed — stop polishing
+
+        x = x - step * gx
+        y = y - step * gy
+
+    print(f"    Polish done: best |grad| = {best_norm:.6e}", flush=True)
+    return best_x, best_y
+
+
+# =============================================================================
 # Implicit Differentiation Wrapper
 # =============================================================================
 
@@ -555,11 +618,49 @@ def sgd_solve_implicit(
     if settings is None:
         settings = SGDSettings()
 
-    # Wrap objective to include params
+    opt_x, opt_y = _sgd_and_polish(
+        objective_fn, init_x, init_y, boundary, min_spacing, settings, params,
+    )
+    return opt_x, opt_y
+
+
+def _sgd_and_polish(
+    objective_fn: Callable[[jnp.ndarray, jnp.ndarray, jnp.ndarray], jnp.ndarray],
+    init_x: jnp.ndarray,
+    init_y: jnp.ndarray,
+    boundary: jnp.ndarray,
+    min_spacing: float,
+    settings: SGDSettings,
+    params: jnp.ndarray,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Run SGD then Newton-CG polishing to satisfy IFT optimality condition."""
+    rho = settings.ks_rho
+
     def obj_fn(x: jnp.ndarray, y: jnp.ndarray) -> jnp.ndarray:
         return objective_fn(x, y, params)
 
-    return topfarm_sgd_solve(obj_fn, init_x, init_y, boundary, min_spacing, settings)
+    opt_x, opt_y = topfarm_sgd_solve(
+        obj_fn, init_x, init_y, boundary, min_spacing, settings,
+    )
+
+    # Newton-CG polishing: drive grad(total_obj) → 0 for IFT
+    if settings.ift_polish_max_iter > 0:
+        def total_obj(x: jnp.ndarray, y: jnp.ndarray) -> jnp.ndarray:
+            return (
+                obj_fn(x, y)
+                + settings.boundary_weight * boundary_penalty(x, y, boundary, rho)
+                + settings.spacing_weight * spacing_penalty(x, y, min_spacing, rho)
+            )
+
+        opt_x, opt_y = _newton_polish(
+            total_obj, opt_x, opt_y,
+            max_iter=settings.ift_polish_max_iter,
+            tol=settings.ift_polish_tol,
+            cg_max_iter=settings.ift_cg_max_iter,
+            damping=settings.ift_cg_damping,
+        )
+
+    return opt_x, opt_y
 
 
 def _sgd_solve_implicit_fwd(
@@ -575,16 +676,9 @@ def _sgd_solve_implicit_fwd(
     if settings is None:
         settings = SGDSettings()
 
-    # Wrap objective to include params
-    def obj_fn(x: jnp.ndarray, y: jnp.ndarray) -> jnp.ndarray:
-        return objective_fn(x, y, params)
-
-    # Call the underlying solver (not the custom_vjp wrapper)
-    opt_x, opt_y = topfarm_sgd_solve(
-        obj_fn, init_x, init_y, boundary, min_spacing, settings
+    opt_x, opt_y = _sgd_and_polish(
+        objective_fn, init_x, init_y, boundary, min_spacing, settings, params,
     )
-    # Store residuals for backward pass (only JAX-compatible types)
-    # settings is passed through nondiff_argnums
     return (opt_x, opt_y), (opt_x, opt_y, params)
 
 
@@ -653,15 +747,18 @@ def _sgd_solve_implicit_bwd(
         _, (hvp_x, hvp_y) = jax.jvp(grad_obj, (opt_x, opt_y), (vx, vy))
         return hvp_x, hvp_y
 
-    # Solve (H + damping*I) @ v = g using Conjugate Gradient (CG)
-    # Tikhonov damping regularizes near-singular Hessians
+    # Solve (H + damping*I) @ v = g using truncated Conjugate Gradient (CG)
+    # Tikhonov damping regularizes near-singular Hessians.
+    # Truncated CG: if negative curvature is detected (p^T A p <= 0),
+    # we stop and return the current iterate. This handles indefinite
+    # Hessians that arise when the inner solver hasn't fully converged.
     damping = settings.ift_cg_damping
     cg_max_iter = settings.ift_cg_max_iter
 
     def solve_linear_system(
         g_x: jnp.ndarray, g_y: jnp.ndarray, max_iter: int = cg_max_iter, tol: float = 1e-6
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
-        """Solve (H + damping*I) @ v = g using Conjugate Gradient."""
+        """Solve (H + damping*I) @ v = g using truncated Conjugate Gradient."""
 
         def damped_hvp(vx: jnp.ndarray, vy: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
             hx, hy = hvp(vx, vy)
@@ -673,21 +770,33 @@ def _sgd_solve_implicit_bwd(
         # CG state: (v_x, v_y, r_x, r_y, p_x, p_y, rs_old, iteration)
         def cond_fn(carry):
             _, _, _, _, _, _, rs_old, it = carry
-            return jnp.logical_and(rs_old > tol**2, it < max_iter)
+            # Continue while residual is large, iteration count < max,
+            # and residual is finite (stops on NaN/Inf from divergence)
+            return jnp.logical_and(
+                jnp.logical_and(rs_old > tol**2, it < max_iter),
+                jnp.isfinite(rs_old),
+            )
 
         def body_fn(carry):
             v_x, v_y, r_x, r_y, p_x, p_y, rs_old, it = carry
             # A @ p
             ap_x, ap_y = damped_hvp(p_x, p_y)
-            # step size alpha = rs_old / (p^T A p)
+            # p^T A p — must be positive for CG to work
             pap = dot_xy(p_x, p_y, ap_x, ap_y)
-            alpha = rs_old / jnp.maximum(pap, 1e-30)
+            # Truncated CG: if pap <= 0 (negative curvature), stop by
+            # setting residual to 0 (triggers cond_fn exit) and keeping
+            # current v unchanged.
+            neg_curv = pap <= 1e-30
+            # When negative curvature detected, use alpha=0 to freeze v
+            alpha = jnp.where(neg_curv, 0.0, rs_old / jnp.maximum(pap, 1e-30))
             # update solution and residual
             v_x_new = v_x + alpha * p_x
             v_y_new = v_y + alpha * p_y
             r_x_new = r_x - alpha * ap_x
             r_y_new = r_y - alpha * ap_y
             rs_new = dot_xy(r_x_new, r_y_new, r_x_new, r_y_new)
+            # Force exit on negative curvature by setting rs_new = 0
+            rs_new = jnp.where(neg_curv, 0.0, rs_new)
             # update search direction
             beta = rs_new / jnp.maximum(rs_old, 1e-30)
             p_x_new = r_x_new + beta * p_x

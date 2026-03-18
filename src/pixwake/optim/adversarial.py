@@ -31,6 +31,7 @@ from jax.lax import while_loop
 from pixwake.optim.sgd import (
     SGDSettings,
     sgd_solve_implicit,
+    topfarm_sgd_solve,
 )
 
 
@@ -1479,5 +1480,688 @@ class PooledBlobDiscovery:
             n_liberal_starts=settings.n_starts,
             n_conservative_starts=settings.n_starts,
             same_best_layout=same_best,
+        )
+
+
+# =============================================================================
+# Greedy Grid Search
+# =============================================================================
+
+
+class GreedyGridResult(NamedTuple):
+    """Result of greedy grid search for adversarial neighbor placement.
+
+    Attributes:
+        neighbor_x: Placed neighbor x positions, shape (n_placed,).
+        neighbor_y: Placed neighbor y positions, shape (n_placed,).
+        target_x: Target layout re-optimized with all placed neighbors.
+        target_y: Target layout re-optimized with all placed neighbors.
+        liberal_x: Liberal layout (optimized without neighbors).
+        liberal_y: Liberal layout (optimized without neighbors).
+        regret: Final regret with all placed neighbors.
+        liberal_aep: AEP of liberal layout without neighbors.
+        conservative_aep: AEP of conservative layout with all placed neighbors.
+        placement_order: Grid indices chosen at each greedy step.
+        regret_history: Regret after each turbine placement.
+        regret_maps: Per-step regret at every grid point (list of arrays).
+    """
+
+    neighbor_x: jnp.ndarray
+    neighbor_y: jnp.ndarray
+    target_x: jnp.ndarray
+    target_y: jnp.ndarray
+    liberal_x: jnp.ndarray
+    liberal_y: jnp.ndarray
+    regret: float
+    liberal_aep: float
+    conservative_aep: float
+    placement_order: list[int]
+    regret_history: list[float]
+    regret_maps: list[jnp.ndarray]
+
+
+@dataclass
+class GreedyGridSettings:
+    """Settings for greedy grid search.
+
+    Attributes:
+        sgd_settings: Settings for inner SGD optimization.
+        n_inner_starts: Number of random inner starts for conservative
+            optimization (best-of-K). Default 1 (single start).
+        screen_top_k: If > 0, screen all candidates by AEP loss first
+            (cheap forward eval only), then run full inner optimization
+            on only the top-K candidates. Drastically reduces runtime
+            for large grids. Default 0 (no screening, evaluate all).
+        screen_chunk_size: Number of candidates to screen in each
+            vectorized batch (vmap). Larger = faster but more memory.
+            Default 100 (~0.4 GB for 66 turbines × 24 dirs).
+        eval_parallel: If True, run the top-K full evaluations in
+            parallel via vmap over candidate positions. Default True.
+        verbose: Print progress during search.
+    """
+
+    sgd_settings: SGDSettings | None = None
+    n_inner_starts: int = 1
+    screen_top_k: int = 0
+    screen_chunk_size: int = 100
+    eval_parallel: bool = True
+    verbose: bool = True
+
+
+class GreedyGridSearch:
+    """Greedy sequential placement of neighbor turbines on a discrete grid.
+
+    Places neighbors one at a time. At each step, evaluates the regret at
+    every remaining grid point (by re-optimizing the target layout with
+    the candidate neighbor configuration) and selects the point that
+    maximizes regret. Repeats until the desired number of neighbors is
+    placed.
+
+    Parameters
+    ----------
+    sim : WakeSimulation
+        Wake simulation engine.
+    target_boundary : jnp.ndarray
+        Target farm boundary polygon, shape (n_vertices, 2).
+    target_min_spacing : float
+        Minimum spacing between target turbines.
+    ws_amb : jnp.ndarray
+        Ambient wind speeds.
+    wd_amb : jnp.ndarray
+        Wind directions.
+    ti_amb : jnp.ndarray | None
+        Ambient turbulence intensity (optional).
+    weights : jnp.ndarray | None
+        Probability weights for wind conditions (optional).
+    """
+
+    def __init__(
+        self,
+        sim,
+        target_boundary: jnp.ndarray,
+        target_min_spacing: float,
+        ws_amb: jnp.ndarray,
+        wd_amb: jnp.ndarray,
+        ti_amb: jnp.ndarray | None = None,
+        weights: jnp.ndarray | None = None,
+    ):
+        self.sim = sim
+        self.target_boundary = target_boundary
+        self.target_min_spacing = target_min_spacing
+        self.ws_amb = ws_amb
+        self.wd_amb = wd_amb
+        self.ti_amb = ti_amb
+        self.weights = weights
+
+    def _compute_aep(
+        self,
+        target_x: jnp.ndarray,
+        target_y: jnp.ndarray,
+        neighbor_x: jnp.ndarray | None = None,
+        neighbor_y: jnp.ndarray | None = None,
+    ) -> jnp.ndarray:
+        """Compute AEP for target turbines, optionally with neighbors."""
+        n_target = target_x.shape[0]
+
+        if neighbor_x is not None and neighbor_y is not None and neighbor_x.shape[0] > 0:
+            x_all = jnp.concatenate([target_x, neighbor_x])
+            y_all = jnp.concatenate([target_y, neighbor_y])
+        else:
+            x_all = target_x
+            y_all = target_y
+
+        result = self.sim(
+            x_all, y_all, ws_amb=self.ws_amb, wd_amb=self.wd_amb, ti_amb=self.ti_amb
+        )
+
+        power = result.power()[:, :n_target]
+
+        if self.weights is not None:
+            weighted_power = jnp.sum(power * self.weights[:, None])
+            return weighted_power * 8760 / 1e6
+        return jnp.sum(power) * 8760 / 1e6 / power.shape[0]
+
+    def _evaluate_candidate(
+        self,
+        candidate_x: float,
+        candidate_y: float,
+        placed_x: jnp.ndarray,
+        placed_y: jnp.ndarray,
+        liberal_x: jnp.ndarray,
+        liberal_y: jnp.ndarray,
+        init_target_x: jnp.ndarray,
+        init_target_y: jnp.ndarray,
+        sgd_settings: SGDSettings,
+        n_inner_starts: int = 1,
+    ) -> tuple[float, jnp.ndarray, jnp.ndarray]:
+        """Evaluate regret for adding one candidate neighbor.
+
+        Returns (regret, conservative_x, conservative_y).
+        """
+        # Assemble all neighbors: already placed + candidate
+        nb_x = jnp.concatenate([placed_x, jnp.array([candidate_x])])
+        nb_y = jnp.concatenate([placed_y, jnp.array([candidate_y])])
+
+        # Liberal AEP with these neighbors (no re-optimization)
+        liberal_aep_present = self._compute_aep(liberal_x, liberal_y, nb_x, nb_y)
+
+        # Conservative: re-optimize target layout with these neighbors
+        def conservative_objective(x, y):
+            return -self._compute_aep(x, y, nb_x, nb_y)
+
+        best_aep = -jnp.inf
+        best_cx, best_cy = init_target_x, init_target_y
+
+        for k in range(n_inner_starts):
+            if k == 0:
+                start_x, start_y = init_target_x, init_target_y
+            else:
+                key = jax.random.PRNGKey(hash((float(candidate_x), float(candidate_y), k)) % (2**31))
+                start_x, start_y = self._random_init(key, init_target_x.shape[0])
+
+            opt_x, opt_y = topfarm_sgd_solve(
+                conservative_objective,
+                start_x,
+                start_y,
+                self.target_boundary,
+                self.target_min_spacing,
+                sgd_settings,
+            )
+
+            aep = self._compute_aep(opt_x, opt_y, nb_x, nb_y)
+            if aep > best_aep:
+                best_aep = aep
+                best_cx, best_cy = opt_x, opt_y
+
+        conservative_aep = best_aep
+        regret = float(conservative_aep - liberal_aep_present)
+        return regret, best_cx, best_cy
+
+    def _random_init(self, key, n_turbines):
+        """Generate random initial positions within target boundary polygon.
+
+        Uses rejection sampling to ensure all turbines are inside the
+        convex hull of the boundary, not just within the bounding box.
+        """
+        from matplotlib.path import Path as MplPath
+
+        boundary_np = np.array(self.target_boundary)
+        poly_path = MplPath(boundary_np)
+        margin = self.target_min_spacing / 2
+
+        x_min = float(boundary_np[:, 0].min()) + margin
+        x_max = float(boundary_np[:, 0].max()) - margin
+        y_min = float(boundary_np[:, 1].min()) + margin
+        y_max = float(boundary_np[:, 1].max()) - margin
+
+        # Rejection sampling: generate candidates, keep those inside polygon
+        xs, ys = [], []
+        max_attempts = 100
+        for _ in range(max_attempts):
+            key, k1, k2 = jax.random.split(key, 3)
+            n_need = n_turbines - len(xs)
+            # Oversample to reduce iterations
+            n_try = max(n_need * 3, 100)
+            cx = jax.random.uniform(k1, (n_try,), minval=x_min, maxval=x_max)
+            cy = jax.random.uniform(k2, (n_try,), minval=y_min, maxval=y_max)
+            pts = np.column_stack([np.array(cx), np.array(cy)])
+            inside = poly_path.contains_points(pts)
+            xs.extend(float(cx[i]) for i in range(n_try) if inside[i])
+            ys.extend(float(cy[i]) for i in range(n_try) if inside[i])
+            if len(xs) >= n_turbines:
+                break
+
+        x = jnp.array(xs[:n_turbines])
+        y = jnp.array(ys[:n_turbines])
+        return x, y
+
+    def _screen_batch(
+        self,
+        candidate_xs: jnp.ndarray,
+        candidate_ys: jnp.ndarray,
+        placed_x: jnp.ndarray,
+        placed_y: jnp.ndarray,
+        liberal_x: jnp.ndarray,
+        liberal_y: jnp.ndarray,
+        liberal_aep: float,
+        chunk_size: int = 100,
+    ) -> jnp.ndarray:
+        """Screen candidates by AEP loss using vectorized evaluation.
+
+        Args:
+            candidate_xs: x positions of candidates, shape (n_cands,).
+            candidate_ys: y positions of candidates, shape (n_cands,).
+            placed_x: Already-placed neighbor x positions.
+            placed_y: Already-placed neighbor y positions.
+            liberal_x: Liberal layout x positions.
+            liberal_y: Liberal layout y positions.
+            liberal_aep: AEP of liberal layout without neighbors.
+            chunk_size: Batch size for vmap. Default 100.
+
+        Returns:
+            AEP loss for each candidate, shape (n_cands,).
+        """
+        n_target = liberal_x.shape[0]
+        n_placed = placed_x.shape[0]
+
+        def eval_one_candidate(cx, cy):
+            """Compute AEP loss for one candidate neighbor."""
+            nb_x = jnp.concatenate([placed_x, jnp.array([cx])])
+            nb_y = jnp.concatenate([placed_y, jnp.array([cy])])
+            x_all = jnp.concatenate([liberal_x, nb_x])
+            y_all = jnp.concatenate([liberal_y, nb_y])
+            result = self.sim(
+                x_all, y_all, ws_amb=self.ws_amb, wd_amb=self.wd_amb,
+                ti_amb=self.ti_amb,
+            )
+            power = result.power()[:, :n_target]
+            if self.weights is not None:
+                aep = jnp.sum(power * self.weights[:, None]) * 8760 / 1e6
+            else:
+                aep = jnp.sum(power) * 8760 / 1e6 / power.shape[0]
+            return liberal_aep - aep
+
+        eval_batch = jax.vmap(eval_one_candidate)
+
+        n_cands = candidate_xs.shape[0]
+        all_losses = []
+        for start in range(0, n_cands, chunk_size):
+            end = min(start + chunk_size, n_cands)
+            chunk_losses = eval_batch(
+                candidate_xs[start:end], candidate_ys[start:end]
+            )
+            all_losses.append(chunk_losses)
+
+        return jnp.concatenate(all_losses)
+
+    def _evaluate_candidates_batch(
+        self,
+        candidate_xs: jnp.ndarray,
+        candidate_ys: jnp.ndarray,
+        placed_x: jnp.ndarray,
+        placed_y: jnp.ndarray,
+        liberal_x: jnp.ndarray,
+        liberal_y: jnp.ndarray,
+        init_target_xs: jnp.ndarray,
+        init_target_ys: jnp.ndarray,
+        sgd_settings: SGDSettings,
+    ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+        """Evaluate regret for a batch of candidates via vmap'd inner SGD.
+
+        Supports multistart: init_target_xs/ys can be shape (K, n_turbines)
+        for single-start or (n_candidates, K, n_turbines) for multistart.
+        When multistart, each candidate runs K inner SGDs in parallel and
+        the best (highest AEP) is kept.
+
+        All candidates × starts are flattened into one vmap call for
+        maximum GPU utilization.
+
+        Args:
+            candidate_xs: Candidate x positions, shape (n_candidates,).
+            candidate_ys: Candidate y positions, shape (n_candidates,).
+            placed_x: Already-placed neighbor x positions.
+            placed_y: Already-placed neighbor y positions.
+            liberal_x: Liberal layout x positions.
+            liberal_y: Liberal layout y positions.
+            init_target_xs: Initial target x positions.
+                Shape (n_turbines,) for single start,
+                or (n_candidates, K, n_turbines) for multistart.
+            init_target_ys: Initial target y positions (same shape rules).
+            sgd_settings: SGD settings (with mid pre-computed).
+
+        Returns:
+            Tuple of (regrets, opt_xs, opt_ys) where:
+                regrets: shape (n_candidates,)
+                opt_xs: shape (n_candidates, n_turbines)
+                opt_ys: shape (n_candidates, n_turbines)
+        """
+        from dataclasses import replace as _dc_replace
+        from pixwake.optim.sgd import _compute_mid_bisection
+
+        # Pre-compute mid so it doesn't happen inside vmap
+        if sgd_settings.mid is None:
+            gamma_min = sgd_settings.gamma_min_factor
+            computed_mid = _compute_mid_bisection(
+                learning_rate=sgd_settings.learning_rate,
+                gamma_min=gamma_min,
+                max_iter=sgd_settings.max_iter,
+                lower=sgd_settings.bisect_lower,
+                upper=sgd_settings.bisect_upper,
+            )
+            sgd_settings = _dc_replace(sgd_settings, mid=computed_mid)
+
+        n_candidates = candidate_xs.shape[0]
+        n_target = liberal_x.shape[0]
+        sim = self.sim
+        ws_amb = self.ws_amb
+        wd_amb = self.wd_amb
+        ti_amb = self.ti_amb
+        weights = self.weights
+        bnd = self.target_boundary
+        min_sp = self.target_min_spacing
+
+        # Determine if multistart
+        multistart = init_target_xs.ndim == 3  # (n_candidates, K, n_turbines)
+
+        if multistart:
+            n_starts = init_target_xs.shape[1]
+            # Flatten candidates × starts: (n_candidates * K,)
+            flat_cx = jnp.repeat(candidate_xs, n_starts)
+            flat_cy = jnp.repeat(candidate_ys, n_starts)
+            flat_init_x = init_target_xs.reshape(-1, n_target)  # (n_candidates*K, n_turbines)
+            flat_init_y = init_target_ys.reshape(-1, n_target)
+        else:
+            flat_cx = candidate_xs
+            flat_cy = candidate_ys
+            flat_init_x = jnp.broadcast_to(init_target_xs, (n_candidates, n_target))
+            flat_init_y = jnp.broadcast_to(init_target_ys, (n_candidates, n_target))
+
+        def solve_one(cx, cy, start_x, start_y):
+            """Run inner SGD for one (candidate, start), return (aep, regret, opt_x, opt_y)."""
+            nb_x = jnp.concatenate([placed_x, jnp.array([cx])])
+            nb_y = jnp.concatenate([placed_y, jnp.array([cy])])
+
+            def conservative_objective(x, y):
+                x_all = jnp.concatenate([x, nb_x])
+                y_all = jnp.concatenate([y, nb_y])
+                result = sim(x_all, y_all, ws_amb=ws_amb, wd_amb=wd_amb,
+                             ti_amb=ti_amb)
+                power = result.power()[:, :n_target]
+                if weights is not None:
+                    aep = jnp.sum(power * weights[:, None]) * 8760 / 1e6
+                else:
+                    aep = jnp.sum(power) * 8760 / 1e6 / power.shape[0]
+                return -aep
+
+            opt_x, opt_y = topfarm_sgd_solve(
+                conservative_objective, start_x, start_y,
+                bnd, min_sp, sgd_settings,
+            )
+
+            conservative_aep = -conservative_objective(opt_x, opt_y)
+
+            # Liberal AEP with these neighbors
+            x_lib_all = jnp.concatenate([liberal_x, nb_x])
+            y_lib_all = jnp.concatenate([liberal_y, nb_y])
+            result_lib = sim(x_lib_all, y_lib_all, ws_amb=ws_amb,
+                             wd_amb=wd_amb, ti_amb=ti_amb)
+            power_lib = result_lib.power()[:, :n_target]
+            if weights is not None:
+                lib_aep_present = jnp.sum(power_lib * weights[:, None]) * 8760 / 1e6
+            else:
+                lib_aep_present = jnp.sum(power_lib) * 8760 / 1e6 / power_lib.shape[0]
+
+            regret = conservative_aep - lib_aep_present
+            return conservative_aep, regret, opt_x, opt_y
+
+        all_aeps, all_regrets, all_opt_xs, all_opt_ys = jax.vmap(solve_one)(
+            flat_cx, flat_cy, flat_init_x, flat_init_y
+        )
+
+        if multistart:
+            # Reshape back to (n_candidates, K, ...)
+            all_aeps = all_aeps.reshape(n_candidates, n_starts)
+            all_regrets = all_regrets.reshape(n_candidates, n_starts)
+            all_opt_xs = all_opt_xs.reshape(n_candidates, n_starts, n_target)
+            all_opt_ys = all_opt_ys.reshape(n_candidates, n_starts, n_target)
+
+            # Pick best start per candidate (highest conservative AEP)
+            best_k = jnp.argmax(all_aeps, axis=1)  # (n_candidates,)
+            regrets = all_regrets[jnp.arange(n_candidates), best_k]
+            opt_xs = all_opt_xs[jnp.arange(n_candidates), best_k]
+            opt_ys = all_opt_ys[jnp.arange(n_candidates), best_k]
+        else:
+            regrets = all_regrets
+            opt_xs = all_opt_xs
+            opt_ys = all_opt_ys
+
+        return regrets, opt_xs, opt_ys
+
+    def search(
+        self,
+        init_target_x: jnp.ndarray,
+        init_target_y: jnp.ndarray,
+        grid: jnp.ndarray,
+        n_neighbors: int,
+        settings: GreedyGridSettings | None = None,
+    ) -> GreedyGridResult:
+        """Run greedy grid search to place neighbors sequentially.
+
+        Parameters
+        ----------
+        init_target_x, init_target_y : jnp.ndarray
+            Initial target farm turbine positions.
+        grid : jnp.ndarray
+            Candidate neighbor positions, shape (n_grid, 2). Each row is
+            an (x, y) coordinate where a neighbor turbine could be placed.
+        n_neighbors : int
+            Number of neighbor turbines to place.
+        settings : GreedyGridSettings | None
+            Search settings. Uses defaults if None.
+
+        Returns
+        -------
+        GreedyGridResult
+        """
+        if settings is None:
+            settings = GreedyGridSettings()
+
+        sgd_settings = settings.sgd_settings or SGDSettings()
+
+        # Step 1: Compute liberal layout (no neighbors) — done once
+        def liberal_objective(x, y):
+            return -self._compute_aep(x, y)
+
+        liberal_x, liberal_y = topfarm_sgd_solve(
+            liberal_objective,
+            init_target_x,
+            init_target_y,
+            self.target_boundary,
+            self.target_min_spacing,
+            sgd_settings,
+        )
+        liberal_aep = float(self._compute_aep(liberal_x, liberal_y))
+
+        if settings.verbose:
+            print(f"Liberal AEP (no neighbors): {liberal_aep:.2f} GWh", flush=True)
+            print(f"Grid size: {grid.shape[0]} candidates, placing {n_neighbors} neighbors", flush=True)
+
+        # Track state
+        remaining = set(range(grid.shape[0]))
+        placed_x = jnp.zeros(0)
+        placed_y = jnp.zeros(0)
+        placement_order = []
+        regret_history = []
+        regret_maps = []
+
+        # Step 2: Greedy placement loop
+        for step in range(n_neighbors):
+            n_remaining = len(remaining)
+            use_screening = settings.screen_top_k > 0 and n_remaining > settings.screen_top_k
+
+            if settings.verbose:
+                print(f"\n--- Greedy step {step + 1}/{n_neighbors} "
+                      f"({n_remaining} candidates remaining) ---", flush=True)
+                if use_screening:
+                    print(f"  Screening phase: evaluating AEP loss for all "
+                          f"{n_remaining} candidates...", flush=True)
+
+            regret_map = np.full(grid.shape[0], np.nan)
+
+            remaining_list = sorted(remaining)
+
+            if use_screening:
+                # Phase 1: Vectorized screening by AEP loss
+                import time as _time
+                _t0 = _time.time()
+                cand_xs = jnp.array([grid[i, 0] for i in remaining_list])
+                cand_ys = jnp.array([grid[i, 1] for i in remaining_list])
+
+                aep_losses = self._screen_batch(
+                    cand_xs, cand_ys, placed_x, placed_y,
+                    liberal_x, liberal_y, liberal_aep,
+                    chunk_size=settings.screen_chunk_size,
+                )
+
+                # Map back to grid indices
+                for j, idx in enumerate(remaining_list):
+                    regret_map[idx] = float(aep_losses[j])
+
+                # Pick top-K by AEP loss
+                top_k_local = jnp.argsort(-aep_losses)[:settings.screen_top_k]
+                top_k_indices = [remaining_list[int(j)] for j in top_k_local]
+
+                if settings.verbose:
+                    _elapsed = _time.time() - _t0
+                    print(f"  Screening: {n_remaining} candidates in "
+                          f"{_elapsed:.1f}s (chunks of {settings.screen_chunk_size})", flush=True)
+                    print(f"  Full eval phase: top {len(top_k_indices)} candidates...", flush=True)
+                eval_set = top_k_indices
+            else:
+                eval_set = list(remaining)
+
+            # Phase 2: Full evaluation (inner optimization)
+            import time as _time
+            _t0 = _time.time()
+
+            if settings.eval_parallel and len(eval_set) > 1:
+                # Vectorized: run all candidates (× starts) in parallel via vmap
+                eval_xs = jnp.array([grid[i, 0] for i in eval_set])
+                eval_ys = jnp.array([grid[i, 1] for i in eval_set])
+                n_eval = len(eval_set)
+                K = settings.n_inner_starts
+
+                if K > 1:
+                    # Build (n_eval, K, n_turbines) initial positions
+                    n_turb = init_target_x.shape[0]
+                    init_xs = np.zeros((n_eval, K, n_turb))
+                    init_ys = np.zeros((n_eval, K, n_turb))
+                    for ci in range(n_eval):
+                        init_xs[ci, 0] = np.array(init_target_x)
+                        init_ys[ci, 0] = np.array(init_target_y)
+                        for ki in range(1, K):
+                            seed = hash((float(eval_xs[ci]), float(eval_ys[ci]), ki)) % (2**31)
+                            key = jax.random.PRNGKey(seed)
+                            rx, ry = self._random_init(key, n_turb)
+                            init_xs[ci, ki] = np.array(rx)
+                            init_ys[ci, ki] = np.array(ry)
+                    init_xs_jnp = jnp.array(init_xs)
+                    init_ys_jnp = jnp.array(init_ys)
+                else:
+                    init_xs_jnp = init_target_x
+                    init_ys_jnp = init_target_y
+
+                regrets_batch, opt_xs_batch, opt_ys_batch = \
+                    self._evaluate_candidates_batch(
+                        eval_xs, eval_ys,
+                        placed_x, placed_y,
+                        liberal_x, liberal_y,
+                        init_xs_jnp, init_ys_jnp,
+                        sgd_settings,
+                    )
+
+                # Find best (but don't overwrite screening AEP loss
+                # in regret_map — the heatmap should show a single
+                # consistent metric, not a mix of screening AEP loss
+                # and true regret which are on different scales)
+                best_local = int(jnp.argmax(regrets_batch))
+                best_idx = eval_set[best_local]
+                best_regret = float(regrets_batch[best_local])
+                best_cx = opt_xs_batch[best_local]
+                best_cy = opt_ys_batch[best_local]
+
+                if settings.verbose:
+                    _elapsed = _time.time() - _t0
+                    n_solves = n_eval * K if K > 1 else n_eval
+                    print(f"  Evaluated {n_eval} candidates × {K} starts "
+                          f"({n_solves} solves) in parallel: "
+                          f"{_elapsed:.1f}s, best = {best_regret:.4f} GWh", flush=True)
+            else:
+                # Sequential fallback
+                best_regret = -np.inf
+                best_idx = -1
+                best_cx, best_cy = None, None
+
+                for count, idx in enumerate(eval_set):
+                    cx, cy = float(grid[idx, 0]), float(grid[idx, 1])
+
+                    regret, cons_x, cons_y = self._evaluate_candidate(
+                        cx, cy,
+                        placed_x, placed_y,
+                        liberal_x, liberal_y,
+                        init_target_x, init_target_y,
+                        sgd_settings,
+                        settings.n_inner_starts,
+                    )
+
+                    # Don't overwrite screening AEP loss in regret_map
+                    # when screening is active (metrics are on different
+                    # scales). Only write regret when no screening was used.
+                    if not use_screening:
+                        regret_map[idx] = regret
+
+                    if regret > best_regret:
+                        best_regret = regret
+                        best_idx = idx
+                        best_cx, best_cy = cons_x, cons_y
+
+                    if settings.verbose and (count + 1) % 5 == 0:
+                        print(f"    Evaluated {count + 1}/{len(eval_set)}, "
+                              f"best so far = {best_regret:.4f} GWh", flush=True)
+
+            # Place the winning turbine
+            placed_x = jnp.concatenate([placed_x, jnp.array([grid[best_idx, 0]])])
+            placed_y = jnp.concatenate([placed_y, jnp.array([grid[best_idx, 1]])])
+            remaining.remove(best_idx)
+            placement_order.append(best_idx)
+            regret_history.append(best_regret)
+            regret_maps.append(jnp.array(regret_map))
+
+            if settings.verbose:
+                print(f"  Placed turbine at ({grid[best_idx, 0]:.0f}, "
+                      f"{grid[best_idx, 1]:.0f}), regret = {best_regret:.4f} GWh", flush=True)
+
+        # Step 3: Final evaluation with all placed neighbors
+        def final_objective(x, y):
+            return -self._compute_aep(x, y, placed_x, placed_y)
+
+        final_target_x, final_target_y = topfarm_sgd_solve(
+            final_objective,
+            init_target_x,
+            init_target_y,
+            self.target_boundary,
+            self.target_min_spacing,
+            sgd_settings,
+        )
+
+        conservative_aep = float(
+            self._compute_aep(final_target_x, final_target_y, placed_x, placed_y)
+        )
+        liberal_aep_present = float(
+            self._compute_aep(liberal_x, liberal_y, placed_x, placed_y)
+        )
+        final_regret = conservative_aep - liberal_aep_present
+
+        if settings.verbose:
+            print(f"\nFinal Results:", flush=True)
+            print(f"  Liberal AEP (isolated): {liberal_aep:.2f} GWh", flush=True)
+            print(f"  Liberal AEP (w/ neighbors): {liberal_aep_present:.2f} GWh", flush=True)
+            print(f"  Conservative AEP (w/ neighbors): {conservative_aep:.2f} GWh", flush=True)
+            print(f"  Regret: {final_regret:.4f} GWh", flush=True)
+            print(f"  Placement order: {placement_order}", flush=True)
+
+        return GreedyGridResult(
+            neighbor_x=placed_x,
+            neighbor_y=placed_y,
+            target_x=final_target_x,
+            target_y=final_target_y,
+            liberal_x=liberal_x,
+            liberal_y=liberal_y,
+            regret=final_regret,
+            liberal_aep=liberal_aep,
+            conservative_aep=conservative_aep,
+            placement_order=placement_order,
+            regret_history=regret_history,
+            regret_maps=regret_maps,
         )
 
