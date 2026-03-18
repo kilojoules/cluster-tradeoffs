@@ -476,6 +476,14 @@ def main():
                         help="Number of random inner starts per candidate (best-of-K)")
     parser.add_argument("--eval-parallel", action="store_true",
                         help="Run inner SGDs in parallel via vmap (use on GPU)")
+    parser.add_argument("--wind-rose", type=str, default="dei",
+                        choices=["dei", "unidirectional", "uniform"],
+                        help="Wind rose type: dei (real data), unidirectional (270 deg), "
+                             "uniform (equal weight all directions)")
+    parser.add_argument("--wind-dir", type=float, default=270.0,
+                        help="Wind direction for unidirectional rose (degrees)")
+    parser.add_argument("--wind-speed", type=float, default=9.0,
+                        help="Wind speed for synthetic roses (m/s)")
     parser.add_argument("--output-dir", type=str, default=str(OUTPUT_DIR))
     args = parser.parse_args()
 
@@ -497,16 +505,28 @@ def main():
     print(f"  Inner SGD: lr={args.inner_lr}, max_iter={args.inner_max_iter}")
     print(f"  Inner starts: {args.n_inner_starts} (best-of-K)")
     print(f"  Eval parallel: {args.eval_parallel}")
+    print(f"  Wind rose: {args.wind_rose}")
     print("=" * 70)
 
     # Load data
     turbine = create_dei_turbine()
-    wd, ws, weights = load_wind_data()
+    if args.wind_rose == "dei":
+        wd, ws, weights = load_wind_data()
+    elif args.wind_rose == "unidirectional":
+        wd = jnp.array([args.wind_dir])
+        ws = jnp.array([args.wind_speed])
+        weights = jnp.array([1.0])
+    elif args.wind_rose == "uniform":
+        n_bins = 24
+        wd = jnp.linspace(0, 360 - 360 / n_bins, n_bins)
+        ws = jnp.full(n_bins, args.wind_speed)
+        weights = jnp.full(n_bins, 1.0 / n_bins)
     sim = WakeSimulation(turbine, BastankhahGaussianDeficit(k=0.04))
 
     print(f"\nBoundary: {boundary_np.shape[0]} vertices (CCW)")
     dominant_idx = int(jnp.argmax(weights))
-    print(f"Wind rose: {len(wd)} bins, dominant ~{float(wd[dominant_idx]):.0f} deg")
+    print(f"Wind rose: {args.wind_rose}, {len(wd)} bins, "
+          f"dominant ~{float(wd[dominant_idx]):.0f} deg")
 
     # Target layout
     init_x, init_y = generate_target_grid(boundary_np, n_target, spacing=4 * D)
