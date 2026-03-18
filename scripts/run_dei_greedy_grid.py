@@ -474,6 +474,8 @@ def main():
     parser.add_argument("--screen-chunk-size", type=int, default=100)
     parser.add_argument("--n-inner-starts", type=int, default=1,
                         help="Number of random inner starts per candidate (best-of-K)")
+    parser.add_argument("--eval-parallel", action="store_true",
+                        help="Run inner SGDs in parallel via vmap (use on GPU)")
     parser.add_argument("--output-dir", type=str, default=str(OUTPUT_DIR))
     args = parser.parse_args()
 
@@ -494,6 +496,7 @@ def main():
     print(f"  Min spacing: {args.min_spacing_D:.1f}D = {min_spacing:.0f} m")
     print(f"  Inner SGD: lr={args.inner_lr}, max_iter={args.inner_max_iter}")
     print(f"  Inner starts: {args.n_inner_starts} (best-of-K)")
+    print(f"  Eval parallel: {args.eval_parallel}")
     print("=" * 70)
 
     # Load data
@@ -525,7 +528,7 @@ def main():
         n_inner_starts=args.n_inner_starts,
         screen_top_k=args.screen_top_k,
         screen_chunk_size=args.screen_chunk_size,
-        eval_parallel=False,  # vmap SGD is slower on CPU; use sequential
+        eval_parallel=args.eval_parallel,
         verbose=True,
     )
 

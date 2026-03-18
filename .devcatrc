@@ -1,6 +1,9 @@
 exclude = [
     "pixwake",
     "PyWake",
+    "analysis",
+    "TopFarm2",
+    "docs",
     "OMAE_neighbors",
     "*.lock",
     "*.pt",
@@ -29,5 +32,6 @@ exclude = [
     "__pycache__/",
     "*.pyc",
     "wandb/",
-    "GTSRB*"
+    "GTSRB*",
+    "site"
 ]
