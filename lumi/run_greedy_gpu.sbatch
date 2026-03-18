@@ -19,12 +19,14 @@ export JAX_PLATFORMS=rocm
 export XLA_FLAGS="--xla_gpu_enable_triton_softmax_fusion=false"
 
 # Move to repo
-cd "$HOME/cluster-tradeoffs"
+cd /scratch/project_465002609/julian_clusters
 mkdir -p logs
+
+PIXI="pixi run -e rocm --manifest-path pyproject.toml"
 
 # ---- Smoke test ----
 echo "=== GPU smoke test ==="
-pixi run -e rocm python -c "
+$PIXI python -c "
 import jax
 jax.config.update('jax_enable_x64', True)
 print('JAX version:', jax.__version__)
@@ -35,7 +37,7 @@ echo ""
 
 # ---- Run ----
 echo "=== Starting greedy grid search K=5, 5000 iter ==="
-pixi run -e rocm python scripts/run_dei_greedy_grid.py \
+$PIXI python scripts/run_dei_greedy_grid.py \
     --n-inner-starts 5 \
     --inner-max-iter 5000 \
     --screen-top-k 10 \
