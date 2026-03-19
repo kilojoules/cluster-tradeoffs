@@ -32,6 +32,7 @@ $PIXI python scripts/run_dei_greedy_grid.py \
     --wind-rose unidirectional \
     --wind-dir 270 \
     --wind-speed 9.0 \
-    --output-dir analysis/dei_greedy_grid_unidir_270
+    --grid-pad-D 25 \
+    --output-dir analysis/dei_greedy_grid_unidir_270_pad25D
 
 echo "=== Done ==="
