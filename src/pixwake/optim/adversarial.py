@@ -1649,12 +1649,16 @@ class GreedyGridSearch:
         def conservative_objective(x, y):
             return -self._compute_aep(x, y, nb_x, nb_y)
 
-        best_aep = -jnp.inf
-        best_cx, best_cy = init_target_x, init_target_y
+        # Start with liberal layout as a candidate (guarantees regret >= 0)
+        best_aep = float(liberal_aep_present)
+        best_cx, best_cy = liberal_x, liberal_y
 
         for k in range(n_inner_starts):
             if k == 0:
                 start_x, start_y = init_target_x, init_target_y
+            elif k == 1:
+                # Use liberal layout as a start — SGD may improve it
+                start_x, start_y = liberal_x, liberal_y
             else:
                 key = jax.random.PRNGKey(hash((float(candidate_x), float(candidate_y), k)) % (2**31))
                 start_x, start_y = self._random_init(key, init_target_x.shape[0])
@@ -2033,13 +2037,17 @@ class GreedyGridSearch:
 
                 if K > 1:
                     # Build (n_eval, K, n_turbines) initial positions
+                    # Start 0: grid init, Start 1: liberal layout, rest: random
                     n_turb = init_target_x.shape[0]
                     init_xs = np.zeros((n_eval, K, n_turb))
                     init_ys = np.zeros((n_eval, K, n_turb))
                     for ci in range(n_eval):
                         init_xs[ci, 0] = np.array(init_target_x)
                         init_ys[ci, 0] = np.array(init_target_y)
-                        for ki in range(1, K):
+                        if K > 1:
+                            init_xs[ci, 1] = np.array(liberal_x)
+                            init_ys[ci, 1] = np.array(liberal_y)
+                        for ki in range(2, K):
                             seed = hash((float(eval_xs[ci]), float(eval_ys[ci]), ki)) % (2**31)
                             key = jax.random.PRNGKey(seed)
                             rx, ry = self._random_init(key, n_turb)
