@@ -864,38 +864,8 @@ def main():
         print(f"    Regret:                       {regret:.4f} GWh")
         print(f"    Time:                         {elapsed:.1f}s ({elapsed/60:.1f} min)")
 
-        # --- Render animation ---
-        def eval_snapshot(xc, yc, xl, yl, nbx, nby):
-            """Evaluate all metrics for one snapshot (for animation panels)."""
-            al = compute_aep(jnp.array(xl), jnp.array(yl))
-            ac = compute_aep(jnp.array(xc), jnp.array(yc),
-                             jnp.array(nbx), jnp.array(nby))
-            alp = compute_aep(jnp.array(xl), jnp.array(yl),
-                              jnp.array(nbx), jnp.array(nby))
-            reg = ac - alp
-            obj_val = w_lib * al + w_con * ac + w_reg * reg
-            return {"obj": obj_val, "regret": reg,
-                    "aep_lib": al, "aep_con": ac}
-
-        if not args.no_animate:
-            mp4_path = output_dir / f"flat_{tag.replace(' ', '_')}.mp4"
-            print(f"\n  Rendering animation ({len(snapshots)} frames)...")
-            render_flat_animation(
-                snapshots, history, unpack_fn, boundary_np,
-                wd, ws, weights, mp4_path,
-                regret_only=args.regret_only,
-                liberal_x_fixed=liberal_x if args.regret_only else None,
-                liberal_y_fixed=liberal_y if args.regret_only else None,
-                eval_fn=eval_snapshot,
-            )
-
-        # Save snapshots for re-rendering without re-running
-        npz_path = output_dir / f"snapshots_{tag.replace(' ', '_')}.npz"
-        np.savez(str(npz_path),
-                 **{f"snap_{i}": s for i, s in enumerate(snapshots)})
-        print(f"  Snapshots saved: {npz_path}")
-
-        return {
+        # --- Save results and snapshots FIRST (before animation) ---
+        result_dict = {
             "w_lib": w_lib, "w_con": w_con, "w_reg": w_reg,
             "aep_liberal": aep_lib,
             "aep_conservative": aep_con,
@@ -910,6 +880,43 @@ def main():
             "nb_x": [float(v) for v in nb_x],
             "nb_y": [float(v) for v in nb_y],
         }
+
+        # Save snapshots for re-rendering without re-running
+        npz_path = output_dir / f"snapshots_{tag.replace(' ', '_')}.npz"
+        np.savez(str(npz_path),
+                 **{f"snap_{i}": s for i, s in enumerate(snapshots)})
+        print(f"  Snapshots saved: {npz_path}")
+
+        # --- Render animation (non-fatal if ffmpeg missing) ---
+        if not args.no_animate:
+            def eval_snapshot(xc, yc, xl, yl, nbx, nby):
+                """Evaluate all metrics for one snapshot."""
+                al = compute_aep(jnp.array(xl), jnp.array(yl))
+                ac = compute_aep(jnp.array(xc), jnp.array(yc),
+                                 jnp.array(nbx), jnp.array(nby))
+                alp = compute_aep(jnp.array(xl), jnp.array(yl),
+                                  jnp.array(nbx), jnp.array(nby))
+                reg = ac - alp
+                obj_val = w_lib * al + w_con * ac + w_reg * reg
+                return {"obj": obj_val, "regret": reg,
+                        "aep_lib": al, "aep_con": ac}
+
+            mp4_path = output_dir / f"flat_{tag.replace(' ', '_')}.mp4"
+            try:
+                print(f"\n  Rendering animation ({len(snapshots)} frames)...")
+                render_flat_animation(
+                    snapshots, history, unpack_fn, boundary_np,
+                    wd, ws, weights, mp4_path,
+                    regret_only=args.regret_only,
+                    liberal_x_fixed=liberal_x if args.regret_only else None,
+                    liberal_y_fixed=liberal_y if args.regret_only else None,
+                    eval_fn=eval_snapshot,
+                )
+            except Exception as e:
+                print(f"  Animation failed (non-fatal): {e}")
+                print(f"  Snapshots saved — re-render locally with ffmpeg.")
+
+        return result_dict
 
     # --- Run ---
     if args.sweep:
