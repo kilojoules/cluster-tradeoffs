@@ -36,6 +36,7 @@ echo ""
 echo "=== Flat multi-objective: weight sweep ==="
 $PIXI python scripts/run_dei_flat_multiobjective.py \
     --sweep \
+    --no-animate \
     --flat-max-iter 2000 \
     --flat-lr 20.0 \
     --n-neighbors 30 \
