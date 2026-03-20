@@ -852,15 +852,68 @@ def main():
                 return float(jnp.sum(p * weights[:, None]) * 8760 / 1e6)
             return float(jnp.sum(p) * 8760 / 1e6 / p.shape[0])
 
-        aep_lib = compute_aep(x_l, y_l)
-        aep_con = compute_aep(x_c, y_c, nb_x, nb_y)
-        aep_lib_present = compute_aep(x_l, y_l, nb_x, nb_y)
-        regret = aep_con - aep_lib_present
+        # Evaluate all four combinations (2 layouts × 2 scenarios)
+        aep_lib_of_l = compute_aep(x_l, y_l)                      # liberal layout, no neighbors
+        aep_lib_of_c = compute_aep(x_c, y_c)                      # conservative layout, no neighbors
+        aep_con_of_l = compute_aep(x_l, y_l, nb_x, nb_y)          # liberal layout, with neighbors
+        aep_con_of_c = compute_aep(x_c, y_c, nb_x, nb_y)          # conservative layout, with neighbors
 
-        print(f"\n  Results:")
-        print(f"    Liberal AEP (no neighbors):   {aep_lib:.2f} GWh")
-        print(f"    Liberal AEP (w/ neighbors):   {aep_lib_present:.2f} GWh")
-        print(f"    Conservative AEP (w/ nb):     {aep_con:.2f} GWh")
+        # Dominance check: pool and assign roles correctly
+        swapped = False
+        if aep_lib_of_c > aep_lib_of_l:
+            # x_c is actually better at liberal AEP — it dominates x_l
+            # Swap: use x_c as the liberal layout
+            print(f"\n  DOMINANCE: x_c has higher liberal AEP ({aep_lib_of_c:.2f} > {aep_lib_of_l:.2f})")
+            if aep_con_of_c >= aep_con_of_l:
+                # x_c dominates x_l on BOTH objectives — regret = 0
+                print(f"  x_c dominates x_l on both objectives. Regret = 0.")
+                aep_lib = aep_lib_of_c
+                aep_con = aep_con_of_c
+                aep_lib_present = aep_con_of_c  # same layout
+                regret = 0.0
+                swapped = True
+            else:
+                # x_c is better liberal, x_l is better conservative — swap roles
+                print(f"  Swapping roles: x_c→liberal, x_l→conservative")
+                aep_lib = aep_lib_of_c
+                aep_con = aep_con_of_l
+                aep_lib_present = aep_con_of_c
+                regret = aep_con - aep_lib_present
+                swapped = True
+
+        if aep_con_of_l > aep_con_of_c and not swapped:
+            # x_l is actually better at conservative AEP — it dominates x_c
+            print(f"\n  DOMINANCE: x_l has higher conservative AEP ({aep_con_of_l:.2f} > {aep_con_of_c:.2f})")
+            if aep_lib_of_l >= aep_lib_of_c:
+                # x_l dominates x_c on both — regret = 0
+                print(f"  x_l dominates x_c on both objectives. Regret = 0.")
+                aep_lib = aep_lib_of_l
+                aep_con = aep_con_of_l
+                aep_lib_present = aep_con_of_l
+                regret = 0.0
+            else:
+                # x_l is better conservative, x_c is better liberal — swap roles
+                print(f"  Swapping roles: x_l→conservative, x_c→liberal")
+                aep_lib = aep_lib_of_c
+                aep_con = aep_con_of_l
+                aep_lib_present = aep_con_of_c
+                regret = aep_con - aep_lib_present
+
+        if not swapped and aep_con_of_l <= aep_con_of_c:
+            # Normal case: x_l is liberal, x_c is conservative (as intended)
+            aep_lib = aep_lib_of_l
+            aep_con = aep_con_of_c
+            aep_lib_present = aep_con_of_l
+            regret = aep_con - aep_lib_present
+
+        print(f"\n  Cross-evaluation matrix:")
+        print(f"    {'':>25s} {'No neighbors':>14s} {'With neighbors':>14s}")
+        print(f"    {'Conservative layout':>25s} {aep_lib_of_c:>14.2f} {aep_con_of_c:>14.2f}")
+        print(f"    {'Liberal layout':>25s} {aep_lib_of_l:>14.2f} {aep_con_of_l:>14.2f}")
+        print(f"\n  Results (after dominance check):")
+        print(f"    Best liberal AEP (no nb):    {aep_lib:.2f} GWh")
+        print(f"    Best con AEP (w/ nb):        {aep_con:.2f} GWh")
+        print(f"    Liberal layout w/ nb:         {aep_lib_present:.2f} GWh")
         print(f"    Regret:                       {regret:.4f} GWh")
         print(f"    Time:                         {elapsed:.1f}s ({elapsed/60:.1f} min)")
 
@@ -871,6 +924,10 @@ def main():
             "aep_conservative": aep_con,
             "aep_liberal_present": aep_lib_present,
             "regret": regret,
+            "cross_eval": {
+                "lib_of_l": aep_lib_of_l, "lib_of_c": aep_lib_of_c,
+                "con_of_l": aep_con_of_l, "con_of_c": aep_con_of_c,
+            },
             "elapsed_s": elapsed,
             "history": history,
             "x_c": [float(v) for v in x_c],
