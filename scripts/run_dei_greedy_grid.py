@@ -490,9 +490,6 @@ def main():
                         help="Wind direction for unidirectional rose (degrees)")
     parser.add_argument("--wind-speed", type=float, default=9.0,
                         help="Wind speed for synthetic roses (m/s)")
-    parser.add_argument("--deficit", type=str, default="bastankhah",
-                        choices=["bastankhah", "turbopark"],
-                        help="Wake deficit model")
     parser.add_argument("--ti", type=float, default=0.06,
                         help="Ambient turbulence intensity (for TurboGaussian)")
     parser.add_argument("--output-dir", type=str, default=str(OUTPUT_DIR))
