@@ -31,6 +31,7 @@ from matplotlib.path import Path as MplPath
 
 from pixwake import Curve, Turbine, WakeSimulation
 from pixwake.deficit import BastankhahGaussianDeficit
+from pixwake.deficit.gaussian import TurboGaussianDeficit
 from pixwake.optim.sgd import SGDSettings
 from pixwake.optim.adversarial import GreedyGridSearch, GreedyGridSettings
 
@@ -193,16 +194,18 @@ def build_neighbor_grid(boundary_np, grid_spacing, pad):
 def draw_wind_rose(ax, wd_bins, ws_bins, weights):
     """Draw a wind rose on a polar axes."""
     n_bins = len(wd_bins)
-    theta = np.deg2rad(90 - np.array(wd_bins))  # met convention -> math convention
-    width = np.deg2rad(360 / n_bins) * 0.9
+    theta = np.deg2rad(np.array(wd_bins))
+    # Cap width at 30 deg so single-bin doesn't fill the circle
+    bin_width = min(360 / n_bins, 30.0)
+    width = np.deg2rad(bin_width) * 0.9
 
     # Color by wind speed
     ws_np = np.array(ws_bins)
-    norm = plt.Normalize(vmin=ws_np.min(), vmax=ws_np.max())
+    norm = plt.Normalize(vmin=max(ws_np.min() - 1, 0), vmax=ws_np.max() + 1)
     colors = plt.cm.YlOrRd(norm(ws_np))
 
-    bars = ax.bar(theta, np.array(weights), width=width, bottom=0.0,
-                  color=colors, edgecolor="gray", linewidth=0.4, alpha=0.85)
+    ax.bar(theta, np.array(weights), width=width, bottom=0.0,
+           color=colors, edgecolor="gray", linewidth=0.4, alpha=0.85)
 
     ax.set_theta_zero_location("N")
     ax.set_theta_direction(-1)  # clockwise
@@ -476,6 +479,9 @@ def main():
                         help="Number of random inner starts per candidate (best-of-K)")
     parser.add_argument("--eval-parallel", action="store_true",
                         help="Run inner SGDs in parallel via vmap (use on GPU)")
+    parser.add_argument("--deficit", type=str, default="bastankhah",
+                        choices=["bastankhah", "turbopark"],
+                        help="Wake deficit model")
     parser.add_argument("--wind-rose", type=str, default="dei",
                         choices=["dei", "unidirectional", "uniform"],
                         help="Wind rose type: dei (real data), unidirectional (270 deg), "
@@ -505,6 +511,7 @@ def main():
     print(f"  Inner SGD: lr={args.inner_lr}, max_iter={args.inner_max_iter}")
     print(f"  Inner starts: {args.n_inner_starts} (best-of-K)")
     print(f"  Eval parallel: {args.eval_parallel}")
+    print(f"  Deficit model: {args.deficit}")
     print(f"  Wind rose: {args.wind_rose}")
     print("=" * 70)
 
@@ -521,7 +528,11 @@ def main():
         wd = jnp.linspace(0, 360 - 360 / n_bins, n_bins)
         ws = jnp.full(n_bins, args.wind_speed)
         weights = jnp.full(n_bins, 1.0 / n_bins)
-    sim = WakeSimulation(turbine, BastankhahGaussianDeficit(k=0.04))
+    if args.deficit == "bastankhah":
+        deficit = BastankhahGaussianDeficit(k=0.04)
+    elif args.deficit == "turbopark":
+        deficit = TurboGaussianDeficit(A=0.04)
+    sim = WakeSimulation(turbine, deficit)
 
     print(f"\nBoundary: {boundary_np.shape[0]} vertices (CCW)")
     dominant_idx = int(jnp.argmax(weights))

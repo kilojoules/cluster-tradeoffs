@@ -151,10 +151,12 @@ def build_neighbor_grid(boundary_np, grid_spacing, pad):
 
 def draw_wind_rose(ax, wd_bins, ws_bins, weights):
     n_bins = len(wd_bins)
-    theta = np.deg2rad(90 - np.array(wd_bins))
-    width = np.deg2rad(360 / n_bins) * 0.9
+    theta = np.deg2rad(np.array(wd_bins))
+    # Cap width at 30 deg so single-bin doesn't fill the circle
+    bin_width = min(360 / n_bins, 30.0)
+    width = np.deg2rad(bin_width) * 0.9
     ws_np = np.array(ws_bins)
-    norm = plt.Normalize(vmin=ws_np.min(), vmax=ws_np.max())
+    norm = plt.Normalize(vmin=max(ws_np.min() - 1, 0), vmax=ws_np.max() + 1)
     colors = plt.cm.YlOrRd(norm(ws_np))
     ax.bar(theta, np.array(weights), width=width, bottom=0.0,
            color=colors, edgecolor="gray", linewidth=0.4, alpha=0.85)
@@ -481,6 +483,12 @@ def main():
     )
     parser.add_argument("--results-dir", type=str,
                         default="analysis/dei_greedy_grid_30")
+    parser.add_argument("--grid-pad-D", type=float, default=GRID_PAD_D,
+                        help="Grid padding in rotor diameters (must match the run)")
+    parser.add_argument("--wind-rose", type=str, default="dei",
+                        choices=["dei", "unidirectional", "uniform"])
+    parser.add_argument("--wind-dir", type=float, default=270.0)
+    parser.add_argument("--wind-speed", type=float, default=9.0)
     args = parser.parse_args()
 
     results_dir = Path(args.results_dir)
@@ -494,11 +502,21 @@ def main():
 
     # Rebuild infrastructure
     turbine = create_dei_turbine()
-    wd, ws, weights = load_wind_data()
+    if args.wind_rose == "dei":
+        wd, ws, weights = load_wind_data()
+    elif args.wind_rose == "unidirectional":
+        wd = jnp.array([args.wind_dir])
+        ws = jnp.array([args.wind_speed])
+        weights = jnp.array([1.0])
+    elif args.wind_rose == "uniform":
+        n_bins = 24
+        wd = jnp.linspace(0, 360 - 360 / n_bins, n_bins)
+        ws = jnp.full(n_bins, args.wind_speed)
+        weights = jnp.full(n_bins, 1.0 / n_bins)
     sim = WakeSimulation(turbine, BastankhahGaussianDeficit(k=0.04))
 
     grid, gx_1d, gy_1d = build_neighbor_grid(
-        boundary_np, GRID_SPACING_D * D, GRID_PAD_D * D)
+        boundary_np, GRID_SPACING_D * D, args.grid_pad_D * D)
 
     init_x, init_y = generate_target_grid(boundary_np, N_TARGET, spacing=4 * D)
 
