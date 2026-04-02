@@ -6,7 +6,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=7
 #SBATCH --mem=60G
-#SBATCH --time=02:00:00
+#SBATCH --time=16:00:00
 #SBATCH --output=logs/sweep_bastankhah_unidir_%j.out
 #SBATCH --error=logs/sweep_bastankhah_unidir_%j.err
 
@@ -21,8 +21,9 @@ mkdir -p logs
 PIXI="pixi run -e rocm --manifest-path pyproject.toml"
 
 $PIXI python scripts/run_dei_greedy_grid.py \
+    --n-place 200 \
     --n-inner-starts 5 --inner-max-iter 5000 --screen-top-k 10 \
     --eval-parallel --grid-pad-D 50 \
     --deficit bastankhah \
     --wind-rose unidirectional --wind-dir 270 --wind-speed 9.0 \
-    --output-dir analysis/sweep_pad50D/bastankhah_unidir
+    --output-dir analysis/sweep_pad50D_200t/bastankhah_unidir
