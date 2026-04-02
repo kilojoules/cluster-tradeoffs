@@ -6,7 +6,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=7
 #SBATCH --mem=60G
-#SBATCH --time=02:00:00
+#SBATCH --time=16:00:00
 #SBATCH --output=logs/sweep_turbopark_uniform_%j.out
 #SBATCH --error=logs/sweep_turbopark_uniform_%j.err
 
@@ -21,8 +21,9 @@ mkdir -p logs
 PIXI="pixi run -e rocm --manifest-path pyproject.toml"
 
 $PIXI python scripts/run_dei_greedy_grid.py \
+    --n-place 200 \
     --n-inner-starts 5 --inner-max-iter 5000 --screen-top-k 10 \
     --eval-parallel --grid-pad-D 50 \
     --deficit turbopark --ti 0.06 \
     --wind-rose uniform --wind-speed 9.0 \
-    --output-dir analysis/sweep_pad50D/turbopark_uniform
+    --output-dir analysis/sweep_pad50D_200t/turbopark_uniform
