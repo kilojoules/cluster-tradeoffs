@@ -483,13 +483,30 @@ def main():
                         choices=["bastankhah", "turbopark"],
                         help="Wake deficit model")
     parser.add_argument("--wind-rose", type=str, default="dei",
-                        choices=["dei", "unidirectional", "uniform"],
+                        choices=["dei", "unidirectional", "uniform", "elliptical", "mixture"],
                         help="Wind rose type: dei (real data), unidirectional (270 deg), "
-                             "uniform (equal weight all directions)")
+                             "uniform (equal weight all directions), "
+                             "elliptical (edrose parametric), mixture (edrose bimodal)")
     parser.add_argument("--wind-dir", type=float, default=270.0,
-                        help="Wind direction for unidirectional rose (degrees)")
+                        help="Prevailing wind direction (degrees)")
     parser.add_argument("--wind-speed", type=float, default=9.0,
                         help="Wind speed for synthetic roses (m/s)")
+    parser.add_argument("--n-bins", type=int, default=24,
+                        help="Number of directional bins for synthetic roses")
+    # edrose elliptical parameters
+    parser.add_argument("--ed-a", type=float, default=0.8,
+                        help="edrose shape parameter (>0; 1/sqrt(pi)~0.564 = uniform)")
+    parser.add_argument("--ed-f", type=float, default=1.0,
+                        help="edrose folding parameter [0=bidirectional, 1=unidirectional]")
+    # edrose mixture parameters
+    parser.add_argument("--ed-a2", type=float, default=0.8,
+                        help="edrose shape parameter for second component")
+    parser.add_argument("--ed-f2", type=float, default=1.0,
+                        help="edrose folding parameter for second component")
+    parser.add_argument("--wind-dir2", type=float, default=90.0,
+                        help="Prevailing direction for second mixture component (degrees)")
+    parser.add_argument("--mixture-weight", type=float, default=0.7,
+                        help="Weight of first component in mixture [0-1]")
     parser.add_argument("--ti", type=float, default=0.06,
                         help="Ambient turbulence intensity (for TurboGaussian)")
     parser.add_argument("--output-dir", type=str, default=str(OUTPUT_DIR))
@@ -526,10 +543,34 @@ def main():
         ws = jnp.array([args.wind_speed])
         weights = jnp.array([1.0])
     elif args.wind_rose == "uniform":
-        n_bins = 24
+        n_bins = args.n_bins
         wd = jnp.linspace(0, 360 - 360 / n_bins, n_bins)
         ws = jnp.full(n_bins, args.wind_speed)
         weights = jnp.full(n_bins, 1.0 / n_bins)
+    elif args.wind_rose == "elliptical":
+        from edrose import EllipticalWindRose
+        wr = EllipticalWindRose(a=args.ed_a, f=args.ed_f,
+                                theta_prev=args.wind_dir, n_sectors=args.n_bins)
+        wd = jnp.array(wr.wind_directions)
+        weights = jnp.array(wr.sector_frequencies)
+        ws = jnp.full_like(wd, args.wind_speed)
+        print(f"  edrose elliptical: a={args.ed_a}, f={args.ed_f}, "
+              f"theta_prev={args.wind_dir}, n_sectors={args.n_bins}")
+    elif args.wind_rose == "mixture":
+        from edrose import EllipticalWindRose, MixtureEllipticalWindRose
+        c1 = EllipticalWindRose(a=args.ed_a, f=args.ed_f,
+                                theta_prev=args.wind_dir, n_sectors=args.n_bins)
+        c2 = EllipticalWindRose(a=args.ed_a2, f=args.ed_f2,
+                                theta_prev=args.wind_dir2, n_sectors=args.n_bins)
+        mix = MixtureEllipticalWindRose([c1, c2],
+                                        weights=[args.mixture_weight, 1 - args.mixture_weight])
+        wd = jnp.array(mix.wind_directions)
+        weights = jnp.array(mix.sector_frequencies)
+        ws = jnp.full_like(wd, args.wind_speed)
+        print(f"  edrose mixture: c1(a={args.ed_a}, f={args.ed_f}, θ={args.wind_dir}) "
+              f"w={args.mixture_weight:.2f} + "
+              f"c2(a={args.ed_a2}, f={args.ed_f2}, θ={args.wind_dir2}) "
+              f"w={1-args.mixture_weight:.2f}, n_sectors={args.n_bins}")
     if args.deficit == "bastankhah":
         deficit = BastankhahGaussianDeficit(k=0.04)
     elif args.deficit == "turbopark":
@@ -604,6 +645,25 @@ def main():
         "neighbor_x": [float(x) for x in result.neighbor_x],
         "neighbor_y": [float(y) for y in result.neighbor_y],
         "elapsed_s": elapsed,
+        "config": {
+            "wind_rose": args.wind_rose,
+            "wind_dir": args.wind_dir,
+            "wind_speed": args.wind_speed,
+            "n_bins": args.n_bins,
+            "deficit": args.deficit,
+            "ti": args.ti,
+            "n_inner_starts": args.n_inner_starts,
+            "inner_max_iter": args.inner_max_iter,
+            "inner_lr": args.inner_lr,
+            "grid_pad_D": args.grid_pad_D,
+            "grid_spacing_D": args.grid_spacing_D,
+            "ed_a": args.ed_a if args.wind_rose in ("elliptical", "mixture") else None,
+            "ed_f": args.ed_f if args.wind_rose in ("elliptical", "mixture") else None,
+            "ed_a2": args.ed_a2 if args.wind_rose == "mixture" else None,
+            "ed_f2": args.ed_f2 if args.wind_rose == "mixture" else None,
+            "wind_dir2": args.wind_dir2 if args.wind_rose == "mixture" else None,
+            "mixture_weight": args.mixture_weight if args.wind_rose == "mixture" else None,
+        },
     }
     json_path = output_dir / "results.json"
     with open(json_path, "w") as f:

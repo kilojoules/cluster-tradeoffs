@@ -486,9 +486,16 @@ def main():
     parser.add_argument("--grid-pad-D", type=float, default=GRID_PAD_D,
                         help="Grid padding in rotor diameters (must match the run)")
     parser.add_argument("--wind-rose", type=str, default="dei",
-                        choices=["dei", "unidirectional", "uniform"])
+                        choices=["dei", "unidirectional", "uniform", "elliptical", "mixture"])
     parser.add_argument("--wind-dir", type=float, default=270.0)
     parser.add_argument("--wind-speed", type=float, default=9.0)
+    parser.add_argument("--n-bins", type=int, default=24)
+    parser.add_argument("--ed-a", type=float, default=0.8)
+    parser.add_argument("--ed-f", type=float, default=1.0)
+    parser.add_argument("--ed-a2", type=float, default=0.8)
+    parser.add_argument("--ed-f2", type=float, default=1.0)
+    parser.add_argument("--wind-dir2", type=float, default=90.0)
+    parser.add_argument("--mixture-weight", type=float, default=0.7)
     args = parser.parse_args()
 
     results_dir = Path(args.results_dir)
@@ -509,10 +516,28 @@ def main():
         ws = jnp.array([args.wind_speed])
         weights = jnp.array([1.0])
     elif args.wind_rose == "uniform":
-        n_bins = 24
+        n_bins = args.n_bins
         wd = jnp.linspace(0, 360 - 360 / n_bins, n_bins)
         ws = jnp.full(n_bins, args.wind_speed)
         weights = jnp.full(n_bins, 1.0 / n_bins)
+    elif args.wind_rose == "elliptical":
+        from edrose import EllipticalWindRose
+        wr = EllipticalWindRose(a=args.ed_a, f=args.ed_f,
+                                theta_prev=args.wind_dir, n_sectors=args.n_bins)
+        wd = jnp.array(wr.wind_directions)
+        weights = jnp.array(wr.sector_frequencies)
+        ws = jnp.full_like(wd, args.wind_speed)
+    elif args.wind_rose == "mixture":
+        from edrose import EllipticalWindRose, MixtureEllipticalWindRose
+        c1 = EllipticalWindRose(a=args.ed_a, f=args.ed_f,
+                                theta_prev=args.wind_dir, n_sectors=args.n_bins)
+        c2 = EllipticalWindRose(a=args.ed_a2, f=args.ed_f2,
+                                theta_prev=args.wind_dir2, n_sectors=args.n_bins)
+        mix = MixtureEllipticalWindRose([c1, c2],
+                                        weights=[args.mixture_weight, 1 - args.mixture_weight])
+        wd = jnp.array(mix.wind_directions)
+        weights = jnp.array(mix.sector_frequencies)
+        ws = jnp.full_like(wd, args.wind_speed)
     sim = WakeSimulation(turbine, BastankhahGaussianDeficit(k=0.04))
 
     grid, gx_1d, gy_1d = build_neighbor_grid(
