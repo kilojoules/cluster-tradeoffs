@@ -15,7 +15,11 @@ fi
 # Use pyproject.toml (not pixi.toml) — it has the rocm environment
 pixi install -e rocm --manifest-path pyproject.toml
 
-# 3. Quick smoke test (on login node, CPU only — just checks imports)
+# 3. Install edrose (elliptical wind rose parameterization)
+pixi run -e rocm --manifest-path pyproject.toml python -m ensurepip 2>/dev/null || true
+pixi run -e rocm --manifest-path pyproject.toml python -m pip install git+https://github.com/kilojoules/edrose.git 2>/dev/null || true
+
+# 4. Quick smoke test (on login node, CPU only — just checks imports)
 pixi run -e rocm --manifest-path pyproject.toml python -c "
 import jax
 jax.config.update('jax_enable_x64', True)
