@@ -125,8 +125,7 @@ def generate_target_grid(boundary_np, n_target, spacing):
     return jnp.array(selected[:, 0]), jnp.array(selected[:, 1])
 
 
-def build_neighbor_grid(boundary_np, grid_spacing, pad):
-    buffer = 2 * D
+def build_neighbor_grid(boundary_np, grid_spacing, pad, buffer=2 * D):
     x_lo = boundary_np[:, 0].min() - pad
     x_hi = boundary_np[:, 0].max() + pad
     y_lo = boundary_np[:, 1].min() - pad
@@ -485,6 +484,8 @@ def main():
                         default="analysis/dei_greedy_grid_30")
     parser.add_argument("--grid-pad-D", type=float, default=GRID_PAD_D,
                         help="Grid padding in rotor diameters (must match the run)")
+    parser.add_argument("--buffer-D", type=float, default=2.0,
+                        help="Buffer distance in rotor diameters (must match the run)")
     parser.add_argument("--wind-rose", type=str, default="dei",
                         choices=["dei", "unidirectional", "uniform", "elliptical", "mixture"])
     parser.add_argument("--wind-dir", type=float, default=270.0)
@@ -541,7 +542,7 @@ def main():
     sim = WakeSimulation(turbine, BastankhahGaussianDeficit(k=0.04))
 
     grid, gx_1d, gy_1d = build_neighbor_grid(
-        boundary_np, GRID_SPACING_D * D, args.grid_pad_D * D)
+        boundary_np, GRID_SPACING_D * D, args.grid_pad_D * D, args.buffer_D * D)
 
     init_x, init_y = generate_target_grid(boundary_np, N_TARGET, spacing=4 * D)
 

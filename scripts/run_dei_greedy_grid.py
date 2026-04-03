@@ -156,9 +156,8 @@ def generate_target_grid(boundary_np, n_target, spacing):
 # =============================================================================
 # Candidate neighbour grid (outside polygon + buffer)
 # =============================================================================
-def build_neighbor_grid(boundary_np, grid_spacing, pad):
+def build_neighbor_grid(boundary_np, grid_spacing, pad, buffer=2 * D):
     """Build a grid of candidate positions OUTSIDE the target polygon + buffer."""
-    buffer = 2 * D  # minimum distance from boundary
     x_lo = boundary_np[:, 0].min() - pad
     x_hi = boundary_np[:, 0].max() + pad
     y_lo = boundary_np[:, 1].min() - pad
@@ -473,6 +472,8 @@ def main():
     parser.add_argument("--inner-max-iter", type=int, default=INNER_MAX_ITER)
     parser.add_argument("--grid-spacing-D", type=float, default=GRID_SPACING_D)
     parser.add_argument("--grid-pad-D", type=float, default=GRID_PAD_D)
+    parser.add_argument("--buffer-D", type=float, default=2.0,
+                        help="Minimum buffer distance from target boundary (in D)")
     parser.add_argument("--screen-top-k", type=int, default=10)
     parser.add_argument("--screen-chunk-size", type=int, default=100)
     parser.add_argument("--n-inner-starts", type=int, default=1,
@@ -526,6 +527,7 @@ def main():
     print(f"  {n_target} target turbines, placing {n_place} external turbines")
     print(f"  Grid spacing: {args.grid_spacing_D:.1f}D = {grid_spacing:.0f} m")
     print(f"  Grid pad: {args.grid_pad_D:.0f}D = {grid_pad:.0f} m")
+    print(f"  Buffer: {args.buffer_D:.0f}D = {args.buffer_D * D:.0f} m")
     print(f"  Min spacing: {args.min_spacing_D:.1f}D = {min_spacing:.0f} m")
     print(f"  Inner SGD: lr={args.inner_lr}, max_iter={args.inner_max_iter}")
     print(f"  Inner starts: {args.n_inner_starts} (best-of-K)")
@@ -587,7 +589,8 @@ def main():
     print(f"Target: {n_target} turbines on grid inside polygon")
 
     # Neighbour grid
-    grid, gx_1d, gy_1d = build_neighbor_grid(boundary_np, grid_spacing, grid_pad)
+    buffer = args.buffer_D * D
+    grid, gx_1d, gy_1d = build_neighbor_grid(boundary_np, grid_spacing, grid_pad, buffer)
     grid_jax = jnp.array(grid)
 
     # SGD settings — constant LR for all iterations
@@ -656,6 +659,7 @@ def main():
             "inner_max_iter": args.inner_max_iter,
             "inner_lr": args.inner_lr,
             "grid_pad_D": args.grid_pad_D,
+            "buffer_D": args.buffer_D,
             "grid_spacing_D": args.grid_spacing_D,
             "ed_a": args.ed_a if args.wind_rose in ("elliptical", "mixture") else None,
             "ed_f": args.ed_f if args.wind_rose in ("elliptical", "mixture") else None,
