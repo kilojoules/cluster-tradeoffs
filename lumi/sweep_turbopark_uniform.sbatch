@@ -6,7 +6,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=7
 #SBATCH --mem=60G
-#SBATCH --time=16:00:00
+#SBATCH --time=2-00:00:00
 #SBATCH --output=logs/sweep_turbopark_uniform_%j.out
 #SBATCH --error=logs/sweep_turbopark_uniform_%j.err
 

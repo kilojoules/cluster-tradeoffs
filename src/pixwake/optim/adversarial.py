@@ -1928,6 +1928,7 @@ class GreedyGridSearch:
         grid: jnp.ndarray,
         n_neighbors: int,
         settings: GreedyGridSettings | None = None,
+        checkpoint_dir: str | None = None,
     ) -> GreedyGridResult:
         """Run greedy grid search to place neighbors sequentially.
 
@@ -1942,6 +1943,9 @@ class GreedyGridSearch:
             Number of neighbor turbines to place.
         settings : GreedyGridSettings | None
             Search settings. Uses defaults if None.
+        checkpoint_dir : str | None
+            If provided, save checkpoint after each greedy step and resume
+            from the latest checkpoint if one exists.
 
         Returns
         -------
@@ -1978,8 +1982,30 @@ class GreedyGridSearch:
         regret_history = []
         regret_maps = []
 
+        # Resume from checkpoint if available
+        start_step = 0
+        if checkpoint_dir is not None:
+            import pathlib
+            ckpt_path = pathlib.Path(checkpoint_dir) / "checkpoint.npz"
+            if ckpt_path.exists():
+                ckpt = np.load(str(ckpt_path), allow_pickle=True)
+                placed_x = jnp.array(ckpt["placed_x"])
+                placed_y = jnp.array(ckpt["placed_y"])
+                placement_order = ckpt["placement_order"].tolist()
+                regret_history = ckpt["regret_history"].tolist()
+                start_step = len(placement_order)
+                remaining -= set(placement_order)
+                # Reload regret maps
+                regret_maps_path = pathlib.Path(checkpoint_dir) / "regret_maps_partial.npz"
+                if regret_maps_path.exists():
+                    rm_data = np.load(str(regret_maps_path))
+                    regret_maps = [jnp.array(rm_data[f"step_{i}"]) for i in range(start_step)]
+                if settings.verbose:
+                    print(f"Resumed from checkpoint at step {start_step}/{n_neighbors} "
+                          f"(regret={regret_history[-1]:.4f} GWh)", flush=True)
+
         # Step 2: Greedy placement loop
-        for step in range(n_neighbors):
+        for step in range(start_step, n_neighbors):
             n_remaining = len(remaining)
             use_screening = settings.screen_top_k > 0 and n_remaining > settings.screen_top_k
 
@@ -2128,6 +2154,25 @@ class GreedyGridSearch:
             if settings.verbose:
                 print(f"  Placed turbine at ({grid[best_idx, 0]:.0f}, "
                       f"{grid[best_idx, 1]:.0f}), regret = {best_regret:.4f} GWh", flush=True)
+
+            # Save checkpoint after each step
+            if checkpoint_dir is not None:
+                import pathlib
+                ckpt_dir = pathlib.Path(checkpoint_dir)
+                ckpt_dir.mkdir(parents=True, exist_ok=True)
+                np.savez(
+                    str(ckpt_dir / "checkpoint.npz"),
+                    placed_x=np.array(placed_x),
+                    placed_y=np.array(placed_y),
+                    placement_order=np.array(placement_order),
+                    regret_history=np.array(regret_history),
+                )
+                np.savez(
+                    str(ckpt_dir / "regret_maps_partial.npz"),
+                    **{f"step_{i}": np.array(rm) for i, rm in enumerate(regret_maps)},
+                )
+                if settings.verbose:
+                    print(f"  Checkpoint saved (step {step + 1}/{n_neighbors})", flush=True)
 
         # Step 3: Final evaluation with all placed neighbors
         def final_objective(x, y):
