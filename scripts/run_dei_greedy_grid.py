@@ -583,6 +583,7 @@ def main():
         grid=grid_jax,
         n_neighbors=n_place,
         settings=settings,
+        checkpoint_dir=str(output_dir),
     )
 
     elapsed = time.time() - t0
