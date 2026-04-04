@@ -36,11 +36,12 @@ We conclude that inter-farm buffer distance requirements should be wind-rose-dep
 
 \introduction
 
-Offshore wind energy is expanding rapidly into large-scale clusters, where multiple wind farms share the same marine area.
-In the North Sea alone, dozens of farms are planned within wake-interaction distance of each other \citep{Platis2018, Fischereit2022}.
-Wind farm wakes can persist for tens of kilometers \citep{Platis2018, Schneemann2020}, reducing downstream farm performance---a phenomenon sometimes called ``wind theft.''
+Offshore wind farms are designed in isolation, but operate in clusters.
+This mismatch costs energy: wakes from neighboring farms persist for tens of kilometers \citep{Platis2018, Schneemann2020}, yet each farm's layout is typically optimized without knowledge of what will be built nearby \citep{Quick2026omae}.
+A recent case study of the Danish Energy Island cluster found negligible design tradeoffs from this ignorance \citep{Quick2026omae}, suggesting that inter-farm coordination may be unnecessary.
+We show this conclusion is site-specific: it holds for the Danish Energy Island's moderately diffuse wind rose, but not for sites with concentrated, unidirectional wind climates---where the cost of designing in isolation can exceed 2\% of annual energy production.
 
-A critical challenge in cluster development is that farms are designed and permitted sequentially, often by different developers.
+In emerging North Sea clusters, farms are designed and permitted sequentially, often by different developers \citep{Fischereit2022}.
 A target farm's layout is typically optimized before the characteristics of neighboring farms are fully known \citep{Quick2026omae}.
 This creates a design problem under uncertainty: should the developer design the farm optimistically, assuming no neighbors (the \emph{liberal} scenario), or pessimistically, assuming neighbors will appear in the worst possible configuration (the \emph{conservative} scenario)?
 
@@ -165,7 +166,7 @@ The folding parameter $f$ is the dominant driver.
 Mean regret increases monotonically with $f$: from 49.6\,GWh at $f = 0.0$ (bidirectional) to 82.4\,GWh at $f = 1.0$ (unidirectional).
 The concentration parameter $a$ has a weaker, non-monotonic effect: moderate concentration ($a \approx 0.5$) minimizes regret when combined with bidirectionality, but increases regret at high folding.
 
-The Danish Energy Island wind rose, when fitted with the elliptical model, has approximately $a \approx 0.5$ and $f \appro 0.15$---firmly in the low-regret region.
+The Danish Energy Island wind rose, when fitted with the elliptical model, has approximately $a \approx 0.64$ and $f \approx 0.38$---firmly in the low-regret region.
 This explains why \citet{Quick2026omae} found negligible design tradeoffs: the DEI wind rose is moderately concentrated and nearly bidirectional, the combination that produces the smallest design regret.
 
 \begin{figure}
@@ -229,6 +230,21 @@ The bidirectional case ($a = 0.5$, $f = 0.0$) has the lowest peak regret (1.92\%
     \label{fig:cross_section}
 \end{figure}
 
+\subsection{Regret saturation with number of neighbors}
+
+Figure~\ref{fig:saturation} shows how regret grows as greedy adversarial neighbors are placed sequentially.
+For the Bastankhah unidirectional case, regret grows steeply for the first 30--50 neighbors, then plateaus near 270\,GWh after approximately 100 neighbors.
+This confirms that 30 greedy neighbors (used in the wind rose shape sweep) capture the majority of the achievable regret, while the 200-neighbor runs reveal the saturation behavior.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\textwidth]{figures/saturation_curves.png}
+    \caption{Regret vs.\ number of greedily placed neighbors for three configurations.
+    Regret saturates as the most impactful positions are occupied first.
+    The 30-neighbor mark (used in the wind rose sweep) captures the initial growth phase.}
+    \label{fig:saturation}
+\end{figure}
+
 \subsection{Wake model sensitivity}
 
 To assess robustness, we compare the Bastankhah Gaussian deficit ($k = 0.04$) with the TurbOPark model ($A = 0.04$, ambient TI $= 0.06$) for 30 greedy neighbors under unidirectional and uniform wind roses (Table~\ref{tab:wake_model}).
@@ -271,6 +287,31 @@ A unidirectional rose, by contrast, allows the liberal optimizer to specialize t
 Current inter-farm buffer distance standards, such as the NYSERDA-recommended 4\,nm (7.4\,km $\approx$ 31$D$), treat all sites equally.
 Our results show this is inefficient: sites with bidirectional wind roses need no buffer (regret is negligible at any distance), while sites with concentrated unidirectional roses may need 40$D$+ (9.6\,km+) buffers to reduce regret below 1\% of AEP.
 A wind-rose-dependent buffer policy would allocate marine space more efficiently.
+
+\subsubsection{Screening formula for regret exposure}
+
+A simple linear regression of regret percentage against the edrose parameters yields:
+\begin{equation}\label{eq:regression}
+    \text{regret}(\%) \approx 0.87 + 1.11 \cdot f + 0.44 \cdot a - 0.48 \cdot a \cdot f,
+\end{equation}
+with $R^2 = 0.45$.
+While the fit is modest due to nonlinear structure in the data, the dominance of the $f$ coefficient (1.11) over the $a$ coefficient (0.44) confirms that folding is the primary driver.
+An even simpler univariate model, $\text{regret}(\%) \approx 1.13 + 0.82 \cdot f$, achieves $R^2 = 0.43$, indicating that the folding parameter alone explains most of the systematic variation.
+
+These formulas provide a rapid screening tool: given a site's wind rose, developers can estimate their regret exposure in seconds using the edrose fitting tool of \citet{Hart2025}.
+
+\subsubsection{Decision rule for practitioners}
+
+Based on the regression analysis and the full $(a, f)$ sweep, we propose the following decision rule:
+\begin{enumerate}
+    \item \textbf{Low risk} ($f \leq 0.25$): Design in isolation.
+    Maximum observed regret is 2.0\% of AEP across all concentration levels.
+    Bidirectional wind climates produce inherently robust layouts.
+    \item \textbf{Moderate risk} ($0.25 < f < 0.75$): Compute a site-specific regret cross-section to identify vulnerable bearings.
+    Coordinate planning with neighbors in the high-regret directions.
+    \item \textbf{High risk} ($f \geq 0.75$, $a \geq 0.7$): Enforce inter-farm buffers of at least 30$D$ or adopt cluster-level coordinated design.
+    Minimum observed regret exceeds 1.2\% of AEP in this regime.
+\end{enumerate}
 
 \subsubsection{The regret cross-section as a planning tool}
 

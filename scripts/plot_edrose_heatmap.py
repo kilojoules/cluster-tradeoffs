@@ -53,6 +53,12 @@ ax.axhline(a_uniform, color="white", ls="--", lw=1, alpha=0.7)
 ax.text(0.95, a_uniform + 0.02, "$a = 1/\\sqrt{\\pi}$ (uniform)",
         ha="right", va="bottom", fontsize=8, color="white", style="italic")
 
+# DEI overlay (fitted: a=0.6365, f=0.3840)
+ax.plot(0.384, 0.637, "s", color="cyan", markersize=12, markeredgecolor="black",
+        markeredgewidth=1.5, zorder=10, label="DEI")
+ax.text(0.384 + 0.04, 0.637, "DEI", fontsize=9, fontweight="bold",
+        color="cyan", va="center")
+
 # Right: relative regret
 ax = axes[1]
 im2 = ax.imshow(regret_pct, origin="lower", aspect="auto",
@@ -73,6 +79,10 @@ ax.set_yticks(a_vals)
 ax.axhline(a_uniform, color="white", ls="--", lw=1, alpha=0.7)
 ax.text(0.95, a_uniform + 0.02, "$a = 1/\\sqrt{\\pi}$ (uniform)",
         ha="right", va="bottom", fontsize=8, color="white", style="italic")
+ax.plot(0.384, 0.637, "s", color="cyan", markersize=12, markeredgecolor="black",
+        markeredgewidth=1.5, zorder=10)
+ax.text(0.384 + 0.04, 0.637, "DEI", fontsize=9, fontweight="bold",
+        color="cyan", va="center")
 
 fig.suptitle("Wind Rose Shape Space: Design Regret from 30 Greedy Neighbors\n"
              "Bastankhah $k$=0.04, DEI polygon, 50 IEA-15MW turbines, "
