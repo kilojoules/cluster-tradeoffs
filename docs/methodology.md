@@ -31,7 +31,7 @@ Potential neighboring farms are represented as "blobs" - morphable shapes define
 We use the Bastankhah Gaussian deficit model with:
 
 - Turbulence intensity factor: k = 0.04
-- Superposition: Linear sum of deficits
+- Superposition: Root-sum-of-squares (SquaredSum) by default; LinearSum available via `--superposition linearsum`
 
 The Annual Energy Production (AEP) is computed as:
 

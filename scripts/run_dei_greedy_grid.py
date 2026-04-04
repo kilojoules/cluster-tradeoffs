@@ -510,6 +510,9 @@ def main():
                         help="Weight of first component in mixture [0-1]")
     parser.add_argument("--ti", type=float, default=0.06,
                         help="Ambient turbulence intensity (for TurboGaussian)")
+    parser.add_argument("--superposition", type=str, default="squaredsum",
+                        choices=["squaredsum", "linearsum"],
+                        help="Wake superposition model (squaredsum or linearsum)")
     parser.add_argument("--output-dir", type=str, default=str(OUTPUT_DIR))
     args = parser.parse_args()
 
@@ -573,11 +576,14 @@ def main():
               f"w={args.mixture_weight:.2f} + "
               f"c2(a={args.ed_a2}, f={args.ed_f2}, θ={args.wind_dir2}) "
               f"w={1-args.mixture_weight:.2f}, n_sectors={args.n_bins}")
+    from pixwake.superposition import LinearSum, SquaredSum
+    sup = LinearSum() if args.superposition == "linearsum" else SquaredSum()
     if args.deficit == "bastankhah":
-        deficit = BastankhahGaussianDeficit(k=0.04)
+        deficit = BastankhahGaussianDeficit(k=0.04, superposition=sup)
     elif args.deficit == "turbopark":
-        deficit = TurboGaussianDeficit(A=0.04)
+        deficit = TurboGaussianDeficit(A=0.04, superposition=sup)
     sim = WakeSimulation(turbine, deficit)
+    print(f"  Superposition: {type(sup).__name__}")
 
     print(f"\nBoundary: {boundary_np.shape[0]} vertices (CCW)")
     dominant_idx = int(jnp.argmax(weights))
@@ -654,6 +660,7 @@ def main():
             "wind_speed": args.wind_speed,
             "n_bins": args.n_bins,
             "deficit": args.deficit,
+            "superposition": args.superposition,
             "ti": args.ti,
             "n_inner_starts": args.n_inner_starts,
             "inner_max_iter": args.inner_max_iter,

@@ -219,9 +219,11 @@ def main():
     # Wake model
     parser.add_argument("--deficit", type=str, default="bastankhah",
                         choices=["bastankhah", "turbopark"])
+    parser.add_argument("--superposition", type=str, default="squaredsum",
+                        choices=["squaredsum", "linearsum"])
     parser.add_argument("--ti", type=float, default=0.06)
 
-    parser.add_argument("--output-dir", type=str, default="analysis/regret_cross_section")
+    parser.add_argument("--output-dir", type=str, default="analysis/cross_section_si")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -276,10 +278,13 @@ def main():
         weights = jnp.array(mix.sector_frequencies)
         ws = jnp.full_like(wd, args.wind_speed)
 
+    from pixwake.superposition import LinearSum, SquaredSum
+    sup = LinearSum() if args.superposition == "linearsum" else SquaredSum()
     if args.deficit == "bastankhah":
-        deficit = BastankhahGaussianDeficit(k=0.04)
+        deficit = BastankhahGaussianDeficit(k=0.04, superposition=sup)
     elif args.deficit == "turbopark":
-        deficit = TurboGaussianDeficit(A=0.04)
+        deficit = TurboGaussianDeficit(A=0.04, superposition=sup)
+    print(f"  Superposition: {type(sup).__name__}")
     sim = WakeSimulation(turbine, deficit)
     ti_amb = args.ti if args.deficit == "turbopark" else None
 
