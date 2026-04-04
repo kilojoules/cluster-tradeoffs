@@ -144,8 +144,8 @@ def build_neighbor_grid(boundary_np, grid_spacing, pad, buffer=2 * D):
     outside = ~exclusion_path.contains_points(candidates)
     grid = candidates[outside]
     print(f"Neighbor grid: {len(grid)} candidates outside exclusion zone "
-          f"(spacing={grid_spacing/D:.1f}D, pad={pad/D:.0f}D)")
-    return grid, gx, gy
+          f"(spacing={grid_spacing/D:.1f}D, pad={pad/D:.0f}D, buffer={buffer/D:.0f}D)")
+    return grid, gx, gy, expanded
 
 
 def draw_wind_rose(ax, wd_bins, ws_bins, weights):
@@ -232,7 +232,8 @@ def reconstruct_regret_maps(sim, grid, placement_order, liberal_x, liberal_y,
 
 def render_animation(regret_maps, results, grid, boundary_np, output_path,
                      wd_bins, ws_bins, weights, liberal_x, liberal_y,
-                     conservative_xs=None, conservative_ys=None):
+                     conservative_xs=None, conservative_ys=None,
+                     exclusion_hull=None, liberal_aep=None):
     """Render MP4 with per-frame color range."""
     n_steps = len(regret_maps)
     placement_order = results["placement_order"]
@@ -324,6 +325,14 @@ def render_animation(regret_maps, results, grid, boundary_np, output_path,
                           alpha=0.9, zorder=3)
         ax_map.add_patch(poly)
 
+        # Draw exclusion zone boundary
+        if exclusion_hull is not None:
+            excl_km = np.column_stack(to_km(exclusion_hull[:, 0], exclusion_hull[:, 1]))
+            excl_poly = MplPolygon(excl_km, closed=True, fill=False,
+                                   edgecolor="red", lw=1.5, ls="--",
+                                   alpha=0.7, zorder=4, label="Exclusion zone")
+            ax_map.add_patch(excl_poly)
+
         sc_lib = ax_map.scatter(*to_km(lib_x_np, lib_y_np),
                        facecolors="none", edgecolors="royalblue",
                        marker="^", s=40, linewidths=0.8,
@@ -365,9 +374,10 @@ def render_animation(regret_maps, results, grid, boundary_np, output_path,
         ax_map.legend(loc="lower left", fontsize=9, framealpha=0.9)
 
         regret_val = regret_history[step_idx]
+        regret_pct = 100 * regret_val / liberal_aep if liberal_aep else 0
         ax_map.set_title(
             f"Greedy Step {step_idx + 1}/{n_steps} — "
-            f"Regret = {regret_val:.3f} GWh",
+            f"Regret = {regret_pct:.2f}% of AEP ({regret_val:.1f} GWh)",
             fontsize=14, fontweight="bold",
         )
 
@@ -379,19 +389,21 @@ def render_animation(regret_maps, results, grid, boundary_np, output_path,
         # Wind rose
         draw_wind_rose(ax_rose, wd_np, ws_np, w_np)
 
-        # Regret vs step
+        # Regret vs step (as % of liberal AEP)
         steps = np.arange(1, step_idx + 2)
         regrets = regret_history[:step_idx + 1]
-        ax_bar.plot(steps, regrets, "o-", color="firebrick", ms=5, lw=2)
-        ax_bar.fill_between(steps, 0, regrets, color="firebrick", alpha=0.15)
+        regrets_pct = [100 * r / liberal_aep for r in regrets] if liberal_aep else regrets
+        max_pct = max(100 * r / liberal_aep for r in regret_history) if liberal_aep else max(regret_history)
+        ax_bar.plot(steps, regrets_pct, "o-", color="firebrick", ms=5, lw=2)
+        ax_bar.fill_between(steps, 0, regrets_pct, color="firebrick", alpha=0.15)
         ax_bar.set_xlabel("Neighbors Placed", fontsize=12)
-        ax_bar.set_ylabel("Regret (GWh)", fontsize=12)
+        ax_bar.set_ylabel("Regret (% of AEP)", fontsize=12)
         ax_bar.set_xlim(0.5, n_steps + 0.5)
-        ax_bar.set_ylim(0, max(regret_history) * 1.15)
+        ax_bar.set_ylim(0, max_pct * 1.15)
         ax_bar.set_title("Regret vs. Neighbors Placed", fontsize=13)
         ax_bar.grid(True, alpha=0.3)
-        ax_bar.text(steps[-1], regrets[-1] + max(regret_history) * 0.03,
-                    f"{regrets[-1]:.1f}", ha="center", fontsize=10,
+        ax_bar.text(steps[-1], regrets_pct[-1] + max_pct * 0.03,
+                    f"{regrets_pct[-1]:.2f}%", ha="center", fontsize=10,
                     fontweight="bold", color="firebrick")
 
         fig.suptitle(
@@ -424,6 +436,12 @@ def render_animation(regret_maps, results, grid, boundary_np, output_path,
                       facecolor="white", edgecolor="black", lw=2.5,
                       alpha=0.9, zorder=3)
     ax_map.add_patch(poly)
+    if exclusion_hull is not None:
+        excl_km = np.column_stack(to_km(exclusion_hull[:, 0], exclusion_hull[:, 1]))
+        excl_poly = MplPolygon(excl_km, closed=True, fill=False,
+                               edgecolor="red", lw=1.5, ls="--",
+                               alpha=0.7, zorder=4, label="Exclusion zone")
+        ax_map.add_patch(excl_poly)
     sc_lib = ax_map.scatter(*to_km(lib_x_np, lib_y_np),
                    facecolors="none", edgecolors="royalblue",
                    marker="^", s=40, linewidths=0.8, label="Liberal layout", zorder=5)
@@ -451,23 +469,26 @@ def render_animation(regret_maps, results, grid, boundary_np, output_path,
     ax_map.set_xlabel("x (km)", fontsize=12)
     ax_map.set_ylabel("y (km)", fontsize=12)
     ax_map.legend(loc="lower left", fontsize=9)
-    ax_map.set_title(f"Final Regret = {regret_history[-1]:.3f} GWh",
+    final_pct = 100 * regret_history[-1] / liberal_aep if liberal_aep else 0
+    ax_map.set_title(f"Final Regret = {final_pct:.2f}% of AEP ({regret_history[-1]:.1f} GWh)",
                      fontsize=14, fontweight="bold")
     fig2.colorbar(im, ax=ax_map, shrink=0.8, pad=0.02, label="AEP Loss (GWh)")
 
     draw_wind_rose(ax_rose, wd_np, ws_np, w_np)
 
     steps = np.arange(1, n_steps + 1)
-    ax_bar.plot(steps, regret_history, "o-", color="firebrick", ms=5, lw=2)
-    ax_bar.fill_between(steps, 0, regret_history, color="firebrick", alpha=0.15)
+    regrets_pct = [100 * r / liberal_aep for r in regret_history] if liberal_aep else regret_history
+    max_pct = max(regrets_pct)
+    ax_bar.plot(steps, regrets_pct, "o-", color="firebrick", ms=5, lw=2)
+    ax_bar.fill_between(steps, 0, regrets_pct, color="firebrick", alpha=0.15)
     ax_bar.set_xlabel("Neighbors Placed", fontsize=12)
-    ax_bar.set_ylabel("Regret (GWh)", fontsize=12)
+    ax_bar.set_ylabel("Regret (% of AEP)", fontsize=12)
     ax_bar.set_xlim(0.5, n_steps + 0.5)
-    ax_bar.set_ylim(0, max(regret_history) * 1.15)
+    ax_bar.set_ylim(0, max_pct * 1.15)
     ax_bar.set_title("Regret vs. Neighbors Placed", fontsize=13)
     ax_bar.grid(True, alpha=0.3)
-    ax_bar.text(steps[-1], regret_history[-1] + max(regret_history) * 0.03,
-                f"{regret_history[-1]:.1f}", ha="center", fontsize=10,
+    ax_bar.text(steps[-1], regrets_pct[-1] + max_pct * 0.03,
+                f"{regrets_pct[-1]:.2f}%", ha="center", fontsize=10,
                 fontweight="bold", color="firebrick")
     fig2.suptitle(f"DEI Greedy Grid Search — {N_TARGET} targets, {n_steps} neighbors placed",
                   fontsize=15, fontweight="bold", y=0.98)
@@ -541,7 +562,7 @@ def main():
         ws = jnp.full_like(wd, args.wind_speed)
     sim = WakeSimulation(turbine, BastankhahGaussianDeficit(k=0.04))
 
-    grid, gx_1d, gy_1d = build_neighbor_grid(
+    grid, gx_1d, gy_1d, exclusion_hull = build_neighbor_grid(
         boundary_np, GRID_SPACING_D * D, args.grid_pad_D * D, args.buffer_D * D)
 
     init_x, init_y = generate_target_grid(boundary_np, N_TARGET, spacing=4 * D)
@@ -620,6 +641,8 @@ def main():
         regret_maps, results, grid, boundary_np, mp4_path,
         wd, ws, weights, liberal_x, liberal_y,
         conservative_xs, conservative_ys,
+        exclusion_hull=exclusion_hull,
+        liberal_aep=float(liberal_aep),
     )
 
 
