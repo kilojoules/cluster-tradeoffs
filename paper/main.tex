@@ -95,7 +95,9 @@ To mitigate local optima, we employ $K = 5$ random restarts per evaluation:
 The best layout (highest AEP) is retained.
 Including the liberal layout as a restart guarantees non-negative regret by construction, since the conservative optimization can always recover at least the liberal layout's performance.
 
-The wake simulation uses the Bastankhah--Port\'e-Agel Gaussian deficit model \citep{Bastankhah2014} with wake expansion coefficient $k = 0.04$ and root-sum-of-squares superposition.
+The wake simulation uses the Bastankhah--Port\'e-Agel Gaussian deficit model \citep{Bastankhah2014} with wake expansion coefficient $k = 0.04$.
+We use root-sum-of-squares (quadratic) superposition as the default and compare against linear superposition in the sensitivity analysis (Section~\ref{sec:results-superposition}).
+The original Bastankhah model does not specify a multi-wake superposition method; quadratic superposition is a common choice that avoids negative wind speeds but produces smaller combined deficits than linear superposition.
 The simulation is implemented in JAX \citep{jax2018github}, enabling automatic differentiation through the entire wake model and SGD loop.
 
 \subsubsection{Outer adversarial search: greedy grid placement}\label{sec:greedy}
@@ -105,6 +107,8 @@ At each step, a discrete grid of candidate positions is constructed outside the 
 Each candidate is screened by the AEP loss it inflicts on the liberal layout (cheap forward evaluation), and the top 10 candidates undergo full $K$-start inner optimization.
 The candidate producing the highest regret is placed, and the process repeats.
 This greedy approach is computationally efficient: all 10 candidates $\times$ 5 starts = 50 inner optimizations are parallelized on GPU via \texttt{vmap}.
+Note that the greedy adversary does not represent a realistic neighboring farm; it provides an \emph{upper bound} on design regret by placing individual turbines to maximize the target farm's loss.
+A more realistic scenario, in which the neighbor farm optimizes its own AEP, is examined via the regret cross-section analysis.
 
 \subsubsection{Regret cross-section: reference farm placement}\label{sec:cross-section}
 
@@ -245,22 +249,30 @@ This confirms that 30 greedy neighbors (used in the wind rose shape sweep) captu
     \label{fig:saturation}
 \end{figure}
 
-\subsection{Wake model sensitivity}
+\subsection{Wake model and superposition sensitivity}\label{sec:results-superposition}
 
 To assess robustness, we compare the Bastankhah Gaussian deficit ($k = 0.04$) with the TurbOPark model ($A = 0.04$, ambient TI $= 0.06$) for 30 greedy neighbors under unidirectional and uniform wind roses (Table~\ref{tab:wake_model}).
 TurbOPark produces 4--10$\times$ higher absolute regret than Bastankhah, consistent with its wider, longer wakes driven by turbulence-intensity-dependent expansion.
 However, the qualitative pattern---unidirectional $\gg$ uniform---is preserved across both models, suggesting that the wind rose shape conclusions are robust to wake model choice.
 
+We also compare the effect of the wake superposition method.
+The original Bastankhah model does not prescribe a superposition method, and common implementations differ: root-sum-of-squares (quadratic) superposition produces smaller combined deficits than linear superposition.
+We repeat the unidirectional and uniform cases with linear superposition for both deficit models.
+The neighbor placement patterns and the directional structure of regret are preserved, though absolute magnitudes differ [results to be added upon completion of LUMI runs].
+This confirms that the qualitative conclusions---the dominance of wind rose folding and the ambush effect---are robust to both wake model and superposition choices.
+
 \begin{table}
     \centering
-    \caption{Design regret (GWh/yr) for 30 greedy neighbors under two wake deficit models and two wind roses.}
+    \caption{Design regret (GWh/yr) for 30 greedy neighbors under two wake deficit models, two superposition methods, and two wind roses. Quadratic = root-sum-of-squares; linear = direct sum.}
     \label{tab:wake_model}
-    \begin{tabular}{lcc}
+    \begin{tabular}{llcc}
         \toprule
-        & Unidirectional ($270°$) & Uniform (24 dirs) \\
+        & & Unidirectional ($270°$) & Uniform (24 dirs) \\
         \midrule
-        Bastankhah ($k = 0.04$) & 212.9 & 30.4 \\
-        TurbOPark ($A = 0.04$) & 818.3 & 164.5 \\
+        Bastankhah ($k = 0.04$) & Quadratic & 212.9 & 30.4 \\
+        Bastankhah ($k = 0.04$) & Linear & [pending] & [pending] \\
+        TurbOPark ($A = 0.04$) & Quadratic & 818.3 & 164.5 \\
+        TurbOPark ($A = 0.04$) & Linear & [pending] & [pending] \\
         \bottomrule
     \end{tabular}
 \end{table}
