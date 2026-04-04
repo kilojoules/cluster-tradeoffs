@@ -143,7 +143,10 @@ def place_reference_farm(ref_x, ref_y, bearing_deg, distance_m, centroid_x=0, ce
 
 def compute_aep(sim, x, y, ws_amb, wd_amb, weights, ti_amb=None,
                 neighbor_x=None, neighbor_y=None, n_target=None):
-    """Compute AEP for target turbines, optionally with neighbors."""
+    """Compute AEP for target turbines, optionally with neighbors.
+
+    Returns a JAX scalar (not float) so this can be used inside jax.grad.
+    """
     if n_target is None:
         n_target = x.shape[0]
     if neighbor_x is not None and neighbor_x.shape[0] > 0:
@@ -154,7 +157,7 @@ def compute_aep(sim, x, y, ws_amb, wd_amb, weights, ti_amb=None,
         y_all = y
     result = sim(x_all, y_all, ws_amb=ws_amb, wd_amb=wd_amb, ti_amb=ti_amb)
     power = result.power()[:, :n_target]
-    return float(jnp.sum(power * weights[:, None]) * 8760 / 1e6)
+    return jnp.sum(power * weights[:, None]) * 8760 / 1e6
 
 
 def main():
