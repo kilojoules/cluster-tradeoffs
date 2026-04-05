@@ -1,12 +1,18 @@
-"""Convergence study: regret vs number of multistart restarts and SGD iterations.
+"""Comprehensive convergence study for design regret computation.
 
-Tests whether K=5 with 5000 iterations is sufficient for accurate regret computation
-with 50 turbines. Runs at a single (bearing, distance) configuration with a 5x5
-reference neighbor farm, sweeping K and max_iter.
+Following Quick et al. (OMAE 2026) which found ~400-500 starts needed for
+66-turbine liberal layout convergence, this study sweeps:
+
+1. K (conservative multistart): 1 to 500
+2. K_lib (liberal multistart): 1 to 200
+3. max_iter (SGD iterations): 100 to 10000
+4. Multiple (bearing, distance) test points
+5. Multiple wind roses
+
+All with proper liberal AEP pooling (conservative AEP >= liberal AEP with neighbors).
 
 Usage:
     pixi run python scripts/run_regret_convergence.py
-    pixi run python scripts/run_regret_convergence.py --bearing 105 --distance-D 5
 """
 
 import jax
@@ -93,177 +99,309 @@ def compute_aep(sim, x, y, ws_amb, wd_amb, weights, ti_amb=None,
     return jnp.sum(power * weights[:, None]) * 8760 / 1e6
 
 
-def run_conservative(sim, starts_x, starts_y, liberal_x, liberal_y,
-                     nx, ny, ws, wd, weights, ti_amb, sgd_settings):
-    """Run K conservative optimizations and return best AEP (pooled with liberal)."""
-    K = len(starts_x)
-    lib_aep_present = float(compute_aep(
-        sim, liberal_x, liberal_y, ws, wd, weights, ti_amb,
-        neighbor_x=nx, neighbor_y=ny))
+def random_start_inside_polygon(key, n_turbines):
+    """Generate one random layout inside the polygon via rejection sampling."""
+    pts = []
+    while len(pts) < n_turbines:
+        rx = jax.random.uniform(key, (n_turbines * 3,),
+            minval=boundary_np[:, 0].min(), maxval=boundary_np[:, 0].max())
+        key, _ = jax.random.split(key)
+        ry = jax.random.uniform(key, (n_turbines * 3,),
+            minval=boundary_np[:, 1].min(), maxval=boundary_np[:, 1].max())
+        key, _ = jax.random.split(key)
+        cands = np.column_stack([np.array(rx), np.array(ry)])
+        inside = _polygon_path.contains_points(cands)
+        pts.extend(cands[inside].tolist())
+    pts = np.array(pts[:n_turbines])
+    return jnp.array(pts[:, 0]), jnp.array(pts[:, 1])
 
-    best_cons_aep = lib_aep_present  # Pool: floor is liberal with neighbors
-    all_aeps = [lib_aep_present]  # Track all AEPs including liberal floor
 
-    for k in range(K):
-        def cons_obj(x, y):
-            return -compute_aep(sim, x, y, ws, wd, weights, ti_amb,
-                                neighbor_x=nx, neighbor_y=ny)
-        cx, cy = topfarm_sgd_solve(cons_obj, starts_x[k], starts_y[k],
-                                   boundary, D * 4, sgd_settings)
-        aep = float(compute_aep(sim, cx, cy, ws, wd, weights, ti_amb,
-                                neighbor_x=nx, neighbor_y=ny))
+def run_multistart_optimization(sim, objective_fn, boundary, min_spacing,
+                                init_x, init_y, starts_x, starts_y,
+                                sgd_settings):
+    """Run K-start optimization, return best AEP and all individual AEPs."""
+    all_aeps = []
+    best_aep = -np.inf
+    best_x, best_y = None, None
+
+    for sx, sy in zip(starts_x, starts_y):
+        opt_x, opt_y = topfarm_sgd_solve(
+            objective_fn, sx, sy, boundary, min_spacing, sgd_settings)
+        aep = float(-objective_fn(opt_x, opt_y))
         all_aeps.append(aep)
-        if aep > best_cons_aep:
-            best_cons_aep = aep
+        if aep > best_aep:
+            best_aep = aep
+            best_x, best_y = opt_x, opt_y
 
-    regret = best_cons_aep - lib_aep_present
-    return regret, best_cons_aep, lib_aep_present, all_aeps
+    return best_aep, best_x, best_y, all_aeps
 
 
-def generate_starts(init_x, init_y, liberal_x, liberal_y, K):
-    """Generate K initial positions: grid, liberal, then random."""
-    starts_x, starts_y = [], []
-    for k in range(K):
-        if k == 0:
-            starts_x.append(init_x)
-            starts_y.append(init_y)
-        elif k == 1:
-            starts_x.append(liberal_x)
-            starts_y.append(liberal_y)
-        else:
-            key = jax.random.PRNGKey(k * 7919)
-            pts = []
-            while len(pts) < N_TARGET:
-                rx = jax.random.uniform(key, (N_TARGET * 3,),
-                    minval=boundary_np[:, 0].min(), maxval=boundary_np[:, 0].max())
-                key, _ = jax.random.split(key)
-                ry = jax.random.uniform(key, (N_TARGET * 3,),
-                    minval=boundary_np[:, 1].min(), maxval=boundary_np[:, 1].max())
-                key, _ = jax.random.split(key)
-                cands = np.column_stack([np.array(rx), np.array(ry)])
-                inside = _polygon_path.contains_points(cands)
-                pts.extend(cands[inside].tolist())
-            pts = np.array(pts[:N_TARGET])
-            starts_x.append(jnp.array(pts[:, 0]))
-            starts_y.append(jnp.array(pts[:, 1]))
-    return starts_x, starts_y
+def place_reference_farm(bearing_deg, distance_D):
+    """Place a 5x5 reference farm at (bearing, distance) from centroid."""
+    spacing = 7 * D
+    xs = np.arange(5) * spacing - 2 * spacing
+    ys = np.arange(5) * spacing - 2 * spacing
+    gx, gy = np.meshgrid(xs, ys)
+    ref_x, ref_y = gx.ravel(), gy.ravel()
+
+    bearing_rad = np.radians(bearing_deg)
+    dist_m = distance_D * D
+    cx = dist_m * np.sin(bearing_rad)
+    cy = dist_m * np.cos(bearing_rad)
+    return jnp.array(ref_x + cx), jnp.array(ref_y + cy)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Convergence study for regret")
-    parser.add_argument("--bearing", type=float, default=105.0)
-    parser.add_argument("--distance-D", type=float, default=5.0)
-    parser.add_argument("--ed-a", type=float, default=0.9)
-    parser.add_argument("--ed-f", type=float, default=1.0)
-    parser.add_argument("--wind-dir", type=float, default=270.0)
-    parser.add_argument("--wind-speed", type=float, default=9.0)
+    parser = argparse.ArgumentParser(description="Comprehensive convergence study")
     parser.add_argument("--output-dir", type=str, default="analysis/convergence_study")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    from edrose import EllipticalWindRose
-    wr = EllipticalWindRose(a=args.ed_a, f=args.ed_f,
-                            theta_prev=args.wind_dir, n_sectors=24)
-    wd = jnp.array(wr.wind_directions)
-    weights = jnp.array(wr.sector_frequencies)
-    ws = jnp.full_like(wd, args.wind_speed)
-
     turbine = create_dei_turbine()
     deficit = BastankhahGaussianDeficit(k=0.04)
     sim = WakeSimulation(turbine, deficit)
-
     init_x, init_y = generate_target_grid(boundary_np, N_TARGET, spacing=4*D)
 
-    # Liberal layout with generous iterations
-    print("Computing liberal layout (K=1, 10000 iter)...")
-    lib_settings = SGDSettings(learning_rate=50.0, max_iter=10000,
-                               additional_constant_lr_iterations=10000, tol=1e-6)
-    def lib_obj(x, y):
-        return -compute_aep(sim, x, y, ws, wd, weights)
-    liberal_x, liberal_y = topfarm_sgd_solve(lib_obj, init_x, init_y, boundary, D*4, lib_settings)
-    liberal_aep = float(compute_aep(sim, liberal_x, liberal_y, ws, wd, weights))
-    print(f"Liberal AEP: {liberal_aep:.2f} GWh")
+    # Test configurations: multiple wind roses × (bearing, distance)
+    test_configs = [
+        {"name": "concentrated_unidir_close", "ed_a": 0.9, "ed_f": 1.0,
+         "bearing": 105, "distance_D": 5},
+        {"name": "concentrated_unidir_far", "ed_a": 0.9, "ed_f": 1.0,
+         "bearing": 105, "distance_D": 20},
+        {"name": "moderate_bidir", "ed_a": 0.5, "ed_f": 0.0,
+         "bearing": 210, "distance_D": 5},
+    ]
 
-    # Place reference neighbor
-    ref_x_local = np.arange(5) * 7 * D - 2 * 7 * D
-    ref_y_local = np.arange(5) * 7 * D - 2 * 7 * D
-    ref_x_local, ref_y_local = np.meshgrid(ref_x_local, ref_y_local)
-    ref_x_local, ref_y_local = ref_x_local.ravel(), ref_y_local.ravel()
-    bearing_rad = np.radians(args.bearing)
-    dist_m = args.distance_D * D
-    cx = dist_m * np.sin(bearing_rad)
-    cy = dist_m * np.cos(bearing_rad)
-    nx = jnp.array(ref_x_local + cx)
-    ny = jnp.array(ref_y_local + cy)
+    # Pre-generate a large pool of random starts (shared across all configs)
+    K_MAX = 500
+    print(f"Pre-generating {K_MAX} random starts...")
+    all_random_x, all_random_y = [], []
+    for k in range(K_MAX):
+        key = jax.random.PRNGKey(k * 7919 + 42)
+        rx, ry = random_start_inside_polygon(key, N_TARGET)
+        all_random_x.append(rx)
+        all_random_y.append(ry)
 
-    print(f"Neighbor: 5x5 farm at bearing={args.bearing}°, dist={args.distance_D}D")
+    all_results = {}
 
-    # Pre-generate a large pool of starts (reuse across K values)
-    K_max = 200
-    all_starts_x, all_starts_y = generate_starts(init_x, init_y, liberal_x, liberal_y, K_max)
+    for cfg in test_configs:
+        name = cfg["name"]
+        print(f"\n{'#'*70}")
+        print(f"# CONFIG: {name}")
+        print(f"# a={cfg['ed_a']}, f={cfg['ed_f']}, "
+              f"bearing={cfg['bearing']}°, dist={cfg['distance_D']}D")
+        print(f"{'#'*70}")
 
-    # === Sweep 1: Vary K at fixed max_iter=5000 ===
-    K_values = [1, 2, 3, 5, 10, 20, 50, 100, 200]
-    print(f"\n{'='*70}")
-    print(f"SWEEP 1: Vary K (inner starts) at max_iter=5000, lr=50")
-    print(f"{'='*70}")
-    print(f"{'K':>5} {'Regret (GWh)':>14} {'Regret (%)':>12} {'Cons AEP':>12} {'Time (s)':>10}")
-    print("-" * 60)
+        # Wind rose
+        from edrose import EllipticalWindRose
+        wr = EllipticalWindRose(a=cfg["ed_a"], f=cfg["ed_f"],
+                                theta_prev=270, n_sectors=24)
+        wd = jnp.array(wr.wind_directions)
+        weights = jnp.array(wr.sector_frequencies)
+        ws = jnp.full_like(wd, 9.0)
 
-    results_K = []
-    for K in K_values:
-        sgd_s = SGDSettings(learning_rate=50.0, max_iter=5000,
-                            additional_constant_lr_iterations=5000, tol=1e-6)
-        t0 = time.time()
-        regret, cons_aep, lib_pres, all_aeps = run_conservative(
-            sim, all_starts_x[:K], all_starts_y[:K],
-            liberal_x, liberal_y, nx, ny, ws, wd, weights, None, sgd_s)
-        elapsed = time.time() - t0
-        pct = 100 * regret / liberal_aep
-        print(f"{K:>5} {regret:>14.2f} {pct:>11.3f}% {cons_aep:>12.2f} {elapsed:>10.1f}")
-        results_K.append({"K": K, "regret_gwh": float(regret), "regret_pct": float(pct),
-                          "conservative_aep": float(cons_aep),
-                          "liberal_aep_present": float(lib_pres),
-                          "elapsed_s": elapsed,
-                          "all_aeps": [float(a) for a in all_aeps]})
+        # =====================================================================
+        # PART A: Liberal layout convergence (K_lib sweep)
+        # =====================================================================
+        print(f"\n{'='*60}")
+        print("PART A: Liberal layout convergence")
+        print(f"{'='*60}")
 
-    # === Sweep 2: Vary max_iter at fixed K=50 ===
-    iter_values = [100, 500, 1000, 2000, 5000, 10000]
-    print(f"\n{'='*70}")
-    print(f"SWEEP 2: Vary max_iter at K=50, lr=50")
-    print(f"{'='*70}")
-    print(f"{'Iter':>7} {'Regret (GWh)':>14} {'Regret (%)':>12} {'Cons AEP':>12} {'Time (s)':>10}")
-    print("-" * 60)
+        def lib_obj(x, y):
+            return -compute_aep(sim, x, y, ws, wd, weights)
 
-    results_iter = []
-    for max_iter in iter_values:
-        sgd_s = SGDSettings(learning_rate=50.0, max_iter=max_iter,
-                            additional_constant_lr_iterations=max_iter, tol=1e-6)
-        t0 = time.time()
-        regret, cons_aep, lib_pres, all_aeps = run_conservative(
-            sim, all_starts_x[:50], all_starts_y[:50],
-            liberal_x, liberal_y, nx, ny, ws, wd, weights, None, sgd_s)
-        elapsed = time.time() - t0
-        pct = 100 * regret / liberal_aep
-        print(f"{max_iter:>7} {regret:>14.2f} {pct:>11.3f}% {cons_aep:>12.2f} {elapsed:>10.1f}")
-        results_iter.append({"max_iter": max_iter, "regret_gwh": float(regret),
-                             "regret_pct": float(pct), "conservative_aep": float(cons_aep),
-                             "elapsed_s": elapsed})
+        K_lib_values = [1, 2, 5, 10, 20, 50, 100, 200]
+        lib_settings = SGDSettings(learning_rate=50.0, max_iter=10000,
+                                   additional_constant_lr_iterations=10000, tol=1e-6)
 
-    # Save
-    results = {
-        "bearing_deg": args.bearing,
-        "distance_D": args.distance_D,
-        "liberal_aep_gwh": float(liberal_aep),
-        "ed_a": args.ed_a, "ed_f": args.ed_f,
-        "sweep_K": results_K,
-        "sweep_iter": results_iter,
-    }
+        # Build liberal starts: grid init + randoms
+        lib_starts_x = [init_x] + all_random_x[:K_MAX-1]
+        lib_starts_y = [init_y] + all_random_y[:K_MAX-1]
+
+        # Run all liberal starts once, accumulate
+        print("Running 200 liberal optimizations...")
+        lib_all_aeps = []
+        lib_all_xs, lib_all_ys = [], []
+        for k in range(max(K_lib_values)):
+            t0 = time.time()
+            opt_x, opt_y = topfarm_sgd_solve(
+                lib_obj, lib_starts_x[k], lib_starts_y[k],
+                boundary, D * 4, lib_settings)
+            aep = float(-lib_obj(opt_x, opt_y))
+            lib_all_aeps.append(aep)
+            lib_all_xs.append(opt_x)
+            lib_all_ys.append(opt_y)
+            if (k + 1) % 50 == 0 or k == 0:
+                elapsed = time.time() - t0
+                print(f"  Start {k+1}/{max(K_lib_values)}: "
+                      f"AEP={aep:.2f} GWh, best so far={max(lib_all_aeps):.2f} GWh "
+                      f"({elapsed:.1f}s)")
+
+        # Report best-of-K for each K_lib
+        lib_results = []
+        print(f"\n{'K_lib':>6} {'Best Liberal AEP':>18} {'Δ from K=200':>14}")
+        print("-" * 42)
+        best_lib_200 = max(lib_all_aeps[:200])
+        for K_lib in K_lib_values:
+            best = max(lib_all_aeps[:K_lib])
+            delta = best - best_lib_200
+            print(f"{K_lib:>6} {best:>18.2f} {delta:>+13.2f} GWh")
+            lib_results.append({"K_lib": K_lib, "best_aep": best,
+                                "all_aeps": lib_all_aeps[:K_lib]})
+
+        # Use K_lib=200 liberal layout as the reference
+        best_lib_idx = int(np.argmax(lib_all_aeps[:200]))
+        liberal_x = lib_all_xs[best_lib_idx]
+        liberal_y = lib_all_ys[best_lib_idx]
+        liberal_aep = lib_all_aeps[best_lib_idx]
+        print(f"\nUsing liberal layout from start {best_lib_idx} "
+              f"(AEP={liberal_aep:.2f} GWh)")
+
+        # =====================================================================
+        # PART B: Conservative convergence (K sweep at fixed max_iter=5000)
+        # =====================================================================
+        print(f"\n{'='*60}")
+        print("PART B: Conservative convergence (K sweep, max_iter=5000)")
+        print(f"{'='*60}")
+
+        nx, ny = place_reference_farm(cfg["bearing"], cfg["distance_D"])
+        lib_aep_present = float(compute_aep(
+            sim, liberal_x, liberal_y, ws, wd, weights,
+            neighbor_x=nx, neighbor_y=ny))
+        print(f"Liberal AEP with neighbors: {lib_aep_present:.2f} GWh")
+
+        cons_settings = SGDSettings(learning_rate=50.0, max_iter=5000,
+                                    additional_constant_lr_iterations=5000, tol=1e-6)
+
+        def cons_obj(x, y):
+            return -compute_aep(sim, x, y, ws, wd, weights,
+                                neighbor_x=nx, neighbor_y=ny)
+
+        # Build conservative starts: grid, liberal, then randoms
+        cons_starts_x = [init_x, liberal_x] + all_random_x[:K_MAX-2]
+        cons_starts_y = [init_y, liberal_y] + all_random_y[:K_MAX-2]
+
+        # Run all conservative starts, accumulate
+        K_cons_values = [1, 2, 3, 5, 10, 20, 50, 100, 200, 300, 400, 500]
+        max_K_cons = max(K_cons_values)
+        print(f"Running {max_K_cons} conservative optimizations...")
+
+        cons_all_aeps = []
+        for k in range(max_K_cons):
+            t0 = time.time()
+            opt_x, opt_y = topfarm_sgd_solve(
+                cons_obj, cons_starts_x[k], cons_starts_y[k],
+                boundary, D * 4, cons_settings)
+            aep = float(-cons_obj(opt_x, opt_y))
+            cons_all_aeps.append(aep)
+            if (k + 1) % 50 == 0 or k < 5:
+                elapsed = time.time() - t0
+                best_so_far = max(cons_all_aeps)
+                regret_so_far = max(best_so_far, lib_aep_present) - lib_aep_present
+                print(f"  Start {k+1}/{max_K_cons}: "
+                      f"AEP={aep:.2f}, best={best_so_far:.2f}, "
+                      f"regret={regret_so_far:.2f} GWh ({elapsed:.1f}s)")
+
+        # Report best-of-K for each K (with pooling)
+        cons_results = []
+        print(f"\n{'K':>5} {'Best Cons AEP':>15} {'Regret (GWh)':>14} {'Regret (%)':>12} {'Δ from K=500':>14}")
+        print("-" * 65)
+        ref_regret = max(max(cons_all_aeps[:500]), lib_aep_present) - lib_aep_present
+        for K in K_cons_values:
+            best = max(cons_all_aeps[:K])
+            best_pooled = max(best, lib_aep_present)
+            regret = best_pooled - lib_aep_present
+            pct = 100 * regret / liberal_aep
+            delta = regret - ref_regret
+            print(f"{K:>5} {best_pooled:>15.2f} {regret:>14.2f} {pct:>11.3f}% {delta:>+13.2f}")
+            cons_results.append({
+                "K": K, "best_cons_aep": float(best_pooled),
+                "regret_gwh": float(regret), "regret_pct": float(pct),
+                "best_raw_aep": float(best),
+                "all_aeps": [float(a) for a in cons_all_aeps[:K]],
+            })
+
+        # =====================================================================
+        # PART C: SGD iteration convergence (vary max_iter at K=200)
+        # =====================================================================
+        print(f"\n{'='*60}")
+        print("PART C: SGD iteration convergence (K=200, vary max_iter)")
+        print(f"{'='*60}")
+
+        iter_values = [100, 500, 1000, 2000, 5000, 10000]
+        iter_results = []
+
+        for max_iter in iter_values:
+            iter_settings = SGDSettings(
+                learning_rate=50.0, max_iter=max_iter,
+                additional_constant_lr_iterations=max_iter, tol=1e-6)
+
+            iter_aeps = []
+            t0 = time.time()
+            for k in range(200):
+                opt_x, opt_y = topfarm_sgd_solve(
+                    cons_obj, cons_starts_x[k], cons_starts_y[k],
+                    boundary, D * 4, iter_settings)
+                aep = float(-cons_obj(opt_x, opt_y))
+                iter_aeps.append(aep)
+
+            elapsed = time.time() - t0
+            best = max(iter_aeps)
+            best_pooled = max(best, lib_aep_present)
+            regret = best_pooled - lib_aep_present
+            pct = 100 * regret / liberal_aep
+            print(f"  iter={max_iter:>6}: regret={regret:.2f} GWh ({pct:.3f}%), "
+                  f"best_cons={best_pooled:.2f}, time={elapsed:.0f}s")
+            iter_results.append({
+                "max_iter": max_iter, "regret_gwh": float(regret),
+                "regret_pct": float(pct), "best_cons_aep": float(best_pooled),
+                "elapsed_s": elapsed,
+            })
+
+        # =====================================================================
+        # PART D: Bootstrap analysis — stability of regret estimate
+        # =====================================================================
+        print(f"\n{'='*60}")
+        print("PART D: Bootstrap analysis (1000 reshuffles of 500 starts)")
+        print(f"{'='*60}")
+
+        n_bootstrap = 1000
+        aeps_array = np.array(cons_all_aeps[:500])
+
+        for K_test in [5, 10, 20, 50, 100, 200]:
+            bootstrap_regrets = []
+            for _ in range(n_bootstrap):
+                sample = np.random.choice(aeps_array, size=K_test, replace=True)
+                best = sample.max()
+                best_pooled = max(best, lib_aep_present)
+                bootstrap_regrets.append(best_pooled - lib_aep_present)
+            br = np.array(bootstrap_regrets)
+            print(f"  K={K_test:>4}: regret = {br.mean():.2f} ± {br.std():.2f} GWh "
+                  f"(p5={np.percentile(br, 5):.2f}, p50={np.percentile(br, 50):.2f}, "
+                  f"p95={np.percentile(br, 95):.2f})")
+
+        # Save everything
+        config_results = {
+            "config": cfg,
+            "liberal_aep_gwh": float(liberal_aep),
+            "liberal_aep_present_gwh": float(lib_aep_present),
+            "liberal_convergence": lib_results,
+            "conservative_convergence": cons_results,
+            "iteration_convergence": iter_results,
+            "bootstrap": {
+                "n_bootstrap": n_bootstrap,
+                "n_starts_pool": 500,
+            },
+        }
+        all_results[name] = config_results
+
+    # Save all results
     with open(output_dir / "results.json", "w") as f:
-        json.dump(results, f, indent=2)
-    print(f"\nSaved: {output_dir / 'results.json'}")
+        json.dump(all_results, f, indent=2)
+    print(f"\n{'='*70}")
+    print(f"All results saved: {output_dir / 'results.json'}")
 
 
 if __name__ == "__main__":
