@@ -1677,7 +1677,7 @@ class GreedyGridSearch:
                 best_aep = aep
                 best_cx, best_cy = opt_x, opt_y
 
-        conservative_aep = best_aep
+        conservative_aep = max(best_aep, liberal_aep_present)
         regret = float(conservative_aep - liberal_aep_present)
         return regret, best_cx, best_cy
 
@@ -1895,6 +1895,8 @@ class GreedyGridSearch:
             else:
                 lib_aep_present = jnp.sum(power_lib) * 8760 / 1e6 / power_lib.shape[0]
 
+            # Pool: conservative AEP is at least liberal AEP with neighbors
+            conservative_aep = jnp.maximum(conservative_aep, lib_aep_present)
             regret = conservative_aep - lib_aep_present
             return conservative_aep, regret, opt_x, opt_y
 

@@ -350,7 +350,9 @@ def main():
                 if cons_aep > best_cons_aep:
                     best_cons_aep = cons_aep
 
-            regret = best_cons_aep - lib_aep_present
+            # Pool: conservative AEP must be at least as good as liberal with neighbors
+            best_cons_aep = max(best_cons_aep, float(lib_aep_present))
+            regret = best_cons_aep - float(lib_aep_present)
             results_grid[di, bi] = regret
             liberal_aep_present_grid[di, bi] = lib_aep_present
             conservative_aep_grid[di, bi] = best_cons_aep
