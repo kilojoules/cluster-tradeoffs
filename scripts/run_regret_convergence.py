@@ -238,7 +238,7 @@ def main():
     ]
 
     # Pre-generate a large pool of random starts
-    K_MAX = 500
+    K_MAX = 2000
     print(f"Pre-generating {K_MAX} random starts...")
     random_xs, random_ys = [], []
     for k in range(K_MAX):
@@ -275,7 +275,7 @@ def main():
         print("PART A: Liberal layout convergence (200 starts, vmap)")
         print(f"{'='*60}")
 
-        K_lib_values = [1, 2, 5, 10, 20, 50, 100, 200]
+        K_lib_values = [1, 2, 5, 10, 20, 50, 100, 200, 500]
         K_lib_max = max(K_lib_values)
         lib_settings = SGDSettings(learning_rate=50.0, max_iter=10000,
                                    additional_constant_lr_iterations=10000, tol=1e-6)
@@ -334,7 +334,7 @@ def main():
         cons_settings = SGDSettings(learning_rate=50.0, max_iter=5000,
                                     additional_constant_lr_iterations=5000, tol=1e-6)
 
-        K_cons_values = [1, 2, 3, 5, 10, 20, 50, 100, 200, 300, 400, 500]
+        K_cons_values = [1, 2, 3, 5, 10, 20, 50, 100, 200, 300, 500, 750, 1000, 1500, 2000]
         max_K_cons = max(K_cons_values)
 
         # Stack conservative starts: grid, liberal, then randoms
@@ -381,12 +381,12 @@ def main():
         # PART C: SGD iteration convergence (vary max_iter at K=200, vmap)
         # =====================================================================
         print(f"\n{'='*60}")
-        print("PART C: SGD iteration convergence (K=200, vary max_iter, vmap)")
+        print("PART C: SGD iteration convergence (K=500, vary max_iter, vmap)")
         print(f"{'='*60}")
 
         iter_values = [100, 500, 1000, 2000, 5000, 10000]
         iter_results = []
-        K_iter = 200
+        K_iter = 500
 
         for max_iter in iter_values:
             iter_settings = SGDSettings(
@@ -420,9 +420,9 @@ def main():
         print(f"{'='*60}")
 
         n_bootstrap = 1000
-        aeps_array = cons_all_aeps_np[:500]
+        aeps_array = cons_all_aeps_np[:2000]
 
-        for K_test in [5, 10, 20, 50, 100, 200]:
+        for K_test in [5, 10, 20, 50, 100, 200, 500, 1000]:
             bootstrap_regrets = []
             for _ in range(n_bootstrap):
                 sample = np.random.choice(aeps_array, size=K_test, replace=True)
