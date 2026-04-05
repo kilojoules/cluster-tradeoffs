@@ -18,6 +18,7 @@ D = 240.0  # m
 cases = [
     ("DEI real wind rose", "dei"),
     ("$a$=0.9, $f$=1.0\n(concentrated, unidir)", "a0.9_f1.0"),
+    ("$a$=0.7, $f$=0.5\n(mid-range)", "a0.7_f0.5"),
     ("$a$=0.9, $f$=0.0\n(concentrated, bidir)", "a0.9_f0.0"),
     ("$a$=0.5, $f$=1.0\n(moderate, unidir)", "a0.5_f1.0"),
     ("$a$=0.5, $f$=0.0\n(moderate, bidir)", "a0.5_f0.0"),
@@ -62,7 +63,7 @@ for label, case_dir in cases:
     global_max_pct = max(global_max_pct, np.nanmax(g))
 
 # --- Figure 1: 5-panel polar heatmaps ---
-fig, axes = plt.subplots(1, 5, figsize=(24, 5.5),
+fig, axes = plt.subplots(1, 6, figsize=(28, 5.5),
                           subplot_kw={"projection": "polar"})
 
 for ax, (label, case_dir) in zip(axes, cases):
@@ -161,7 +162,7 @@ fig.savefig(str(out), dpi=200, bbox_inches="tight")
 print(f"Saved: {out}")
 
 # --- Figure 2: Decay curves by bearing for each case ---
-fig2, axes2 = plt.subplots(1, 5, figsize=(24, 4.5), sharey=True)
+fig2, axes2 = plt.subplots(1, 6, figsize=(28, 4.5), sharey=True)
 
 for ax, (label, case_dir) in zip(axes2, cases):
     d = all_data[case_dir]

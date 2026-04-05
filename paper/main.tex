@@ -37,11 +37,12 @@ We conclude that inter-farm buffer distance requirements should be wind-rose-dep
 \introduction
 
 Offshore wind farms are designed in isolation, but operate in clusters.
-This mismatch costs energy: wakes from neighboring farms persist for tens of kilometers \citep{Platis2018, Schneemann2020}, yet each farm's layout is typically optimized without knowledge of what will be built nearby \citep{Quick2026omae}.
+This mismatch costs energy: wakes from neighboring farms---a phenomenon increasingly called ``wind theft'' \citep{Finseraas2024, Du2026}---persist for tens of kilometers \citep{Platis2018, Schneemann2020, Canadillas2022}, yet each farm's layout is typically optimized without knowledge of what will be built nearby \citep{Quick2026omae}.
+The scale of the problem is substantial: inter-farm wake losses reduce offshore wind production by 13--15\% on the US east coast \citep{Rosencrans2024} and are projected to exceed the impact of a century of climate change in the North Sea \citep{Warder2025}.
 A recent case study of the Danish Energy Island cluster found negligible design tradeoffs from this ignorance \citep{Quick2026omae}, suggesting that inter-farm coordination may be unnecessary.
 We show this conclusion is site-specific: it holds for the Danish Energy Island's moderately diffuse wind rose, but not for sites with concentrated, unidirectional wind climates---where the cost of designing in isolation can exceed 2\% of annual energy production.
 
-In emerging North Sea clusters, farms are designed and permitted sequentially, often by different developers \citep{Fischereit2022}.
+In emerging North Sea clusters, farms are designed and permitted sequentially, often by different developers \citep{Fischereit2022, Fliegner2025}.
 A target farm's layout is typically optimized before the characteristics of neighboring farms are fully known \citep{Quick2026omae}.
 This creates a design problem under uncertainty: should the developer design the farm optimistically, assuming no neighbors (the \emph{liberal} scenario), or pessimistically, assuming neighbors will appear in the worst possible configuration (the \emph{conservative} scenario)?
 
@@ -234,6 +235,52 @@ The bidirectional case ($a = 0.5$, $f = 0.0$) has the lowest peak regret (1.92\%
     \label{fig:cross_section}
 \end{figure}
 
+\subsection{Self-interested neighbor comparison}
+
+The baseline regret cross-section uses a fixed reference farm (rigid 5$\times$5 grid) translated to each position.
+To test whether the ambush effect persists under more realistic conditions, we conducted a variant in which the reference farm first optimizes its own AEP (given the target farm at its liberal position) before the target farm is re-optimized.
+
+Figure~\ref{fig:cross_section_comparison} compares the adversarial (fixed grid), self-interested, and linear superposition cross-sections for the concentrated unidirectional case ($a = 0.9$, $f = 1.0$).
+The self-interested neighbor produces \emph{higher} peak regret (6.25\% of AEP vs.\ 2.74\%), with the peak shifting from $105°$ to $315°$.
+This counterintuitive result occurs because the self-interested neighbor concentrates its turbines in the highest-wind positions upwind of the target, creating a more focused wake corridor than the rigid grid.
+
+The ambush effect is preserved in all three variants: peak regret occurs at oblique bearings, not along the dominant wind direction ($270°$).
+This confirms that the ambush effect is a robust property of the liberal layout's directional blind spots, not an artifact of the adversarial or reference farm assumptions.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\textwidth]{figures/cross_section_comparison.png}
+    \caption{Regret cross-section comparison for $a = 0.9$, $f = 1.0$.
+    Left: fixed reference farm (baseline).
+    Center: self-interested neighbor (optimizes own AEP).
+    Right: fixed reference farm with linear superposition.
+    Stars mark peak regret.
+    The ambush effect (peak at oblique angles) persists across all three variants.}
+    \label{fig:cross_section_comparison}
+\end{figure}
+
+\subsection{Optimization fidelity}
+
+To verify that the $K = 5$ multistart is sufficient for the 50-turbine target farm, we compare regret at $K = 3$, 5, and 10 inner starts for three representative wind roses (Table~\ref{tab:k_sensitivity}).
+Regret varies by less than 15\% between $K = 5$ and $K = 10$ for the concentrated unidirectional case and the mid-range case, with $K = 10$ giving slightly higher regret at $a = 0.9$ (more inner starts find better conservative layouts, revealing that K=5 slightly overestimates conservative AEP in some cases).
+The bidirectional case ($a = 0.5$, $f = 0.0$) shows larger sensitivity, but absolute regret remains small (12--33\,GWh) in all cases.
+Overall, the relative rankings and qualitative conclusions are stable across multistart levels.
+
+\begin{table}
+    \centering
+    \caption{Design regret (GWh/yr) for 30 greedy neighbors at different multistart levels $K$.}
+    \label{tab:k_sensitivity}
+    \begin{tabular}{lccc}
+        \toprule
+        Wind rose & $K = 3$ & $K = 5$ & $K = 10$ \\
+        \midrule
+        $a = 0.9$, $f = 1.0$ (concentrated, unidir) & 96.0 & 94.6 & 102.8 \\
+        $a = 0.7$, $f = 0.5$ (mid-range) & 62.0 & 55.5 & 49.4 \\
+        $a = 0.5$, $f = 0.0$ (moderate, bidir) & 32.7 & 12.2 & 22.4 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
 \subsection{Regret saturation with number of neighbors}
 
 Figure~\ref{fig:saturation} shows how regret grows as greedy adversarial neighbors are placed sequentially.
@@ -258,8 +305,12 @@ However, the qualitative pattern---unidirectional $\gg$ uniform---is preserved a
 We also compare the effect of the wake superposition method.
 The original Bastankhah model does not prescribe a superposition method, and common implementations differ: root-sum-of-squares (quadratic) superposition produces smaller combined deficits than linear superposition.
 We repeat the unidirectional and uniform cases with linear superposition for both deficit models.
-The neighbor placement patterns and the directional structure of regret are preserved, though absolute magnitudes differ [results to be added upon completion of LUMI runs].
-This confirms that the qualitative conclusions---the dominance of wind rose folding and the ambush effect---are robust to both wake model and superposition choices.
+Linear superposition increases Bastankhah regret by approximately 50\% (e.g., 212.9 to 326.6\,GWh for unidirectional wind), consistent with the more aggressive deficit summation.
+TurbOPark regret increases by 38\% for unidirectional wind but decreases by 17\% for uniform wind with linear superposition, suggesting a more complex interaction when wakes from many directions overlap.
+Critically, the qualitative pattern---unidirectional $\gg$ uniform---is preserved across all model and superposition combinations, confirming that the wind rose shape conclusions are robust.
+
+A regret cross-section with linear superposition (Fig.~\ref{fig:cross_section_comparison}, right panel) shifts the peak regret bearing from $105°$ to $300°$ and increases peak regret from 2.74\% to 3.86\% of AEP.
+While the peak location changes, the fundamental ambush effect persists: peak regret remains at oblique angles to the dominant wind direction ($270°$), not along it.
 
 \begin{table}
     \centering
@@ -270,9 +321,9 @@ This confirms that the qualitative conclusions---the dominance of wind rose fold
         & & Unidirectional ($270°$) & Uniform (24 dirs) \\
         \midrule
         Bastankhah ($k = 0.04$) & Quadratic & 212.9 & 30.4 \\
-        Bastankhah ($k = 0.04$) & Linear & [pending] & [pending] \\
+        Bastankhah ($k = 0.04$) & Linear & 326.6 & 46.0 \\
         TurbOPark ($A = 0.04$) & Quadratic & 818.3 & 164.5 \\
-        TurbOPark ($A = 0.04$) & Linear & [pending] & [pending] \\
+        TurbOPark ($A = 0.04$) & Linear & 1132.9 & 136.8 \\
         \bottomrule
     \end{tabular}
 \end{table}
@@ -336,9 +387,9 @@ The ambush effect is particularly relevant for planning: the directions that \em
 
 Several simplifications limit the generality of these results.
 
-First, the outer adversarial search (greedy individual turbine placement) produces an upper bound on regret.
-Real neighboring farms are designed for their own AEP, not to maximize damage to the target.
-The regret from a self-interested neighbor would be lower, though the directional patterns should be similar.
+First, the outer adversarial search (greedy individual turbine placement) does not represent realistic neighbor behavior.
+Our self-interested variant (Section~\ref{sec:results}.5) shows that a neighbor optimizing its own AEP can actually produce \emph{higher} regret than the fixed reference farm, because AEP-optimal neighbor layouts concentrate turbines upwind of the target.
+The directional pattern of the ambush effect is preserved regardless of neighbor motivation.
 
 Second, we use a constant wind speed (9\,m\,s$^{-1}$) across all directions.
 Real wind roses have speed--direction correlations that could amplify or dampen regret through the cubic power--speed relationship.
