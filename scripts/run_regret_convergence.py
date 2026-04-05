@@ -151,9 +151,72 @@ def place_reference_farm(bearing_deg, distance_D):
     return jnp.array(ref_x + cx), jnp.array(ref_y + cy)
 
 
+def vmap_solve_batch(sim, starts_x, starts_y, boundary, min_spacing,
+                     sgd_settings, ws_amb, wd_amb, weights, ti_amb=None,
+                     neighbor_x=None, neighbor_y=None, chunk_size=50):
+    """Run SGD from multiple starts in parallel via vmap, in chunks.
+
+    Returns array of AEPs for each start.
+    """
+    from dataclasses import replace as _dc_replace
+    from pixwake.optim.sgd import _compute_mid_bisection
+
+    # Pre-compute mid
+    if sgd_settings.mid is None:
+        computed_mid = _compute_mid_bisection(
+            learning_rate=sgd_settings.learning_rate,
+            gamma_min=sgd_settings.gamma_min_factor,
+            max_iter=sgd_settings.max_iter,
+            lower=sgd_settings.bisect_lower,
+            upper=sgd_settings.bisect_upper,
+        )
+        sgd_settings = _dc_replace(sgd_settings, mid=computed_mid)
+
+    n_starts = starts_x.shape[0]
+    n_target = starts_x.shape[1]
+    bnd = boundary
+    min_sp = min_spacing
+
+    has_neighbors = neighbor_x is not None and neighbor_x.shape[0] > 0
+
+    def solve_one(start_x, start_y):
+        if has_neighbors:
+            def objective(x, y):
+                x_all = jnp.concatenate([x, neighbor_x])
+                y_all = jnp.concatenate([y, neighbor_y])
+                result = sim(x_all, y_all, ws_amb=ws_amb, wd_amb=wd_amb, ti_amb=ti_amb)
+                power = result.power()[:, :n_target]
+                return -jnp.sum(power * weights[:, None]) * 8760 / 1e6
+        else:
+            def objective(x, y):
+                result = sim(x, y, ws_amb=ws_amb, wd_amb=wd_amb, ti_amb=ti_amb)
+                power = result.power()
+                return -jnp.sum(power * weights[:, None]) * 8760 / 1e6
+
+        opt_x, opt_y = topfarm_sgd_solve(objective, start_x, start_y,
+                                          bnd, min_sp, sgd_settings)
+        aep = -objective(opt_x, opt_y)
+        return aep
+
+    # Process in chunks to manage GPU memory
+    all_aeps = []
+    for i in range(0, n_starts, chunk_size):
+        chunk_end = min(i + chunk_size, n_starts)
+        chunk_x = starts_x[i:chunk_end]
+        chunk_y = starts_y[i:chunk_end]
+        chunk_aeps = jax.vmap(solve_one)(chunk_x, chunk_y)
+        all_aeps.append(chunk_aeps)
+        print(f"    Chunk {i}-{chunk_end}: {chunk_end-i} solves done, "
+              f"best in chunk = {float(jnp.max(chunk_aeps)):.2f} GWh")
+
+    return jnp.concatenate(all_aeps)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Comprehensive convergence study")
     parser.add_argument("--output-dir", type=str, default="analysis/convergence_study")
+    parser.add_argument("--chunk-size", type=int, default=50,
+                        help="Number of parallel solves per vmap chunk")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -164,7 +227,7 @@ def main():
     sim = WakeSimulation(turbine, deficit)
     init_x, init_y = generate_target_grid(boundary_np, N_TARGET, spacing=4*D)
 
-    # Test configurations: multiple wind roses × (bearing, distance)
+    # Test configurations
     test_configs = [
         {"name": "concentrated_unidir_close", "ed_a": 0.9, "ed_f": 1.0,
          "bearing": 105, "distance_D": 5},
@@ -174,15 +237,18 @@ def main():
          "bearing": 210, "distance_D": 5},
     ]
 
-    # Pre-generate a large pool of random starts (shared across all configs)
+    # Pre-generate a large pool of random starts
     K_MAX = 500
     print(f"Pre-generating {K_MAX} random starts...")
-    all_random_x, all_random_y = [], []
+    random_xs, random_ys = [], []
     for k in range(K_MAX):
         key = jax.random.PRNGKey(k * 7919 + 42)
         rx, ry = random_start_inside_polygon(key, N_TARGET)
-        all_random_x.append(rx)
-        all_random_y.append(ry)
+        random_xs.append(np.array(rx))
+        random_ys.append(np.array(ry))
+    # Stack into arrays for vmap: (K_MAX, N_TARGET)
+    random_xs = jnp.array(np.stack(random_xs))
+    random_ys = jnp.array(np.stack(random_ys))
 
     all_results = {}
 
@@ -203,67 +269,60 @@ def main():
         ws = jnp.full_like(wd, 9.0)
 
         # =====================================================================
-        # PART A: Liberal layout convergence (K_lib sweep)
+        # PART A: Liberal layout convergence (K_lib sweep, vmap parallel)
         # =====================================================================
         print(f"\n{'='*60}")
-        print("PART A: Liberal layout convergence")
+        print("PART A: Liberal layout convergence (200 starts, vmap)")
         print(f"{'='*60}")
 
-        def lib_obj(x, y):
-            return -compute_aep(sim, x, y, ws, wd, weights)
-
         K_lib_values = [1, 2, 5, 10, 20, 50, 100, 200]
+        K_lib_max = max(K_lib_values)
         lib_settings = SGDSettings(learning_rate=50.0, max_iter=10000,
                                    additional_constant_lr_iterations=10000, tol=1e-6)
 
-        # Build liberal starts: grid init + randoms
-        lib_starts_x = [init_x] + all_random_x[:K_MAX-1]
-        lib_starts_y = [init_y] + all_random_y[:K_MAX-1]
+        # Stack liberal starts: grid init + randoms
+        lib_starts_x = jnp.concatenate([init_x[None, :], random_xs[:K_lib_max-1]], axis=0)
+        lib_starts_y = jnp.concatenate([init_y[None, :], random_ys[:K_lib_max-1]], axis=0)
 
-        # Run all liberal starts once, accumulate
-        print("Running 200 liberal optimizations...")
-        lib_all_aeps = []
-        lib_all_xs, lib_all_ys = [], []
-        for k in range(max(K_lib_values)):
-            t0 = time.time()
-            opt_x, opt_y = topfarm_sgd_solve(
-                lib_obj, lib_starts_x[k], lib_starts_y[k],
-                boundary, D * 4, lib_settings)
-            aep = float(-lib_obj(opt_x, opt_y))
-            lib_all_aeps.append(aep)
-            lib_all_xs.append(opt_x)
-            lib_all_ys.append(opt_y)
-            if (k + 1) % 50 == 0 or k == 0:
-                elapsed = time.time() - t0
-                print(f"  Start {k+1}/{max(K_lib_values)}: "
-                      f"AEP={aep:.2f} GWh, best so far={max(lib_all_aeps):.2f} GWh "
-                      f"({elapsed:.1f}s)")
+        print(f"  Running {K_lib_max} liberal optimizations in parallel (chunks of {args.chunk_size})...")
+        t0 = time.time()
+        lib_all_aeps = vmap_solve_batch(
+            sim, lib_starts_x, lib_starts_y, boundary, D * 4,
+            lib_settings, ws, wd, weights, chunk_size=args.chunk_size)
+        lib_elapsed = time.time() - t0
+        lib_all_aeps_np = np.array(lib_all_aeps)
+        print(f"  {K_lib_max} liberal solves in {lib_elapsed:.1f}s "
+              f"({lib_elapsed/K_lib_max:.1f}s/solve effective)")
 
-        # Report best-of-K for each K_lib
+        # Report best-of-K
         lib_results = []
         print(f"\n{'K_lib':>6} {'Best Liberal AEP':>18} {'Δ from K=200':>14}")
         print("-" * 42)
-        best_lib_200 = max(lib_all_aeps[:200])
+        best_lib_200 = float(lib_all_aeps_np[:200].max())
         for K_lib in K_lib_values:
-            best = max(lib_all_aeps[:K_lib])
+            best = float(lib_all_aeps_np[:K_lib].max())
             delta = best - best_lib_200
             print(f"{K_lib:>6} {best:>18.2f} {delta:>+13.2f} GWh")
             lib_results.append({"K_lib": K_lib, "best_aep": best,
-                                "all_aeps": lib_all_aeps[:K_lib]})
+                                "all_aeps": lib_all_aeps_np[:K_lib].tolist()})
 
-        # Use K_lib=200 liberal layout as the reference
-        best_lib_idx = int(np.argmax(lib_all_aeps[:200]))
-        liberal_x = lib_all_xs[best_lib_idx]
-        liberal_y = lib_all_ys[best_lib_idx]
-        liberal_aep = lib_all_aeps[best_lib_idx]
-        print(f"\nUsing liberal layout from start {best_lib_idx} "
-              f"(AEP={liberal_aep:.2f} GWh)")
+        # Use best from K_lib=200 as reference liberal layout
+        # Need to re-solve the best one to get the layout (vmap only returned AEPs)
+        best_lib_idx = int(lib_all_aeps_np[:200].argmax())
+        print(f"\n  Re-solving best liberal start ({best_lib_idx}) to get layout...")
+        def lib_obj(x, y):
+            return -compute_aep(sim, x, y, ws, wd, weights)
+        liberal_x, liberal_y = topfarm_sgd_solve(
+            lib_obj, lib_starts_x[best_lib_idx], lib_starts_y[best_lib_idx],
+            boundary, D * 4, lib_settings)
+        liberal_aep = float(-lib_obj(liberal_x, liberal_y))
+        print(f"  Liberal AEP: {liberal_aep:.2f} GWh (start {best_lib_idx})")
 
         # =====================================================================
-        # PART B: Conservative convergence (K sweep at fixed max_iter=5000)
+        # PART B: Conservative convergence (K sweep, max_iter=5000, vmap)
         # =====================================================================
         print(f"\n{'='*60}")
-        print("PART B: Conservative convergence (K sweep, max_iter=5000)")
+        print("PART B: Conservative convergence (500 starts, vmap)")
         print(f"{'='*60}")
 
         nx, ny = place_reference_farm(cfg["bearing"], cfg["distance_D"])
@@ -275,42 +334,37 @@ def main():
         cons_settings = SGDSettings(learning_rate=50.0, max_iter=5000,
                                     additional_constant_lr_iterations=5000, tol=1e-6)
 
-        def cons_obj(x, y):
-            return -compute_aep(sim, x, y, ws, wd, weights,
-                                neighbor_x=nx, neighbor_y=ny)
-
-        # Build conservative starts: grid, liberal, then randoms
-        cons_starts_x = [init_x, liberal_x] + all_random_x[:K_MAX-2]
-        cons_starts_y = [init_y, liberal_y] + all_random_y[:K_MAX-2]
-
-        # Run all conservative starts, accumulate
         K_cons_values = [1, 2, 3, 5, 10, 20, 50, 100, 200, 300, 400, 500]
         max_K_cons = max(K_cons_values)
-        print(f"Running {max_K_cons} conservative optimizations...")
 
-        cons_all_aeps = []
-        for k in range(max_K_cons):
-            t0 = time.time()
-            opt_x, opt_y = topfarm_sgd_solve(
-                cons_obj, cons_starts_x[k], cons_starts_y[k],
-                boundary, D * 4, cons_settings)
-            aep = float(-cons_obj(opt_x, opt_y))
-            cons_all_aeps.append(aep)
-            if (k + 1) % 50 == 0 or k < 5:
-                elapsed = time.time() - t0
-                best_so_far = max(cons_all_aeps)
-                regret_so_far = max(best_so_far, lib_aep_present) - lib_aep_present
-                print(f"  Start {k+1}/{max_K_cons}: "
-                      f"AEP={aep:.2f}, best={best_so_far:.2f}, "
-                      f"regret={regret_so_far:.2f} GWh ({elapsed:.1f}s)")
+        # Stack conservative starts: grid, liberal, then randoms
+        cons_starts_x = jnp.concatenate([
+            init_x[None, :], liberal_x[None, :], random_xs[:max_K_cons-2]
+        ], axis=0)
+        cons_starts_y = jnp.concatenate([
+            init_y[None, :], liberal_y[None, :], random_ys[:max_K_cons-2]
+        ], axis=0)
+
+        print(f"  Running {max_K_cons} conservative optimizations in parallel "
+              f"(chunks of {args.chunk_size})...")
+        t0 = time.time()
+        cons_all_aeps = vmap_solve_batch(
+            sim, cons_starts_x, cons_starts_y, boundary, D * 4,
+            cons_settings, ws, wd, weights,
+            neighbor_x=nx, neighbor_y=ny, chunk_size=args.chunk_size)
+        cons_elapsed = time.time() - t0
+        cons_all_aeps_np = np.array(cons_all_aeps)
+        print(f"  {max_K_cons} conservative solves in {cons_elapsed:.1f}s "
+              f"({cons_elapsed/max_K_cons:.1f}s/solve effective)")
 
         # Report best-of-K for each K (with pooling)
         cons_results = []
+        ref_best = float(cons_all_aeps_np[:500].max())
+        ref_regret = max(ref_best, lib_aep_present) - lib_aep_present
         print(f"\n{'K':>5} {'Best Cons AEP':>15} {'Regret (GWh)':>14} {'Regret (%)':>12} {'Δ from K=500':>14}")
         print("-" * 65)
-        ref_regret = max(max(cons_all_aeps[:500]), lib_aep_present) - lib_aep_present
         for K in K_cons_values:
-            best = max(cons_all_aeps[:K])
+            best = float(cons_all_aeps_np[:K].max())
             best_pooled = max(best, lib_aep_present)
             regret = best_pooled - lib_aep_present
             pct = 100 * regret / liberal_aep
@@ -320,35 +374,33 @@ def main():
                 "K": K, "best_cons_aep": float(best_pooled),
                 "regret_gwh": float(regret), "regret_pct": float(pct),
                 "best_raw_aep": float(best),
-                "all_aeps": [float(a) for a in cons_all_aeps[:K]],
+                "all_aeps": cons_all_aeps_np[:K].tolist(),
             })
 
         # =====================================================================
-        # PART C: SGD iteration convergence (vary max_iter at K=200)
+        # PART C: SGD iteration convergence (vary max_iter at K=200, vmap)
         # =====================================================================
         print(f"\n{'='*60}")
-        print("PART C: SGD iteration convergence (K=200, vary max_iter)")
+        print("PART C: SGD iteration convergence (K=200, vary max_iter, vmap)")
         print(f"{'='*60}")
 
         iter_values = [100, 500, 1000, 2000, 5000, 10000]
         iter_results = []
+        K_iter = 200
 
         for max_iter in iter_values:
             iter_settings = SGDSettings(
                 learning_rate=50.0, max_iter=max_iter,
                 additional_constant_lr_iterations=max_iter, tol=1e-6)
 
-            iter_aeps = []
             t0 = time.time()
-            for k in range(200):
-                opt_x, opt_y = topfarm_sgd_solve(
-                    cons_obj, cons_starts_x[k], cons_starts_y[k],
-                    boundary, D * 4, iter_settings)
-                aep = float(-cons_obj(opt_x, opt_y))
-                iter_aeps.append(aep)
-
+            iter_aeps = vmap_solve_batch(
+                sim, cons_starts_x[:K_iter], cons_starts_y[:K_iter],
+                boundary, D * 4, iter_settings, ws, wd, weights,
+                neighbor_x=nx, neighbor_y=ny, chunk_size=args.chunk_size)
             elapsed = time.time() - t0
-            best = max(iter_aeps)
+
+            best = float(jnp.max(iter_aeps))
             best_pooled = max(best, lib_aep_present)
             regret = best_pooled - lib_aep_present
             pct = 100 * regret / liberal_aep
@@ -368,7 +420,7 @@ def main():
         print(f"{'='*60}")
 
         n_bootstrap = 1000
-        aeps_array = np.array(cons_all_aeps[:500])
+        aeps_array = cons_all_aeps_np[:500]
 
         for K_test in [5, 10, 20, 50, 100, 200]:
             bootstrap_regrets = []
