@@ -1900,9 +1900,23 @@ class GreedyGridSearch:
             regret = conservative_aep - lib_aep_present
             return conservative_aep, regret, opt_x, opt_y
 
-        all_aeps, all_regrets, all_opt_xs, all_opt_ys = jax.vmap(solve_one)(
-            flat_cx, flat_cy, flat_init_x, flat_init_y
-        )
+        # Chunk the vmap to avoid GPU OOM for large K
+        n_total = flat_cx.shape[0]
+        chunk_size = min(50, n_total)  # max 50 parallel solves
+        aep_chunks, regret_chunks, ox_chunks, oy_chunks = [], [], [], []
+        for i in range(0, n_total, chunk_size):
+            end = min(i + chunk_size, n_total)
+            ca, cr, cox, coy = jax.vmap(solve_one)(
+                flat_cx[i:end], flat_cy[i:end],
+                flat_init_x[i:end], flat_init_y[i:end])
+            aep_chunks.append(ca)
+            regret_chunks.append(cr)
+            ox_chunks.append(cox)
+            oy_chunks.append(coy)
+        all_aeps = jnp.concatenate(aep_chunks)
+        all_regrets = jnp.concatenate(regret_chunks)
+        all_opt_xs = jnp.concatenate(ox_chunks)
+        all_opt_ys = jnp.concatenate(oy_chunks)
 
         if multistart:
             # Reshape back to (n_candidates, K, ...)
