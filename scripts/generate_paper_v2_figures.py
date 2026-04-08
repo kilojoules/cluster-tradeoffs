@@ -140,7 +140,7 @@ buf_configs = [
     ("$a$=0.5, $f$=0.0 (mod. bidir)", "0.5", "0.0", "tab:blue", "D"),
 ]
 
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5.5))
+fig, ax = plt.subplots(figsize=(8, 5.5))
 for label, a, f, color, marker in buf_configs:
     regrets_buf = []
     lib_aep_buf = None
@@ -150,26 +150,19 @@ for label, a, f, color, marker in buf_configs:
         if lib_aep_buf is None:
             lib_aep_buf = d["liberal_aep_gwh"]
     regrets_buf = np.array(regrets_buf)
-    ax1.plot(buffers_km, regrets_buf, f"{marker}-", color=color, label=label,
-             linewidth=2, markersize=8)
-    ax2.plot(buffers_km, 100 * regrets_buf / lib_aep_buf, f"{marker}-", color=color,
-             label=label, linewidth=2, markersize=8)
+    ax.plot(buffers_km, 100 * regrets_buf / lib_aep_buf, f"{marker}-", color=color,
+            label=label, linewidth=2, markersize=8)
 
 nyserda_km = 4 * 1.852
-for ax in (ax1, ax2):
-    ax.axvline(nyserda_km, color="gray", ls="--", lw=1.5, alpha=0.7)
-    ax.text(nyserda_km + 0.15, ax.get_ylim()[1] * 0.9 if ax.get_ylim()[1] > 5 else 2.2,
-            "NYSERDA\n4 nm", fontsize=8, color="gray", va="top")
-    ax.set_xlabel("Buffer distance (km)")
-    ax.grid(True, alpha=0.3)
-    ax.legend(fontsize=9)
-    ax_top = ax.secondary_xaxis("top", functions=(lambda x: x*1000/D, lambda x: x*D/1000))
-    ax_top.set_xlabel("Buffer distance ($D$)")
-
-ax1.set_ylabel("Design regret (GWh/yr)")
-ax1.set_title("Absolute Regret vs. Buffer (K=500)")
-ax2.set_ylabel("Design regret (% of AEP)")
-ax2.set_title("Relative Regret vs. Buffer (K=500)")
+ax.axvline(nyserda_km, color="gray", ls="--", lw=1.5, alpha=0.7)
+ax.text(nyserda_km + 0.15, ax.get_ylim()[1] * 0.9,
+        "NYSERDA\n4 nm", fontsize=8, color="gray", va="top")
+ax.set_xlabel("Buffer distance (km)")
+ax.set_ylabel("Design regret (% of liberal AEP)")
+ax.grid(True, alpha=0.3)
+ax.legend(fontsize=9)
+ax_top = ax.secondary_xaxis("top", functions=(lambda x: x*1000/D, lambda x: x*D/1000))
+ax_top.set_xlabel("Buffer distance ($D$)")
 fig.suptitle("Buffer Distance Decay of Design Regret (K=500 Multistart)", fontsize=12)
 plt.tight_layout()
 fig.savefig(OUT / "buffer_decay_k500.png", dpi=200, bbox_inches="tight")
