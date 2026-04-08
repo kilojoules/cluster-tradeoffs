@@ -578,7 +578,8 @@ def main():
         liberal_objective, init_x, init_y, boundary, MIN_SPACING_D * D,
         settings=sgd_settings,
     )
-    print(f"Liberal layout optimized: {len(liberal_x)} turbines")
+    liberal_aep = float(compute_aep(sim, liberal_x, liberal_y, ws, wd, weights))
+    print(f"Liberal layout optimized: {len(liberal_x)} turbines, AEP={liberal_aep:.2f} GWh")
 
     # Check if regret maps already saved
     npz_path = results_dir / "regret_maps.npz"
