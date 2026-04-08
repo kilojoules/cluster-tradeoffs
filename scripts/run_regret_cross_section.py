@@ -275,14 +275,42 @@ def main():
         tol=1e-6,
     )
 
-    print("\nComputing liberal layout (no neighbors)...")
+    # Liberal layout with multistart
+    print(f"\nComputing liberal layout (K_lib={min(args.n_inner_starts, 100)} starts)...")
     def liberal_objective(x, y):
         return -compute_aep(sim, x, y, ws, wd, weights, ti_amb)
 
-    liberal_x, liberal_y = topfarm_sgd_solve(
-        liberal_objective, init_x, init_y, boundary, D * 4, sgd_settings)
-    liberal_aep = compute_aep(sim, liberal_x, liberal_y, ws, wd, weights, ti_amb)
-    print(f"Liberal AEP: {liberal_aep:.2f} GWh")
+    K_lib = min(args.n_inner_starts, 100)
+    lib_best_aep = -np.inf
+    liberal_x, liberal_y = init_x, init_y
+    for k in range(K_lib):
+        if k == 0:
+            sx, sy = init_x, init_y
+        else:
+            key = jax.random.PRNGKey(k * 7919 + 42)
+            n_turb = args.n_target
+            pts = []
+            while len(pts) < n_turb:
+                rx = jax.random.uniform(key, (n_turb * 3,),
+                                        minval=boundary_np[:, 0].min(),
+                                        maxval=boundary_np[:, 0].max())
+                key, _ = jax.random.split(key)
+                ry = jax.random.uniform(key, (n_turb * 3,),
+                                        minval=boundary_np[:, 1].min(),
+                                        maxval=boundary_np[:, 1].max())
+                key, _ = jax.random.split(key)
+                cands = np.column_stack([np.array(rx), np.array(ry)])
+                inside = _polygon_path.contains_points(cands)
+                pts.extend(cands[inside].tolist())
+            pts = np.array(pts[:n_turb])
+            sx, sy = jnp.array(pts[:, 0]), jnp.array(pts[:, 1])
+        lx, ly = topfarm_sgd_solve(liberal_objective, sx, sy, boundary, D * 4, sgd_settings)
+        lib_aep = float(-liberal_objective(lx, ly))
+        if lib_aep > lib_best_aep:
+            lib_best_aep = lib_aep
+            liberal_x, liberal_y = lx, ly
+    liberal_aep = lib_best_aep
+    print(f"Liberal AEP: {liberal_aep:.2f} GWh (best of {K_lib} starts)")
 
     # Build reference farm
     ref_x_local, ref_y_local = build_reference_farm(
@@ -290,89 +318,147 @@ def main():
     n_ref = len(ref_x_local)
     print(f"Reference farm: {n_ref} turbines")
 
-    # Sweep
+    # =========================================================================
+    # VMAP-BATCHED SWEEP
+    # Batch all (position, start) pairs and vmap in chunks for GPU efficiency
+    # =========================================================================
+    n_positions = len(distances_m) * args.n_bearings
+    K = args.n_inner_starts
+
+    # Build all neighbor positions: (n_positions, n_ref) arrays
+    all_nx_np = np.zeros((n_positions, n_ref))
+    all_ny_np = np.zeros((n_positions, n_ref))
+    pos_info = []  # (di, bi, bearing, dist_m) for each position
+    pi = 0
+    for di, dist_m in enumerate(distances_m):
+        for bi, bearing in enumerate(bearings):
+            nx, ny = place_reference_farm(ref_x_local, ref_y_local, bearing, dist_m)
+            all_nx_np[pi] = np.array(nx)
+            all_ny_np[pi] = np.array(ny)
+            pos_info.append((di, bi, float(bearing), float(dist_m)))
+            pi += 1
+    all_nx = jnp.array(all_nx_np)
+    all_ny = jnp.array(all_ny_np)
+
+    # Build K starts (shared across all positions): grid, liberal, random
+    print(f"Generating {K} start layouts...")
+    start_xs_list = [init_x, liberal_x]
+    start_ys_list = [init_y, liberal_y]
+    for k in range(2, K):
+        key = jax.random.PRNGKey(k * 7919 + 42)
+        n_turb = args.n_target
+        pts = []
+        while len(pts) < n_turb:
+            rx = jax.random.uniform(key, (n_turb * 3,),
+                                    minval=boundary_np[:, 0].min(),
+                                    maxval=boundary_np[:, 0].max())
+            key, _ = jax.random.split(key)
+            ry = jax.random.uniform(key, (n_turb * 3,),
+                                    minval=boundary_np[:, 1].min(),
+                                    maxval=boundary_np[:, 1].max())
+            key, _ = jax.random.split(key)
+            cands = np.column_stack([np.array(rx), np.array(ry)])
+            inside = _polygon_path.contains_points(cands)
+            pts.extend(cands[inside].tolist())
+        pts = np.array(pts[:n_turb])
+        start_xs_list.append(jnp.array(pts[:, 0]))
+        start_ys_list.append(jnp.array(pts[:, 1]))
+    start_xs = jnp.stack(start_xs_list)  # (K, n_target)
+    start_ys = jnp.stack(start_ys_list)
+
+    # Build batched (position × start) arrays: (n_positions * K, ...)
+    # For each position, repeat K starts
+    # For each start, repeat n_positions neighbor positions
+    batch_nx = jnp.repeat(all_nx, K, axis=0)  # (n_positions * K, n_ref)
+    batch_ny = jnp.repeat(all_ny, K, axis=0)
+    batch_start_x = jnp.tile(start_xs, (n_positions, 1))  # (n_positions * K, n_target)
+    batch_start_y = jnp.tile(start_ys, (n_positions, 1))
+
+    n_total = n_positions * K
+    print(f"Total batch: {n_positions} positions × {K} starts = {n_total} solves")
+
+    # Pre-compute mid for SGD settings
+    from dataclasses import replace as _dc_replace
+    from pixwake.optim.sgd import _compute_mid_bisection
+    if sgd_settings.mid is None:
+        computed_mid = _compute_mid_bisection(
+            learning_rate=sgd_settings.learning_rate,
+            gamma_min=sgd_settings.gamma_min_factor,
+            max_iter=sgd_settings.max_iter,
+            lower=sgd_settings.bisect_lower,
+            upper=sgd_settings.bisect_upper,
+        )
+        sgd_settings = _dc_replace(sgd_settings, mid=computed_mid)
+
+    n_target = init_x.shape[0]
+
+    def solve_one(sx, sy, nx_local, ny_local):
+        def objective(x, y):
+            x_all = jnp.concatenate([x, nx_local])
+            y_all = jnp.concatenate([y, ny_local])
+            result = sim(x_all, y_all, ws_amb=ws, wd_amb=wd, ti_amb=ti_amb)
+            power = result.power()[:, :n_target]
+            return -jnp.sum(power * weights[:, None]) * 8760 / 1e6
+
+        opt_x, opt_y = topfarm_sgd_solve(
+            objective, sx, sy, boundary, D * 4, sgd_settings)
+        aep = -objective(opt_x, opt_y)
+        return aep
+
+    # Chunked vmap
+    CHUNK = 50
+    print(f"Running vmap in chunks of {CHUNK}...")
+    t0 = time.time()
+    all_cons_aeps = np.zeros(n_total)
+    for start in range(0, n_total, CHUNK):
+        end = min(start + CHUNK, n_total)
+        chunk_aeps = jax.vmap(solve_one)(
+            batch_start_x[start:end], batch_start_y[start:end],
+            batch_nx[start:end], batch_ny[start:end])
+        all_cons_aeps[start:end] = np.array(chunk_aeps)
+        elapsed = time.time() - t0
+        rate = elapsed / end
+        remaining = rate * (n_total - end)
+        pct_done = 100 * end / n_total
+        print(f"  Chunk {start:>6}-{end:>6}  "
+              f"({pct_done:>5.1f}%)  "
+              f"elapsed={elapsed/60:.1f}min  eta={remaining/60:.1f}min")
+
+    # Reshape: (n_positions, K)
+    cons_aeps = all_cons_aeps.reshape(n_positions, K)
+
+    # For each position, compute regret with pooling
     results_grid = np.full((len(distances_D), args.n_bearings), np.nan)
     liberal_aep_present_grid = np.full_like(results_grid, np.nan)
     conservative_aep_grid = np.full_like(results_grid, np.nan)
     all_evals = []
 
-    total = len(distances_D) * args.n_bearings
-    count = 0
-    t0 = time.time()
-
-    for di, dist_m in enumerate(distances_m):
-        for bi, bearing in enumerate(bearings):
-            count += 1
-            nx, ny = place_reference_farm(ref_x_local, ref_y_local, bearing, dist_m)
-
-            # Liberal AEP with this neighbor present
-            lib_aep_present = compute_aep(
-                sim, liberal_x, liberal_y, ws, wd, weights, ti_amb,
-                neighbor_x=nx, neighbor_y=ny)
-
-            # Conservative: re-optimize target with this neighbor
-            # K multistart: grid init + liberal layout + random starts
-            best_cons_aep = -np.inf
-            for k in range(args.n_inner_starts):
-                if k == 0:
-                    start_x, start_y = init_x, init_y
-                elif k == 1:
-                    start_x, start_y = liberal_x, liberal_y
-                else:
-                    key = jax.random.PRNGKey(hash((bearing, dist_m, k)) % (2**31))
-                    # Random inside polygon
-                    n_turb = args.n_target
-                    pts = []
-                    while len(pts) < n_turb:
-                        rx = jax.random.uniform(key, (n_turb * 3,),
-                                                minval=boundary_np[:, 0].min(),
-                                                maxval=boundary_np[:, 0].max())
-                        key, _ = jax.random.split(key)
-                        ry = jax.random.uniform(key, (n_turb * 3,),
-                                                minval=boundary_np[:, 1].min(),
-                                                maxval=boundary_np[:, 1].max())
-                        key, _ = jax.random.split(key)
-                        cands = np.column_stack([np.array(rx), np.array(ry)])
-                        inside = _polygon_path.contains_points(cands)
-                        pts.extend(cands[inside].tolist())
-                    pts = np.array(pts[:n_turb])
-                    start_x, start_y = jnp.array(pts[:, 0]), jnp.array(pts[:, 1])
-
-                def cons_objective(x, y):
-                    return -compute_aep(sim, x, y, ws, wd, weights, ti_amb,
-                                        neighbor_x=nx, neighbor_y=ny)
-
-                cx, cy = topfarm_sgd_solve(
-                    cons_objective, start_x, start_y, boundary, D * 4, sgd_settings)
-                cons_aep = compute_aep(
-                    sim, cx, cy, ws, wd, weights, ti_amb,
-                    neighbor_x=nx, neighbor_y=ny)
-                if cons_aep > best_cons_aep:
-                    best_cons_aep = cons_aep
-
-            # Pool: conservative AEP must be at least as good as liberal with neighbors
-            best_cons_aep = max(best_cons_aep, float(lib_aep_present))
-            regret = best_cons_aep - float(lib_aep_present)
-            results_grid[di, bi] = regret
-            liberal_aep_present_grid[di, bi] = lib_aep_present
-            conservative_aep_grid[di, bi] = best_cons_aep
-
-            elapsed = time.time() - t0
-            rate = elapsed / count
-            remaining = rate * (total - count)
-            print(f"  [{count}/{total}] bearing={bearing:.0f} dist={distances_D[di]:.0f}D "
-                  f"regret={regret:.2f} GWh ({100*regret/liberal_aep:.3f}%) "
-                  f"[{elapsed:.0f}s elapsed, ~{remaining:.0f}s remaining]")
-
-            all_evals.append({
-                "bearing_deg": float(bearing),
-                "distance_D": float(distances_D[di]),
-                "distance_m": float(dist_m),
-                "regret_gwh": float(regret),
-                "regret_pct": float(100 * regret / liberal_aep),
-                "liberal_aep_present_gwh": float(lib_aep_present),
-                "conservative_aep_gwh": float(best_cons_aep),
-            })
+    print(f"\n{'Position':>10} {'bearing':>8} {'dist':>6} {'regret':>10} {'pct':>8}")
+    for pi, (di, bi, bearing, dist_m) in enumerate(pos_info):
+        nx_p = all_nx[pi]
+        ny_p = all_ny[pi]
+        lib_aep_present = float(compute_aep(
+            sim, liberal_x, liberal_y, ws, wd, weights, ti_amb,
+            neighbor_x=nx_p, neighbor_y=ny_p))
+        best_cons = float(cons_aeps[pi].max())
+        # Pool
+        best_cons = max(best_cons, lib_aep_present)
+        regret = best_cons - lib_aep_present
+        results_grid[di, bi] = regret
+        liberal_aep_present_grid[di, bi] = lib_aep_present
+        conservative_aep_grid[di, bi] = best_cons
+        pct = 100 * regret / liberal_aep
+        all_evals.append({
+            "bearing_deg": bearing,
+            "distance_D": distances_D[di],
+            "distance_m": dist_m,
+            "regret_gwh": float(regret),
+            "regret_pct": float(pct),
+            "liberal_aep_present_gwh": lib_aep_present,
+            "conservative_aep_gwh": best_cons,
+        })
+    t_total = time.time() - t0
+    print(f"\nTotal sweep time: {t_total/60:.1f} min")
 
     elapsed = time.time() - t0
     print(f"\nTotal time: {elapsed:.0f}s ({elapsed/60:.1f} min)")
