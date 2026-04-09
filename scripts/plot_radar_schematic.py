@@ -37,13 +37,29 @@ def to_km(x, y):
 
 bnd_km = np.column_stack(to_km(boundary_np[:, 0], boundary_np[:, 1]))
 
-# Reference farm positions to illustrate
-ref_positions = [
-    (270, 15, "tab:red", "High regret\n(upwind)"),
-    (105, 10, "tab:orange", "Ambush\n(oblique)"),
-    (0, 20, "tab:green", "Low regret\n(crosswind)"),
-    (180, 30, "tab:blue", "Minimal\n(far, downwind)"),
+# Compute polygon extent in each direction to place farms outside
+def polygon_extent_km(bearing_deg, bnd_km):
+    """Max projection of polygon onto bearing direction (km from centroid)."""
+    rad = np.radians(bearing_deg)
+    projections = bnd_km[:, 0] * np.sin(rad) + bnd_km[:, 1] * np.cos(rad)
+    return projections.max()
+
+ref_farm_half_km = 2 * 7 * D / 1000  # half-width of 5x5 reference farm
+
+# Reference farm positions: bearing, buffer_km_from_edge, color, label
+ref_placements = [
+    (270, 3.0, "tab:red", "High regret\n(upwind)"),
+    (135, 5.0, "tab:orange", "Ambush\n(oblique)"),
+    (0, 8.0, "tab:green", "Low regret\n(crosswind)"),
+    (45, 15.0, "tab:blue", "Minimal\n(far)"),
 ]
+
+# Convert to absolute distance from centroid
+ref_positions = []
+for bearing, buffer_km, color, label in ref_placements:
+    edge_km = polygon_extent_km(bearing, bnd_km)
+    dist_km = edge_km + ref_farm_half_km + buffer_km
+    ref_positions.append((bearing, dist_km, color, label))
 
 # Build a tiny 5x5 grid for the reference farm
 ref_spacing = 7 * D
@@ -83,18 +99,16 @@ ax1.add_patch(poly)
 ax1.scatter(target_x, target_y, c="navy", marker="^", s=30, zorder=3,
             label="Target farm (50 turbines)")
 
-# Distance rings
-for r_D in [10, 20, 30]:
-    r_km = r_D * D / 1000
+# Distance rings (from centroid)
+for r_km in [5, 10, 15, 20, 25]:
     circle = Circle((0, 0), r_km, fill=False, edgecolor="gray", ls=":",
                      lw=0.8, alpha=0.5, zorder=1)
     ax1.add_patch(circle)
-    ax1.text(r_km * 0.71, r_km * 0.71, f"{r_D}$D$", fontsize=8,
+    ax1.text(r_km * 0.71, r_km * 0.71, f"{r_km} km", fontsize=7,
              color="gray", ha="center", va="center")
 
 # Reference farm placements
-for bearing, dist_D, color, label in ref_positions:
-    dist_km = dist_D * D / 1000
+for bearing, dist_km, color, label in ref_positions:
     bearing_rad = np.radians(bearing)
     nx_km = dist_km * np.sin(bearing_rad)
     ny_km = dist_km * np.cos(bearing_rad)
@@ -119,16 +133,28 @@ for bearing, dist_D, color, label in ref_positions:
              bbox=dict(boxstyle="round,pad=0.3", facecolor="white",
                        edgecolor=color, alpha=0.9))
 
-# Compass rose
+# Compass rose at edge of plot
+xlim = ax1.get_xlim()
+ylim = ax1.get_ylim()
+r_compass = min(abs(xlim[0]), abs(xlim[1]), abs(ylim[0]), abs(ylim[1])) * 0.92
 for angle, lbl in [(0, "N"), (90, "E"), (180, "S"), (270, "W")]:
     rad = np.radians(angle)
-    r = 11
-    ax1.text(r * np.sin(rad), r * np.cos(rad), lbl,
-             fontsize=11, ha="center", va="center", fontweight="bold",
+    ax1.text(r_compass * np.sin(rad), r_compass * np.cos(rad), lbl,
+             fontsize=13, ha="center", va="center", fontweight="bold",
              color="gray")
 
-ax1.set_xlim(-14, 14)
-ax1.set_ylim(-14, 14)
+# Auto-scale to fit all reference farms
+all_pts_x = [bnd_km[:, 0].min(), bnd_km[:, 0].max()]
+all_pts_y = [bnd_km[:, 1].min(), bnd_km[:, 1].max()]
+for bearing, dist_km, color, label in ref_positions:
+    rad = np.radians(bearing)
+    cx_ref = dist_km * np.sin(rad)
+    cy_ref = dist_km * np.cos(rad)
+    all_pts_x.extend([cx_ref - ref_farm_half_km - 2, cx_ref + ref_farm_half_km + 2])
+    all_pts_y.extend([cy_ref - ref_farm_half_km - 2, cy_ref + ref_farm_half_km + 2])
+pad = 3
+ax1.set_xlim(min(all_pts_x) - pad, max(all_pts_x) + pad)
+ax1.set_ylim(min(all_pts_y) - pad, max(all_pts_y) + pad)
 ax1.set_aspect("equal")
 ax1.set_xlabel("x (km)", fontsize=12)
 ax1.set_ylabel("y (km)", fontsize=12)
@@ -182,9 +208,9 @@ ax2.set_yticklabels(["10$D$", "20$D$", "30$D$", "40$D$", "60$D$"], fontsize=8)
 from edrose import EllipticalWindRose
 wr = EllipticalWindRose(a=0.9, f=1.0, theta_prev=270, n_sectors=24)
 ax_inset = inset_axes(ax2, width="30%", height="30%", loc="lower right",
-                      axes_class=PolarAxes,
-                      axes_kwargs={"theta_zero_location": "N",
-                                   "theta_direction": -1})
+                      axes_class=PolarAxes)
+ax_inset.set_theta_zero_location("N")
+ax_inset.set_theta_direction(-1)
 wr_width = np.radians(360 / 24)
 ax_inset.bar(np.radians(wr.wind_directions), wr.sector_frequencies,
              width=wr_width, color="steelblue", alpha=0.7,
