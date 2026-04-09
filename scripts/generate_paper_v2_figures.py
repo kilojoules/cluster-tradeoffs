@@ -150,19 +150,19 @@ for label, a, f, color, marker in buf_configs:
         if lib_aep_buf is None:
             lib_aep_buf = d["liberal_aep_gwh"]
     regrets_buf = np.array(regrets_buf)
-    ax.plot(buffers_km, 100 * regrets_buf / lib_aep_buf, f"{marker}-", color=color,
+    ax.plot(buffers_D, 100 * regrets_buf / lib_aep_buf, f"{marker}-", color=color,
             label=label, linewidth=2, markersize=8)
 
-nyserda_km = 4 * 1.852
-ax.axvline(nyserda_km, color="gray", ls="--", lw=1.5, alpha=0.7)
-ax.text(nyserda_km + 0.15, ax.get_ylim()[1] * 0.9,
+nyserda_D = 4 * 1.852 * 1000 / D  # 4 nm in rotor diameters
+ax.axvline(nyserda_D, color="gray", ls="--", lw=1.5, alpha=0.7)
+ax.text(nyserda_D + 1, ax.get_ylim()[1] * 0.9,
         "NYSERDA\n4 nm", fontsize=8, color="gray", va="top")
-ax.set_xlabel("Buffer distance (km)")
+ax.set_xlabel("Buffer distance ($D$)")
 ax.set_ylabel("Design regret (% of liberal AEP)")
 ax.grid(True, alpha=0.3)
 ax.legend(fontsize=9)
-ax_top = ax.secondary_xaxis("top", functions=(lambda x: x*1000/D, lambda x: x*D/1000))
-ax_top.set_xlabel("Buffer distance ($D$)")
+ax_top = ax.secondary_xaxis("top", functions=(lambda x: x*D/1000, lambda x: x*1000/D))
+ax_top.set_xlabel("Buffer distance (km)")
 fig.suptitle("Buffer Distance Decay of Design Regret (K=500 Multistart)", fontsize=12)
 plt.tight_layout()
 fig.savefig(OUT / "buffer_decay_k500.png", dpi=200, bbox_inches="tight")

@@ -56,7 +56,7 @@ def get_wind_rose(case_dir):
 all_data = {}
 global_max_pct = 0
 for label, case_dir in cases:
-    with open(f"analysis/cross_section/{case_dir}/results.json") as f:
+    with open(f"analysis/cross_section_k100/{case_dir}/results.json") as f:
         d = json.load(f)
     all_data[case_dir] = d
     g = np.array(d["regret_grid_pct"])
@@ -157,7 +157,7 @@ cbar_ax = fig.add_axes([0.92, 0.15, 0.012, 0.7])
 fig.colorbar(im, cax=cbar_ax, label="Design Regret (% of AEP)")
 
 plt.tight_layout(rect=[0, 0, 0.91, 0.95])
-out = Path("analysis/cross_section/regret_cross_section.png")
+out = Path("analysis/cross_section_k100/regret_cross_section.png")
 fig.savefig(str(out), dpi=200, bbox_inches="tight")
 print(f"Saved: {out}")
 
@@ -190,7 +190,7 @@ for ax, (label, case_dir) in zip(axes2, cases):
 fig2.suptitle("Regret Decay by Bearing — Top 4 Most Adverse Directions",
               fontsize=12)
 plt.tight_layout()
-out2 = Path("analysis/cross_section/regret_decay_by_bearing.png")
+out2 = Path("analysis/cross_section_k100/regret_decay_by_bearing.png")
 fig2.savefig(str(out2), dpi=200, bbox_inches="tight")
 print(f"Saved: {out2}")
 
