@@ -8,6 +8,7 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.patheffects
 from pathlib import Path
 
 D = 240.0
@@ -96,11 +97,23 @@ for ax, data, cblabel, title, fmt in [
     # Uniform reference
     a_unif = 1 / np.sqrt(np.pi)
     ax.axhline(a_unif, color="white", ls="--", lw=1, alpha=0.7)
-    # DEI marker (fitted: a=0.64, f=0.38)
-    ax.plot(0.384, 0.637, "s", color="cyan", markersize=12,
-            markeredgecolor="black", markeredgewidth=1.5, zorder=10)
-    ax.text(0.384 + 0.04, 0.637, "DEI", fontsize=9, fontweight="bold",
-            color="cyan", va="center")
+    # Real North Sea sites overlay
+    real_sites = [
+        ("DEI", 0.384, 0.637, "cyan", "s"),
+        ("Horns Rev", 0.384, 0.649, "lime", "D"),
+        ("Lillgrund", 0.544, 0.621, "magenta", "^"),
+        ("Borssele", 0.291, 0.728, "yellow", "o"),
+        ("Pr. Amalia", 0.182, 0.650, "white", "p"),
+    ]
+    for name, f_site, a_site, color, marker in real_sites:
+        ax.plot(f_site, a_site, marker, color=color, markersize=10,
+                markeredgecolor="black", markeredgewidth=1.2, zorder=10)
+        # Offset labels to avoid overlap
+        dx = 0.04 if name != "Horns Rev" else -0.12
+        dy = 0.02 if name != "Horns Rev" else 0.02
+        ax.text(f_site + dx, a_site + dy, name, fontsize=7, fontweight="bold",
+                color=color, va="bottom",
+                path_effects=[matplotlib.patheffects.withStroke(linewidth=2, foreground="black")])
 
 fig.suptitle("Design Regret Across Wind Rose Shape Space\n"
              "30 greedy neighbors, Bastankhah $k$=0.04, 50 IEA-15MW turbines, K=500 multistart",
