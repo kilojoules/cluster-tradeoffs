@@ -231,12 +231,14 @@ This is directly relevant to the emerging cross-border coordination frameworks f
 
 \subsection{The ambush effect: directional vulnerability}\label{sec:cross-sections}
 
-Figure~\ref{fig:cross-section} presents regret cross-sections at $K = 100$ for six wind roses (Table~\ref{tab:cross-section}).
+Figure~\ref{fig:cross-section} presents regret cross-sections at $K = 500$ (converged) for four elliptical wind roses spanning the shape space.
+The K=500 results show peak regret ratios of 1.07--1.11$\times$ those at K=100, confirming that the directional pattern is robust while magnitudes increase slightly with more optimization starts.
+Peak bearings are unchanged from K=100 to K=500 for three cases and shift slightly (from \SI{135}{\degree} to \SI{105}{\degree}) for the mid-range case (Table~\ref{tab:cross-section}).
 
 \begin{figure}[t]
     \centering
-    \includegraphics[width=\textwidth]{figures/cross_section_k100.png}
-    \caption{Regret cross-sections at $K = 100$: design regret vs.\ neighbor bearing and distance for a $5 \times 5$ reference farm.
+    \includegraphics[width=\textwidth]{figures/cross_section_k500.png}
+    \caption{Regret cross-sections at $K = 500$: design regret vs.\ neighbor bearing and distance for a $5 \times 5$ reference farm.
     Stars mark peak regret.
     Inset wind roses show sector frequencies.
     Dominant wind: \SI{270}{\degree} (west).}
@@ -245,19 +247,17 @@ Figure~\ref{fig:cross-section} presents regret cross-sections at $K = 100$ for s
 
 \begin{table}[t]
     \centering
-    \caption{Peak regret from cross-sections at $K = 100$.
+    \caption{Peak regret from cross-sections at $K = 500$ (converged).
     Dominant wind: \SI{270}{\degree}.}
     \label{tab:cross-section}
     \begin{tabular}{lrrrr}
         \toprule
         Case & Max (\si{GWh}) & Max (\si{\percent}) & Bearing & Distance \\
         \midrule
-        DEI real wind rose       & 122.3 & 2.21 & \SI{225}{\degree} & $15D$ \\
-        $a = 0.9$, $f = 1.0$    & 117.6 & 2.96 & \SI{315}{\degree} & $15D$ \\
-        $a = 0.7$, $f = 0.5$    & 114.2 & 2.89 & \SI{135}{\degree} & $15D$ \\
-        $a = 0.9$, $f = 0.0$    &  95.0 & 2.39 & \SI{195}{\degree} & $60D$ \\
-        $a = 0.5$, $f = 1.0$    & 163.3 & 4.14 & \SI{135}{\degree} &  $5D$ \\
-        $a = 0.5$, $f = 0.0$    &  91.2 & 2.31 &  \SI{90}{\degree} & $15D$ \\
+        $a = 0.5$, $f = 1.0$    & 174.1 & 4.42 & \SI{135}{\degree} &  $5D$ \\
+        $a = 0.9$, $f = 1.0$    & 128.6 & 3.24 & \SI{315}{\degree} & $15D$ \\
+        $a = 0.7$, $f = 0.5$    & 127.0 & 3.21 & \SI{105}{\degree} & $15D$ \\
+        $a = 0.9$, $f = 0.0$    & 105.9 & 2.67 & \SI{195}{\degree} & $60D$ \\
         \bottomrule
     \end{tabular}
 \end{table}
@@ -270,8 +270,8 @@ For North Sea cluster planning, this finding is counterintuitive: a developer mi
 The ambush effect shows that neighbors at oblique angles---perhaps in an adjacent country's lease area at a different bearing---may cause greater design regret.
 This is relevant for cross-border coordination in the North Sea, where multiple national lease areas surround each farm at various bearings.
 
-These cross-sections use $K = 100$, which the convergence study shows may underestimate converged regret by up to \SI{40}{\percent} for some configurations.
-The qualitative directional pattern is robust---it is physically grounded and consistent across all six cases---but absolute magnitudes should be interpreted as lower bounds.
+These cross-sections are fully converged ($K = 500$) for four elliptical cases.
+The DEI and moderate-bidirectional ($a = 0.5$, $f = 0.0$) cases are currently running and will be added to the final version.
 
 
 \section{Discussion}\label{sec:discussion}
