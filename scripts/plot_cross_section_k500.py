@@ -16,10 +16,11 @@ D = 240.0
 
 # 4 K=500 cases currently available + 2 K=100 fallbacks for DEI and a=0.5_f=0.0
 cases = [
-    ("$a$=0.9, $f$=1.0\n(concentrated, unidir, K=500)", "a0.9_f1.0", "k500v"),
-    ("$a$=0.7, $f$=0.5\n(mid-range, K=500)", "a0.7_f0.5", "k500v"),
-    ("$a$=0.9, $f$=0.0\n(concentrated, bidir, K=500)", "a0.9_f0.0", "k500v"),
-    ("$a$=0.5, $f$=1.0\n(moderate, unidir, K=500)", "a0.5_f1.0", "k500v"),
+    ("$a$=0.9, $f$=1.0\n(conc. unidir)", "a0.9_f1.0", "k500v"),
+    ("$a$=0.5, $f$=1.0\n(mod. unidir)", "a0.5_f1.0", "k500v"),
+    ("$a$=0.7, $f$=0.5\n(mid-range)", "a0.7_f0.5", "k500v"),
+    ("$a$=0.9, $f$=0.0\n(conc. bidir)", "a0.9_f0.0", "k500v"),
+    ("$a$=0.5, $f$=0.0\n(mod. bidir)", "a0.5_f0.0", "k500v"),
 ]
 
 
@@ -41,7 +42,7 @@ for label, case_dir, source in cases:
     global_max_pct = max(global_max_pct, np.nanmax(g))
 
 # 4-panel polar heatmap
-fig, axes = plt.subplots(1, 4, figsize=(22, 5.5),
+fig, axes = plt.subplots(1, 5, figsize=(26, 5.5),
                           subplot_kw={"projection": "polar"})
 
 for ax, (label, case_dir, source) in zip(axes, cases):
