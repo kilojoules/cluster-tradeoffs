@@ -1,0 +1,95 @@
+\begin{thebibliography}{14}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{{\tt #1}}
+\providecommand{\urlprefix}{URL }
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{https://doi.org/\discretionary{}{}{}#1}\else
+  \providecommand{\doi}{https://doi.org/\discretionary{}{}{}\begingroup
+  \urlstyle{rm}\Url}\fi
+
+\bibitem[{Bastankhah and Port{\'e}-Agel(2014)}]{Bastankhah2014}
+Bastankhah, M. and Port{\'e}-Agel, F.: A new analytical model for wind-turbine
+  wakes, Renewable Energy, 70, 116--123, \doi{10.1016/j.renene.2014.01.002},
+  2014.
+
+\bibitem[{Bradbury et~al.(2018)Bradbury, Frostig, Hawkins, Johnson, Leary,
+  Maclaurin, Necula, Paszke, Vander{P}las, Wanderman-{M}ilne, and
+  Zhang}]{jax2018github}
+Bradbury, J., Frostig, R., Hawkins, P., Johnson, M.~J., Leary, C., Maclaurin,
+  D., Necula, G., Paszke, A., Vander{P}las, J., Wanderman-{M}ilne, S., and
+  Zhang, Q.: {JAX}: composable transformations of {P}ython+{N}um{P}y programs,
+  \urlprefix\url{http://github.com/jax-ml/jax}, 2018.
+
+\bibitem[{Canadillas et~al.(2022)Canadillas, Beckenbauer, Trujillo,
+  Dorenkamper, Foreman, Neumann, and Lampert}]{Canadillas2022}
+Canadillas, B., Beckenbauer, M., Trujillo, J.~J., Dorenkamper, M., Foreman, R.,
+  Neumann, T., and Lampert, A.: Offshore wind farm cluster wakes as observed by
+  long-range-scanning wind lidar measurements and mesoscale modeling, Wind
+  Energy Science, 7, 1241--1262, \doi{10.5194/wes-7-1241-2022}, 2022.
+
+\bibitem[{Du et~al.(2026)Du, Ding, Hou et~al.}]{Du2026}
+Du, Y., Ding, X., Hou, P., et~al.: Tackling wind theft through
+  interdisciplinary collaboration, Nature Reviews Electrical Engineering,
+  \doi{10.1038/s44287-026-00275-w}, 2026.
+
+\bibitem[{Finseraas et~al.(2024)Finseraas, Herrera~Anchustegui, Cheynet,
+  Gebhardt, and Reuder}]{Finseraas2024}
+Finseraas, E., Herrera~Anchustegui, I., Cheynet, E., Gebhardt, C.~G., and
+  Reuder, J.: Gone with the wind? Wind farm-induced wakes and regulatory gaps,
+  Marine Policy, 159, 105\,897, \doi{10.1016/j.marpol.2023.105897}, 2024.
+
+\bibitem[{Fliegner et~al.(2025)}]{Fliegner2025}
+Fliegner, F.~J. et~al.: Cross-border cooperation to mitigate wake losses in
+  offshore wind energy: a 2050 case study for the {N}orth {S}ea, International
+  Journal of Energy Research, \doi{10.1155/er/2518424}, 2025.
+
+\bibitem[{Hart(2025)}]{Hart2025}
+Hart, E.: Elliptical parameterisation of the wind direction rose, Wind Energy
+  Science, 10, 1821--1835, \doi{10.5194/wes-10-1821-2025}, 2025.
+
+\bibitem[{{NYSERDA}(2024)}]{NYSERDA2024}
+{NYSERDA}: Analysis of Potential Turbine Layouts and Spacing Between Wind
+  Farms, Tech. rep., New York State Energy Research and Development Authority,
+  2024.
+
+\bibitem[{Quick et~al.(2023)Quick, Rethore, M{\o}lgaard~Pedersen, Rodrigues,
+  and Friis-M{\o}ller}]{Quick2023sgd}
+Quick, J., Rethore, P.-E., M{\o}lgaard~Pedersen, M., Rodrigues, R.~V., and
+  Friis-M{\o}ller, M.: Stochastic gradient descent for wind farm optimization,
+  Wind Energy Science, 8, 1235--1250, \doi{10.5194/wes-8-1235-2023}, 2023.
+
+\bibitem[{Quick et~al.(2026)Quick, R{\'e}thor{\'e}, Maak, and
+  Maheshwari}]{Quick2026omae}
+Quick, J., R{\'e}thor{\'e}, P.-E., Maak, L., and Maheshwari, P.: Wind Farm
+  Design Under Uncertainty: Managing Unknown Neighboring Farm Effects, in:
+  Proceedings of the ASME 2026 45th International Conference on Ocean, Offshore
+  and Arctic Engineering (OMAE2026), Tokyo, Japan, 2026.
+
+\bibitem[{Schneemann et~al.(2020)Schneemann, Rott, Dor{\"e}nkamper, Steinfeld,
+  and K{\"u}hn}]{Schneemann2020}
+Schneemann, J., Rott, A., Dor{\"e}nkamper, M., Steinfeld, G., and K{\"u}hn, M.:
+  Cluster wakes impact on a far-distant offshore wind farm's power, Wind Energy
+  Science, 5, 29--49, \doi{10.5194/wes-5-29-2020}, 2020.
+
+\bibitem[{Thomas et~al.(2023)Thomas, Baker, Malisani, Quaeghebeur, Sanchez
+  Perez-Moreno, Jasa, Bay, Tilli, Bieniek, Robinson, Stanley, Holt, and
+  Ning}]{Thomas2023}
+Thomas, J.~J., Baker, N.~F., Malisani, P., Quaeghebeur, E., Sanchez
+  Perez-Moreno, S., Jasa, J., Bay, C., Tilli, F., Bieniek, D., Robinson, N.,
+  Stanley, A. P.~J., Holt, W., and Ning, A.: A comparison of eight optimization
+  methods applied to a wind farm layout optimization problem, Wind Energy
+  Science, 8, 865--891, \doi{10.5194/wes-8-865-2023}, 2023.
+
+\bibitem[{Valotta~Rodrigues et~al.(2024)Valotta~Rodrigues, Pedersen,
+  Sch{\o}ler, Quick, and R{\'e}thor{\'e}}]{ValottaRodrigues2024}
+Valotta~Rodrigues, R., Pedersen, M.~M., Sch{\o}ler, J.~P., Quick, J., and
+  R{\'e}thor{\'e}, P.-E.: Speeding up large-wind-farm layout optimization using
+  gradients, parallelization, and a heuristic algorithm for the initial layout,
+  Wind Energy Science, 9, 321--341, \doi{10.5194/wes-9-321-2024}, 2024.
+
+\bibitem[{Warder and Piggott(2025)}]{Warder2025}
+Warder, S.~C. and Piggott, M.~D.: The future of offshore wind power production:
+  wake and climate impacts, Applied Energy, 380, 124\,956,
+  \doi{10.1016/j.apenergy.2024.124956}, 2025.
+
+\end{thebibliography}

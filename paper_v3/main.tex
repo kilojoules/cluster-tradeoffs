@@ -28,7 +28,8 @@ When a wind farm is designed in isolation---ignoring the wakes of potential neig
 We define this loss as \emph{design regret}: the difference in annual energy production between a layout re-optimized with knowledge of neighbors and the original isolation-designed layout, both evaluated under the same neighbor wakes.
 Using greedy adversarial neighbor placement and converged multistart optimization ($K = 500$ random restarts), we sweep the two-parameter elliptical wind rose space of \citet{Hart2025} and find that design regret varies six-fold across wind climate: from \SI{17}{GWh/yr} (\SI{0.4}{\percent} of AEP) under bidirectional conditions to \SI{101}{GWh/yr} (\SI{2.5}{\percent}) under concentrated unidirectional conditions.
 Wind rose directionality---specifically the folding parameter controlling uni- versus bidirectionality---is the dominant driver.
-Regret cross-sections at $K = 100$ confirm an ``ambush effect'': peak vulnerability occurs at oblique angles to the dominant wind direction, not along it.
+Regret cross-sections at $K = 500$ confirm an ``ambush effect'': peak vulnerability occurs at oblique angles to the dominant wind direction, not along it.
+A self-interested neighbor comparison reveals that under concentrated unidirectional wind, a neighbor optimizing its own production causes nearly double the design regret of a fixed reference farm, because it concentrates turbines in the high-wind upwind corridor.
 Critically, we find that the computational effort required for reliable regret estimation far exceeds standard practice: five random starts capture only \SIrange{55}{86}{\percent} of the converged regret.
 We recommend a minimum of 300 multistart optimizations for any study computing AEP differences between design strategies.
 Buffer distance analysis shows that regret decay depends on wind rose shape: concentrated unidirectional sites require buffers exceeding $40D$ (\SI{9.6}{km}), while bidirectional sites need minimal separation.
@@ -258,6 +259,7 @@ Peak bearings are unchanged from K=100 to K=500 for three cases and shift slight
         $a = 0.9$, $f = 1.0$    & 128.6 & 3.24 & \SI{315}{\degree} & $15D$ \\
         $a = 0.7$, $f = 0.5$    & 127.0 & 3.21 & \SI{105}{\degree} & $15D$ \\
         $a = 0.9$, $f = 0.0$    & 105.9 & 2.67 & \SI{195}{\degree} & $60D$ \\
+        $a = 0.5$, $f = 0.0$    &  95.3 & 2.42 &  \SI{90}{\degree} & $15D$ \\
         \bottomrule
     \end{tabular}
 \end{table}
@@ -270,8 +272,36 @@ For North Sea cluster planning, this finding is counterintuitive: a developer mi
 The ambush effect shows that neighbors at oblique angles---perhaps in an adjacent country's lease area at a different bearing---may cause greater design regret.
 This is relevant for cross-border coordination in the North Sea, where multiple national lease areas surround each farm at various bearings.
 
-These cross-sections are fully converged ($K = 500$) for four elliptical cases.
-The DEI and moderate-bidirectional ($a = 0.5$, $f = 0.0$) cases are currently running and will be added to the final version.
+These cross-sections are fully converged ($K = 500$) for five elliptical cases.
+The DEI case is currently running and will be added to the final version.
+
+\subsection{Self-interested neighbor comparison}
+
+The cross-section analyses above use a fixed reference farm translated to each position.
+To test whether the ambush effect persists under realistic neighbor behavior, we additionally optimize the reference farm to maximize its \emph{own} AEP (given the target at its liberal layout) before re-optimizing the target farm.
+This self-interested variant represents a neighbor that acts rationally for its own production, not adversarially against the target.
+
+Figure~\ref{fig:si-comparison} compares the adversarial and self-interested cross-sections at $K = 500$ for three wind roses spanning the shape space.
+The results reveal a striking wind-rose dependence:
+\begin{itemize}
+    \item Under bidirectional conditions ($a = 0.5$, $f = 0.0$), the self-interested neighbor produces \SI{60}{\percent} of the adversarial peak regret (\SI{1.45}{\percent} vs.\ \SI{2.42}{\percent} of AEP). The adversarial upper bound substantially overstates the realistic risk.
+    \item Under mid-range conditions ($a = 0.7$, $f = 0.5$), a similar reduction occurs: \SI{63}{\percent} of adversarial (\SI{2.01}{\percent} vs.\ \SI{3.21}{\percent}).
+    \item Under concentrated unidirectional conditions ($a = 0.9$, $f = 1.0$), the self-interested neighbor produces \emph{nearly double} the adversarial peak regret: \SI{5.99}{\percent} vs.\ \SI{3.24}{\percent} of AEP.
+\end{itemize}
+
+The last result is the most policy-relevant: when wind is strongly unidirectional, a neighbor optimizing its own AEP concentrates its turbines upwind---exactly where the strongest wind is, and exactly where they cause the most damage to the target.
+The fixed reference grid, by contrast, spreads turbines evenly across its footprint, diluting the wake impact.
+This means that for concentrated unidirectional sites, the adversarial upper bound \emph{underestimates} the design regret from a rational neighbor.
+
+For North Sea planning, this implies that sites in the German Bight with strongly unidirectional southwesterly winds face \emph{higher} design regret from realistic neighbor behavior than from adversarial placement---the ``wind theft'' problem is worse than the worst case suggests.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\textwidth]{figures/si_comparison_k500.png}
+    \caption{Adversarial (top row) vs.\ self-interested (bottom row) regret cross-sections at $K = 500$ for three wind roses.
+    Under concentrated unidirectional wind ($a = 0.9$, $f = 1.0$), the self-interested neighbor produces nearly double the adversarial peak regret because AEP-optimal neighbor placement concentrates turbines in the high-wind upwind corridor.}
+    \label{fig:si-comparison}
+\end{figure}
 
 
 \section{Discussion}\label{sec:discussion}
@@ -347,9 +377,10 @@ We use \citet{Bastankhah2014} with $k = 0.04$ and root-sum-of-squares superposit
 More sophisticated models (e.g., TurbOPark) may change absolute magnitudes.
 The qualitative findings---folding dominance, the ambush effect---depend on wake corridor geometry, not magnitude, and are expected to be robust.
 
-\paragraph{Adversarial assumption.}
-The greedy grid search provides an upper bound.
-Realistic self-interested neighbors may produce different regret patterns; preliminary evidence suggests they can produce \emph{higher} regret at certain bearings because AEP-optimal neighbor layouts concentrate turbines upwind, but this requires further investigation at converged~$K$.
+\paragraph{Adversarial vs.\ self-interested.}
+The greedy grid search and fixed reference farm provide an adversarial framing.
+The self-interested comparison (Section~\ref{sec:results}) shows that the adversarial upper bound overestimates regret for bidirectional sites (\SI{60}{\percent} of adversarial) but \emph{underestimates} it for concentrated unidirectional sites (1.85$\times$ adversarial).
+This asymmetry means the qualitative ordering of sites by risk is robust, but absolute magnitudes depend on neighbor behavior.
 
 \paragraph{Constant wind speed.}
 Real North Sea sites have speed--direction correlations.
