@@ -19,12 +19,12 @@ do
 
     for dist in 2 5 10 15 20 30 40; do
         sbatch --job-name="xf-${case_name:0:6}-d${dist}" \
-               --partition=windq,workq \
+               --partition=windfatq,fatq,windq,workq \
                --ntasks=1 --cpus-per-task=32 \
                --time=2-00:00:00 \
                --output="logs/xsec_fixed_${case_name}_d${dist}_%j.out" \
                --error="logs/xsec_fixed_${case_name}_d${dist}_%j.err" \
-               --wrap="cd /work/users/juqu/cluster-tradeoffs && export PATH=\$PWD/.pixi/envs/default/bin:\$PATH && export PYTHONPATH=\$PWD/src && export JAX_PLATFORMS=cpu && export JAX_ENABLE_X64=True && python scripts/run_regret_cross_section.py --n-bearings 24 --distances-D ${dist} --n-inner-starts 300 --inner-max-iter 2000 --k-liberal 100 --deficit bastankhah --chunk-size 2 ${rose_args} --output-dir analysis/cross_section_fixed/${case_name}_d${dist}"
+               --wrap="cd /work/users/juqu/cluster-tradeoffs && export PATH=\$PWD/.pixi/envs/default/bin:\$PATH && export PYTHONPATH=\$PWD/src && export JAX_PLATFORMS=cpu && export JAX_ENABLE_X64=True && python scripts/run_regret_cross_section.py --n-bearings 24 --distances-D ${dist} --n-inner-starts 300 --inner-max-iter 2000 --k-liberal 100 --deficit bastankhah --chunk-size 1 ${rose_args} --output-dir analysis/cross_section_fixed/${case_name}_d${dist}"
         count=$((count + 1))
     done
 done
