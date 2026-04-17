@@ -256,6 +256,7 @@ Peak bearings are unchanged from K=100 to K=500 for three cases and shift slight
         Case & Max (\si{GWh}) & Max (\si{\percent}) & Bearing & Distance \\
         \midrule
         $a = 0.5$, $f = 1.0$    & 174.1 & 4.42 & \SI{135}{\degree} &  $5D$ \\
+        DEI real wind rose       & 143.6 & 2.59 & \SI{225}{\degree} & $15D$ \\
         $a = 0.9$, $f = 1.0$    & 128.6 & 3.24 & \SI{315}{\degree} & $15D$ \\
         $a = 0.7$, $f = 0.5$    & 127.0 & 3.21 & \SI{105}{\degree} & $15D$ \\
         $a = 0.9$, $f = 0.0$    & 105.9 & 2.67 & \SI{195}{\degree} & $60D$ \\
@@ -272,8 +273,8 @@ For North Sea cluster planning, this finding is counterintuitive: a developer mi
 The ambush effect shows that neighbors at oblique angles---perhaps in an adjacent country's lease area at a different bearing---may cause greater design regret.
 This is relevant for cross-border coordination in the North Sea, where multiple national lease areas surround each farm at various bearings.
 
-These cross-sections are fully converged ($K = 500$) for five elliptical cases.
-The DEI case is currently running and will be added to the final version.
+All six cross-sections are fully converged at $K = 500$.
+The DEI real wind rose shows peak regret of \SI{143.6}{GWh} (\SI{2.59}{\percent}) at bearing \SI{225}{\degree} and $15D$---consistent with the ``ambush effect,'' as the DEI prevailing wind is from the southwest ($\theta_\text{prev} \approx 251°$) and peak regret occurs \SI{26}{\degree} south of the dominant direction.
 
 \subsection{Self-interested neighbor comparison}
 
@@ -390,9 +391,8 @@ If high-speed winds are concentrated in the dominant direction (common for storm
 Results may depend on the DEI polygon shape.
 Different boundaries could affect the layout optimization landscape and the potential for lateral escape from wake corridors.
 
-\paragraph{Cross-section $K$ level.}
-Cross-sections use $K = 100$, which may underestimate converged regret.
-Directional patterns are robust; magnitudes are lower bounds.
+\paragraph{Cross-section resolution.}
+The cross-section analysis uses 24 bearings and 7 distances, which may miss fine angular structure in the regret field.
 
 
 \conclusions
