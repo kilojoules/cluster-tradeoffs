@@ -16,6 +16,7 @@ D = 240.0
 
 # 4 K=500 cases currently available + 2 K=100 fallbacks for DEI and a=0.5_f=0.0
 cases = [
+    ("DEI real\nwind rose", "dei", "k500v"),
     ("$a$=0.9, $f$=1.0\n(conc. unidir)", "a0.9_f1.0", "k500v"),
     ("$a$=0.5, $f$=1.0\n(mod. unidir)", "a0.5_f1.0", "k500v"),
     ("$a$=0.7, $f$=0.5\n(mid-range)", "a0.7_f0.5", "k500v"),
@@ -25,6 +26,23 @@ cases = [
 
 
 def get_wind_rose(case_dir):
+    if case_dir == "dei":
+        import pandas as pd
+        csv_path = Path("energy_island_10y_daily_av_wind.csv")
+        df = pd.read_csv(csv_path, sep=";")
+        wd_ts = df["WD_150"].values
+        n_bins = 24
+        bin_edges = np.linspace(0, 360, n_bins + 1)
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+        w = np.zeros(n_bins)
+        for i in range(n_bins):
+            if i == n_bins - 1:
+                mask = (wd_ts >= bin_edges[i]) | (wd_ts < bin_edges[0])
+            else:
+                mask = (wd_ts >= bin_edges[i]) & (wd_ts < bin_edges[i + 1])
+            w[i] = mask.sum()
+        w /= w.sum()
+        return bin_centers, w
     parts = case_dir.replace("a", "").replace("f", "").split("_")
     a_val, f_val = float(parts[0]), float(parts[1])
     from edrose import EllipticalWindRose
@@ -42,7 +60,7 @@ for label, case_dir, source in cases:
     global_max_pct = max(global_max_pct, np.nanmax(g))
 
 # 4-panel polar heatmap
-fig, axes = plt.subplots(1, 5, figsize=(26, 5.5),
+fig, axes = plt.subplots(1, 6, figsize=(30, 5.5),
                           subplot_kw={"projection": "polar"})
 
 for ax, (label, case_dir, source) in zip(axes, cases):
