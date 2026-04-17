@@ -1,10 +1,16 @@
-"""Regret cross-section: place a reference neighbor farm at (bearing, distance)
-positions around the DEI target farm and measure design regret at each.
+"""Regret cross-section: place an identical copy of the liberal-optimized target
+farm at (bearing, buffer_distance) positions and measure design regret at each.
 
-Produces a polar heatmap showing the farm's directional vulnerability.
+The reference (neighbor) farm is a clone of the target: same turbine count,
+same optimized layout, same boundary polygon, translated so that the minimum
+gap between the two farm boundary polygons equals the specified buffer distance.
+
+Buffer distance is measured as the minimum Euclidean distance between any point
+on the target boundary and any point on the reference boundary.
 
 Usage:
-    pixi run python scripts/run_regret_cross_section.py
+    pixi run python scripts/run_regret_cross_section.py --n-target 50
+    pixi run python scripts/run_regret_cross_section.py --n-target 20,30,40,50,60
     pixi run python scripts/run_regret_cross_section.py --wind-rose elliptical --ed-a 0.8 --ed-f 0.5
 """
 
@@ -28,10 +34,9 @@ from pixwake.optim.sgd import SGDSettings, topfarm_sgd_solve
 print = partial(print, flush=True)
 
 D = 240.0
-N_TARGET = 50
 
 # =============================================================================
-# DEI polygon boundary (same as run_dei_greedy_grid.py)
+# DEI polygon boundary
 # =============================================================================
 _dk0w_raw = np.array([
     706694.3923283464, 6224158.532895836,
@@ -46,6 +51,7 @@ CENTROID_X = _dk0w_raw[:, 0].mean()
 CENTROID_Y = _dk0w_raw[:, 1].mean()
 
 from scipy.spatial import ConvexHull
+from scipy.spatial.distance import cdist
 from matplotlib.path import Path as MplPath
 
 _hull = ConvexHull(_dk0w_raw - np.array([CENTROID_X, CENTROID_Y]))
@@ -120,33 +126,69 @@ def load_wind_data():
     return jnp.array(bin_centers), jnp.array(mean_speeds), jnp.array(w)
 
 
-def build_reference_farm(n_rows, n_cols, spacing_D):
-    """Build a rectangular reference farm centered at origin."""
-    spacing = spacing_D * D
-    xs = np.arange(n_cols) * spacing - (n_cols - 1) * spacing / 2
-    ys = np.arange(n_rows) * spacing - (n_rows - 1) * spacing / 2
-    gx, gy = np.meshgrid(xs, ys)
-    return gx.ravel(), gy.ravel()
+# =============================================================================
+# Boundary-gap geometry
+# =============================================================================
+
+def sample_polygon_boundary(vertices, n_per_edge=50):
+    """Sample points along polygon edges for distance computation."""
+    pts = []
+    n = len(vertices)
+    for i in range(n):
+        j = (i + 1) % n
+        t = np.linspace(0, 1, n_per_edge, endpoint=False)
+        edge_pts = vertices[i] + t[:, None] * (vertices[j] - vertices[i])
+        pts.append(edge_pts)
+    return np.vstack(pts)
 
 
-def place_reference_farm(ref_x, ref_y, bearing_deg, distance_m, centroid_x=0, centroid_y=0):
-    """Place the reference farm at (bearing, distance) from centroid.
+def compute_boundary_gap(bnd1, bnd2, n_per_edge=50):
+    """Minimum distance between two polygon boundaries."""
+    pts1 = sample_polygon_boundary(bnd1, n_per_edge)
+    pts2 = sample_polygon_boundary(bnd2, n_per_edge)
+    return float(cdist(pts1, pts2).min())
 
-    Bearing is meteorological convention: 0=N, 90=E, 180=S, 270=W.
+
+def centroid_offset_for_gap(boundary_np, bearing_deg, gap_m, n_per_edge=50):
+    """Compute centroid-to-centroid offset along bearing for desired boundary gap.
+
+    Returns (offset_m, direction_vec, actual_gap_m).
     """
     bearing_rad = np.radians(bearing_deg)
-    # Meteorological: 0=N means +y, 90=E means +x
-    cx = centroid_x + distance_m * np.sin(bearing_rad)
-    cy = centroid_y + distance_m * np.cos(bearing_rad)
-    return jnp.array(ref_x + cx), jnp.array(ref_y + cy)
+    direction = np.array([np.sin(bearing_rad), np.cos(bearing_rad)])
 
+    # Initial estimate from axis-aligned projections
+    projections = boundary_np @ direction
+    extent_fwd = projections.max()
+    extent_back = -projections.min()
+    offset = extent_fwd + extent_back + gap_m
+
+    # Iterative refinement
+    for _ in range(30):
+        ref_bnd = boundary_np + offset * direction
+        actual_gap = compute_boundary_gap(boundary_np, ref_bnd, n_per_edge)
+        error = actual_gap - gap_m
+        if abs(error) < 0.5:  # 0.5 m tolerance
+            break
+        offset -= error
+
+    return offset, direction, actual_gap
+
+
+def min_interfarm_distance(x1, y1, x2, y2):
+    """Minimum Euclidean distance between turbines in two different farms."""
+    pts1 = np.column_stack([np.asarray(x1), np.asarray(y1)])
+    pts2 = np.column_stack([np.asarray(x2), np.asarray(y2)])
+    return float(cdist(pts1, pts2).min())
+
+
+# =============================================================================
+# AEP computation
+# =============================================================================
 
 def compute_aep(sim, x, y, ws_amb, wd_amb, weights, ti_amb=None,
                 neighbor_x=None, neighbor_y=None, n_target=None):
-    """Compute AEP for target turbines, optionally with neighbors.
-
-    Returns a JAX scalar (not float) so this can be used inside jax.grad.
-    """
+    """Compute AEP for target turbines, optionally with neighbors."""
     if n_target is None:
         n_target = x.shape[0]
     if neighbor_x is not None and neighbor_x.shape[0] > 0:
@@ -162,24 +204,25 @@ def compute_aep(sim, x, y, ws_amb, wd_amb, weights, ti_amb=None,
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Regret cross-section: reference farm at (bearing, distance)",
+        description="Regret cross-section with identical-copy neighbor farm",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     # Target farm
-    parser.add_argument("--n-target", type=int, default=N_TARGET)
+    parser.add_argument("--n-target", type=str, default="50",
+                        help="Comma-separated turbine counts to sweep (e.g. 20,30,40,50,60)")
     parser.add_argument("--inner-lr", type=float, default=50.0)
     parser.add_argument("--inner-max-iter", type=int, default=5000)
-    parser.add_argument("--n-inner-starts", type=int, default=5)
-
-    # Reference neighbor farm
-    parser.add_argument("--ref-rows", type=int, default=5)
-    parser.add_argument("--ref-cols", type=int, default=5)
-    parser.add_argument("--ref-spacing-D", type=float, default=7.0)
+    parser.add_argument("--n-inner-starts", type=int, default=5,
+                        help="K for conservative re-optimization at each cross-section point")
+    parser.add_argument("--k-liberal", type=int, default=500,
+                        help="K for liberal layout optimization")
 
     # Sweep parameters
     parser.add_argument("--n-bearings", type=int, default=24)
     parser.add_argument("--distances-D", type=str, default="5,10,15,20,30,40,60",
-                        help="Comma-separated distances in D")
+                        help="Comma-separated buffer distances in D (boundary gap)")
+    parser.add_argument("--chunk-size", type=int, default=50,
+                        help="vmap batch chunk size (reduce for large N_t to avoid OOM)")
 
     # Wind rose
     parser.add_argument("--wind-rose", type=str, default="dei",
@@ -204,27 +247,12 @@ def main():
     parser.add_argument("--output-dir", type=str, default="analysis/regret_cross_section")
     args = parser.parse_args()
 
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
+    n_target_list = [int(x) for x in args.n_target.split(",")]
     distances_D = [float(x) for x in args.distances_D.split(",")]
     distances_m = [d * D for d in distances_D]
     bearings = np.linspace(0, 360 - 360 / args.n_bearings, args.n_bearings)
 
-    print("=" * 70)
-    print("REGRET CROSS-SECTION")
-    print(f"  Target: {args.n_target} turbines in DEI polygon")
-    print(f"  Reference farm: {args.ref_rows}x{args.ref_cols} = "
-          f"{args.ref_rows * args.ref_cols} turbines at {args.ref_spacing_D}D spacing")
-    print(f"  Bearings: {args.n_bearings} ({bearings[1]-bearings[0]:.0f} deg steps)")
-    print(f"  Distances: {distances_D} D")
-    print(f"  Total evaluations: {args.n_bearings * len(distances_D)}")
-    print(f"  Wind rose: {args.wind_rose}")
-    print(f"  Deficit: {args.deficit}")
-    print(f"  K={args.n_inner_starts} inner starts, {args.inner_max_iter} iter")
-    print("=" * 70)
-
-    # Setup
+    # Setup wake model
     turbine = create_dei_turbine()
     if args.wind_rose == "dei":
         wd, ws, weights = load_wind_data()
@@ -262,120 +290,15 @@ def main():
         deficit = BastankhahGaussianDeficit(k=0.04, superposition=sup)
     elif args.deficit == "turbopark":
         deficit = TurboGaussianDeficit(A=0.04, superposition=sup)
-    print(f"  Superposition: {type(sup).__name__}")
     sim = WakeSimulation(turbine, deficit)
     ti_amb = args.ti if args.deficit == "turbopark" else None
 
-    # Target layout + liberal optimization
-    init_x, init_y = generate_target_grid(boundary_np, args.n_target, spacing=4 * D)
     sgd_settings = SGDSettings(
         learning_rate=args.inner_lr,
         max_iter=args.inner_max_iter,
         additional_constant_lr_iterations=args.inner_max_iter,
         tol=1e-6,
     )
-
-    # Liberal layout with multistart
-    print(f"\nComputing liberal layout (K_lib={min(args.n_inner_starts, 100)} starts)...")
-    def liberal_objective(x, y):
-        return -compute_aep(sim, x, y, ws, wd, weights, ti_amb)
-
-    K_lib = min(args.n_inner_starts, 100)
-    lib_best_aep = -np.inf
-    liberal_x, liberal_y = init_x, init_y
-    for k in range(K_lib):
-        if k == 0:
-            sx, sy = init_x, init_y
-        else:
-            key = jax.random.PRNGKey(k * 7919 + 42)
-            n_turb = args.n_target
-            pts = []
-            while len(pts) < n_turb:
-                rx = jax.random.uniform(key, (n_turb * 3,),
-                                        minval=boundary_np[:, 0].min(),
-                                        maxval=boundary_np[:, 0].max())
-                key, _ = jax.random.split(key)
-                ry = jax.random.uniform(key, (n_turb * 3,),
-                                        minval=boundary_np[:, 1].min(),
-                                        maxval=boundary_np[:, 1].max())
-                key, _ = jax.random.split(key)
-                cands = np.column_stack([np.array(rx), np.array(ry)])
-                inside = _polygon_path.contains_points(cands)
-                pts.extend(cands[inside].tolist())
-            pts = np.array(pts[:n_turb])
-            sx, sy = jnp.array(pts[:, 0]), jnp.array(pts[:, 1])
-        lx, ly = topfarm_sgd_solve(liberal_objective, sx, sy, boundary, D * 4, sgd_settings)
-        lib_aep = float(-liberal_objective(lx, ly))
-        if lib_aep > lib_best_aep:
-            lib_best_aep = lib_aep
-            liberal_x, liberal_y = lx, ly
-    liberal_aep = lib_best_aep
-    print(f"Liberal AEP: {liberal_aep:.2f} GWh (best of {K_lib} starts)")
-
-    # Build reference farm
-    ref_x_local, ref_y_local = build_reference_farm(
-        args.ref_rows, args.ref_cols, args.ref_spacing_D)
-    n_ref = len(ref_x_local)
-    print(f"Reference farm: {n_ref} turbines")
-
-    # =========================================================================
-    # VMAP-BATCHED SWEEP
-    # Batch all (position, start) pairs and vmap in chunks for GPU efficiency
-    # =========================================================================
-    n_positions = len(distances_m) * args.n_bearings
-    K = args.n_inner_starts
-
-    # Build all neighbor positions: (n_positions, n_ref) arrays
-    all_nx_np = np.zeros((n_positions, n_ref))
-    all_ny_np = np.zeros((n_positions, n_ref))
-    pos_info = []  # (di, bi, bearing, dist_m) for each position
-    pi = 0
-    for di, dist_m in enumerate(distances_m):
-        for bi, bearing in enumerate(bearings):
-            nx, ny = place_reference_farm(ref_x_local, ref_y_local, bearing, dist_m)
-            all_nx_np[pi] = np.array(nx)
-            all_ny_np[pi] = np.array(ny)
-            pos_info.append((di, bi, float(bearing), float(dist_m)))
-            pi += 1
-    all_nx = jnp.array(all_nx_np)
-    all_ny = jnp.array(all_ny_np)
-
-    # Build K starts (shared across all positions): grid, liberal, random
-    print(f"Generating {K} start layouts...")
-    start_xs_list = [init_x, liberal_x]
-    start_ys_list = [init_y, liberal_y]
-    for k in range(2, K):
-        key = jax.random.PRNGKey(k * 7919 + 42)
-        n_turb = args.n_target
-        pts = []
-        while len(pts) < n_turb:
-            rx = jax.random.uniform(key, (n_turb * 3,),
-                                    minval=boundary_np[:, 0].min(),
-                                    maxval=boundary_np[:, 0].max())
-            key, _ = jax.random.split(key)
-            ry = jax.random.uniform(key, (n_turb * 3,),
-                                    minval=boundary_np[:, 1].min(),
-                                    maxval=boundary_np[:, 1].max())
-            key, _ = jax.random.split(key)
-            cands = np.column_stack([np.array(rx), np.array(ry)])
-            inside = _polygon_path.contains_points(cands)
-            pts.extend(cands[inside].tolist())
-        pts = np.array(pts[:n_turb])
-        start_xs_list.append(jnp.array(pts[:, 0]))
-        start_ys_list.append(jnp.array(pts[:, 1]))
-    start_xs = jnp.stack(start_xs_list)  # (K, n_target)
-    start_ys = jnp.stack(start_ys_list)
-
-    # Build batched (position × start) arrays: (n_positions * K, ...)
-    # For each position, repeat K starts
-    # For each start, repeat n_positions neighbor positions
-    batch_nx = jnp.repeat(all_nx, K, axis=0)  # (n_positions * K, n_ref)
-    batch_ny = jnp.repeat(all_ny, K, axis=0)
-    batch_start_x = jnp.tile(start_xs, (n_positions, 1))  # (n_positions * K, n_target)
-    batch_start_y = jnp.tile(start_ys, (n_positions, 1))
-
-    n_total = n_positions * K
-    print(f"Total batch: {n_positions} positions × {K} starts = {n_total} solves")
 
     # Pre-compute mid for SGD settings
     from dataclasses import replace as _dc_replace
@@ -390,124 +313,275 @@ def main():
         )
         sgd_settings = _dc_replace(sgd_settings, mid=computed_mid)
 
-    n_target = init_x.shape[0]
+    # Pre-compute centroid offsets for all (bearing, distance) pairs
+    print("Pre-computing boundary-gap offsets...")
+    offset_table = {}  # (di, bi) -> (offset, direction, actual_gap)
+    for di, gap_m in enumerate(distances_m):
+        for bi, bearing in enumerate(bearings):
+            offset, direction, actual_gap = centroid_offset_for_gap(
+                boundary_np, bearing, gap_m)
+            offset_table[(di, bi)] = (offset, direction, actual_gap)
+    print(f"  {len(offset_table)} positions computed")
 
-    def solve_one(sx, sy, nx_local, ny_local):
-        def objective(x, y):
-            x_all = jnp.concatenate([x, nx_local])
-            y_all = jnp.concatenate([y, ny_local])
-            result = sim(x_all, y_all, ws_amb=ws, wd_amb=wd, ti_amb=ti_amb)
-            power = result.power()[:, :n_target]
-            return -jnp.sum(power * weights[:, None]) * 8760 / 1e6
+    # =========================================================================
+    # Sweep over N_t values
+    # =========================================================================
+    for n_target in n_target_list:
+        print(f"\n{'=' * 70}")
+        print(f"N_TARGET = {n_target}")
+        print(f"{'=' * 70}")
+        print(f"  Bearings: {args.n_bearings} ({bearings[1]-bearings[0]:.0f} deg steps)")
+        print(f"  Buffer distances: {distances_D} D")
+        print(f"  Total evaluations: {args.n_bearings * len(distances_D)}")
+        print(f"  Wind rose: {args.wind_rose}")
+        print(f"  Deficit: {args.deficit}, superposition: {type(sup).__name__}")
+        print(f"  K_liberal={args.k_liberal}, K_inner={args.n_inner_starts}, "
+              f"{args.inner_max_iter} iter")
 
-        opt_x, opt_y = topfarm_sgd_solve(
-            objective, sx, sy, boundary, D * 4, sgd_settings)
-        aep = -objective(opt_x, opt_y)
-        return aep
+        # Generate initial layout
+        init_x, init_y = generate_target_grid(boundary_np, n_target, spacing=4 * D)
 
-    # Chunked vmap
-    CHUNK = 50
-    print(f"Running vmap in chunks of {CHUNK}...")
-    t0 = time.time()
-    all_cons_aeps = np.zeros(n_total)
-    for start in range(0, n_total, CHUNK):
-        end = min(start + CHUNK, n_total)
-        chunk_aeps = jax.vmap(solve_one)(
-            batch_start_x[start:end], batch_start_y[start:end],
-            batch_nx[start:end], batch_ny[start:end])
-        all_cons_aeps[start:end] = np.array(chunk_aeps)
-        elapsed = time.time() - t0
-        rate = elapsed / end
-        remaining = rate * (n_total - end)
-        pct_done = 100 * end / n_total
-        print(f"  Chunk {start:>6}-{end:>6}  "
-              f"({pct_done:>5.1f}%)  "
-              f"elapsed={elapsed/60:.1f}min  eta={remaining/60:.1f}min")
+        # =================================================================
+        # Liberal optimization with K=k_liberal starts
+        # =================================================================
+        print(f"\nComputing liberal layout (K={args.k_liberal})...")
+        def liberal_objective(x, y):
+            return -compute_aep(sim, x, y, ws, wd, weights, ti_amb)
 
-    # Reshape: (n_positions, K)
-    cons_aeps = all_cons_aeps.reshape(n_positions, K)
+        lib_best_aep = -np.inf
+        liberal_x, liberal_y = init_x, init_y
+        for k in range(args.k_liberal):
+            if k == 0:
+                sx, sy = init_x, init_y
+            else:
+                key = jax.random.PRNGKey(k * 7919 + 42)
+                pts = []
+                while len(pts) < n_target:
+                    rx = jax.random.uniform(key, (n_target * 3,),
+                                            minval=boundary_np[:, 0].min(),
+                                            maxval=boundary_np[:, 0].max())
+                    key, _ = jax.random.split(key)
+                    ry = jax.random.uniform(key, (n_target * 3,),
+                                            minval=boundary_np[:, 1].min(),
+                                            maxval=boundary_np[:, 1].max())
+                    key, _ = jax.random.split(key)
+                    cands = np.column_stack([np.array(rx), np.array(ry)])
+                    inside = _polygon_path.contains_points(cands)
+                    pts.extend(cands[inside].tolist())
+                pts = np.array(pts[:n_target])
+                sx, sy = jnp.array(pts[:, 0]), jnp.array(pts[:, 1])
+            lx, ly = topfarm_sgd_solve(liberal_objective, sx, sy, boundary, D * 4, sgd_settings)
+            lib_aep = float(-liberal_objective(lx, ly))
+            if lib_aep > lib_best_aep:
+                lib_best_aep = lib_aep
+                liberal_x, liberal_y = lx, ly
+            if (k + 1) % 50 == 0 or k == 0:
+                print(f"  Start {k+1}/{args.k_liberal}: best AEP = {lib_best_aep:.2f} GWh")
+        liberal_aep = lib_best_aep
+        print(f"Liberal AEP: {liberal_aep:.2f} GWh (best of {args.k_liberal} starts)")
 
-    # For each position, compute regret with pooling
-    results_grid = np.full((len(distances_D), args.n_bearings), np.nan)
-    liberal_aep_present_grid = np.full_like(results_grid, np.nan)
-    conservative_aep_grid = np.full_like(results_grid, np.nan)
-    all_evals = []
+        # Reference farm = liberal layout (identical copy)
+        ref_x_local = np.array(liberal_x)
+        ref_y_local = np.array(liberal_y)
+        n_ref = n_target
 
-    print(f"\n{'Position':>10} {'bearing':>8} {'dist':>6} {'regret':>10} {'pct':>8}")
-    for pi, (di, bi, bearing, dist_m) in enumerate(pos_info):
-        nx_p = all_nx[pi]
-        ny_p = all_ny[pi]
-        lib_aep_present = float(compute_aep(
-            sim, liberal_x, liberal_y, ws, wd, weights, ti_amb,
-            neighbor_x=nx_p, neighbor_y=ny_p))
-        best_cons = float(cons_aeps[pi].max())
-        # Pool
-        best_cons = max(best_cons, lib_aep_present)
-        regret = best_cons - lib_aep_present
-        results_grid[di, bi] = regret
-        liberal_aep_present_grid[di, bi] = lib_aep_present
-        conservative_aep_grid[di, bi] = best_cons
-        pct = 100 * regret / liberal_aep
-        all_evals.append({
-            "bearing_deg": bearing,
-            "distance_D": distances_D[di],
-            "distance_m": dist_m,
-            "regret_gwh": float(regret),
-            "regret_pct": float(pct),
-            "liberal_aep_present_gwh": lib_aep_present,
-            "conservative_aep_gwh": best_cons,
-        })
-    t_total = time.time() - t0
-    print(f"\nTotal sweep time: {t_total/60:.1f} min")
+        # =================================================================
+        # Build neighbor positions for each (bearing, buffer_distance)
+        # =================================================================
+        n_positions = len(distances_m) * args.n_bearings
+        K = args.n_inner_starts
 
-    elapsed = time.time() - t0
-    print(f"\nTotal time: {elapsed:.0f}s ({elapsed/60:.1f} min)")
+        all_nx_np = np.zeros((n_positions, n_ref))
+        all_ny_np = np.zeros((n_positions, n_ref))
+        pos_info = []  # (di, bi, bearing, dist_m, actual_gap_m, min_turb_dist_m)
+        pi = 0
+        for di, gap_m in enumerate(distances_m):
+            for bi, bearing in enumerate(bearings):
+                offset, direction, actual_gap = offset_table[(di, bi)]
+                nx = ref_x_local + offset * direction[0]
+                ny = ref_y_local + offset * direction[1]
+                all_nx_np[pi] = nx
+                all_ny_np[pi] = ny
+                min_turb_dist = min_interfarm_distance(
+                    liberal_x, liberal_y, nx, ny)
+                pos_info.append((di, bi, float(bearing), gap_m,
+                                 actual_gap, min_turb_dist))
+                pi += 1
+        all_nx = jnp.array(all_nx_np)
+        all_ny = jnp.array(all_ny_np)
 
-    # Save results
-    results_data = {
-        "n_target": args.n_target,
-        "ref_rows": args.ref_rows,
-        "ref_cols": args.ref_cols,
-        "ref_spacing_D": args.ref_spacing_D,
-        "n_ref_turbines": n_ref,
-        "liberal_aep_gwh": float(liberal_aep),
-        "bearings_deg": bearings.tolist(),
-        "distances_D": distances_D,
-        "regret_grid_gwh": results_grid.tolist(),
-        "regret_grid_pct": (100 * results_grid / liberal_aep).tolist(),
-        "evaluations": all_evals,
-        "elapsed_s": elapsed,
-        "config": {
-            "wind_rose": args.wind_rose,
-            "wind_dir": args.wind_dir,
-            "wind_speed": args.wind_speed,
-            "n_bins": args.n_bins,
-            "deficit": args.deficit,
-            "ti": args.ti,
-            "n_inner_starts": args.n_inner_starts,
-            "inner_max_iter": args.inner_max_iter,
-            "ed_a": args.ed_a if args.wind_rose in ("elliptical", "mixture") else None,
-            "ed_f": args.ed_f if args.wind_rose in ("elliptical", "mixture") else None,
-        },
-    }
+        # =================================================================
+        # Build K start layouts (shared across positions)
+        # =================================================================
+        print(f"Generating {K} start layouts...")
+        start_xs_list = [init_x, liberal_x]
+        start_ys_list = [init_y, liberal_y]
+        for k in range(2, K):
+            key = jax.random.PRNGKey(k * 7919 + 42)
+            pts = []
+            while len(pts) < n_target:
+                rx = jax.random.uniform(key, (n_target * 3,),
+                                        minval=boundary_np[:, 0].min(),
+                                        maxval=boundary_np[:, 0].max())
+                key, _ = jax.random.split(key)
+                ry = jax.random.uniform(key, (n_target * 3,),
+                                        minval=boundary_np[:, 1].min(),
+                                        maxval=boundary_np[:, 1].max())
+                key, _ = jax.random.split(key)
+                cands = np.column_stack([np.array(rx), np.array(ry)])
+                inside = _polygon_path.contains_points(cands)
+                pts.extend(cands[inside].tolist())
+            pts = np.array(pts[:n_target])
+            start_xs_list.append(jnp.array(pts[:, 0]))
+            start_ys_list.append(jnp.array(pts[:, 1]))
+        start_xs = jnp.stack(start_xs_list)  # (K, n_target)
+        start_ys = jnp.stack(start_ys_list)
 
-    json_path = output_dir / "results.json"
-    with open(json_path, "w") as f:
-        json.dump(results_data, f, indent=2)
-    print(f"Results saved: {json_path}")
+        # =================================================================
+        # VMAP-BATCHED SWEEP
+        # =================================================================
+        batch_nx = jnp.repeat(all_nx, K, axis=0)  # (n_positions * K, n_ref)
+        batch_ny = jnp.repeat(all_ny, K, axis=0)
+        batch_start_x = jnp.tile(start_xs, (n_positions, 1))
+        batch_start_y = jnp.tile(start_ys, (n_positions, 1))
 
-    # Print summary
-    print(f"\n{'='*60}")
-    print("SUMMARY")
-    print(f"{'='*60}")
-    print(f"Liberal AEP: {liberal_aep:.2f} GWh")
-    print(f"Max regret: {np.nanmax(results_grid):.2f} GWh "
-          f"({100*np.nanmax(results_grid)/liberal_aep:.3f}%)")
-    idx = np.unravel_index(np.nanargmax(results_grid), results_grid.shape)
-    print(f"  at bearing={bearings[idx[1]]:.0f} deg, distance={distances_D[idx[0]]:.0f}D")
-    print(f"Min regret: {np.nanmin(results_grid):.2f} GWh")
-    idx_min = np.unravel_index(np.nanargmin(results_grid), results_grid.shape)
-    print(f"  at bearing={bearings[idx_min[1]]:.0f} deg, distance={distances_D[idx_min[0]]:.0f}D")
+        n_total = n_positions * K
+        print(f"Total batch: {n_positions} positions x {K} starts = {n_total} solves")
+
+        def solve_one(sx, sy, nx_local, ny_local):
+            def objective(x, y):
+                x_all = jnp.concatenate([x, nx_local])
+                y_all = jnp.concatenate([y, ny_local])
+                result = sim(x_all, y_all, ws_amb=ws, wd_amb=wd, ti_amb=ti_amb)
+                power = result.power()[:, :n_target]
+                return -jnp.sum(power * weights[:, None]) * 8760 / 1e6
+            opt_x, opt_y = topfarm_sgd_solve(
+                objective, sx, sy, boundary, D * 4, sgd_settings)
+            return -objective(opt_x, opt_y)
+
+        CHUNK = args.chunk_size
+        print(f"Running vmap in chunks of {CHUNK}...")
+        t0 = time.time()
+        all_cons_aeps = np.zeros(n_total)
+        for start in range(0, n_total, CHUNK):
+            end = min(start + CHUNK, n_total)
+            chunk_aeps = jax.vmap(solve_one)(
+                batch_start_x[start:end], batch_start_y[start:end],
+                batch_nx[start:end], batch_ny[start:end])
+            all_cons_aeps[start:end] = np.array(chunk_aeps)
+            elapsed = time.time() - t0
+            rate = elapsed / end
+            remaining = rate * (n_total - end)
+            pct_done = 100 * end / n_total
+            print(f"  Chunk {start:>6}-{end:>6}  "
+                  f"({pct_done:>5.1f}%)  "
+                  f"elapsed={elapsed/60:.1f}min  eta={remaining/60:.1f}min")
+
+        # Reshape: (n_positions, K)
+        cons_aeps = all_cons_aeps.reshape(n_positions, K)
+
+        # =================================================================
+        # Compute regret with pooling
+        # =================================================================
+        results_grid = np.full((len(distances_D), args.n_bearings), np.nan)
+        gap_grid = np.full_like(results_grid, np.nan)
+        min_turb_dist_grid = np.full_like(results_grid, np.nan)
+        all_evals = []
+
+        print(f"\n{'Pos':>5} {'bearing':>8} {'buf_D':>6} {'gap_m':>8} "
+              f"{'min_turb':>9} {'regret':>10} {'pct':>8}")
+        for pi, (di, bi, bearing, gap_m, actual_gap, min_turb_dist) in enumerate(pos_info):
+            nx_p = all_nx[pi]
+            ny_p = all_ny[pi]
+            lib_aep_present = float(compute_aep(
+                sim, liberal_x, liberal_y, ws, wd, weights, ti_amb,
+                neighbor_x=nx_p, neighbor_y=ny_p))
+            best_cons = float(cons_aeps[pi].max())
+            best_cons = max(best_cons, lib_aep_present)
+            regret = best_cons - lib_aep_present
+            results_grid[di, bi] = regret
+            gap_grid[di, bi] = actual_gap
+            min_turb_dist_grid[di, bi] = min_turb_dist
+            pct = 100 * regret / liberal_aep
+            all_evals.append({
+                "bearing_deg": bearing,
+                "buffer_distance_D": distances_D[di],
+                "buffer_distance_m": gap_m,
+                "actual_boundary_gap_m": actual_gap,
+                "min_interfarm_turbine_dist_m": min_turb_dist,
+                "min_interfarm_turbine_dist_D": min_turb_dist / D,
+                "regret_gwh": float(regret),
+                "regret_pct": float(pct),
+                "liberal_aep_present_gwh": lib_aep_present,
+                "conservative_aep_gwh": best_cons,
+            })
+            if pi % args.n_bearings == 0:
+                print(f"  {pi:>3}  {bearing:>7.0f}  {distances_D[di]:>5.0f}  "
+                      f"{actual_gap:>7.0f}  {min_turb_dist:>8.0f}  "
+                      f"{regret:>9.2f}  {pct:>7.3f}%")
+
+        t_total = time.time() - t0
+        print(f"\nSweep time for N_t={n_target}: {t_total/60:.1f} min")
+
+        # =================================================================
+        # Save results
+        # =================================================================
+        output_dir = Path(args.output_dir) / f"Nt{n_target}"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        results_data = {
+            "n_target": n_target,
+            "n_ref": n_ref,
+            "methodology": "identical_copy",
+            "distance_definition": "boundary_gap",
+            "liberal_aep_gwh": float(liberal_aep),
+            "liberal_x": np.array(liberal_x).tolist(),
+            "liberal_y": np.array(liberal_y).tolist(),
+            "k_liberal": args.k_liberal,
+            "k_inner": args.n_inner_starts,
+            "bearings_deg": bearings.tolist(),
+            "distances_D": distances_D,
+            "regret_grid_gwh": results_grid.tolist(),
+            "regret_grid_pct": (100 * results_grid / liberal_aep).tolist(),
+            "boundary_gap_grid_m": gap_grid.tolist(),
+            "min_interfarm_turbine_dist_grid_m": min_turb_dist_grid.tolist(),
+            "min_interfarm_turbine_dist_grid_D": (min_turb_dist_grid / D).tolist(),
+            "evaluations": all_evals,
+            "elapsed_s": t_total,
+            "config": {
+                "wind_rose": args.wind_rose,
+                "wind_dir": args.wind_dir,
+                "wind_speed": args.wind_speed,
+                "n_bins": args.n_bins,
+                "deficit": args.deficit,
+                "superposition": args.superposition,
+                "ti": args.ti,
+                "inner_max_iter": args.inner_max_iter,
+                "inner_lr": args.inner_lr,
+                "ed_a": args.ed_a if args.wind_rose in ("elliptical", "mixture") else None,
+                "ed_f": args.ed_f if args.wind_rose in ("elliptical", "mixture") else None,
+            },
+        }
+
+        json_path = output_dir / "results.json"
+        with open(json_path, "w") as f:
+            json.dump(results_data, f, indent=2)
+        print(f"Results saved: {json_path}")
+
+        # Summary
+        print(f"\n{'='*60}")
+        print(f"SUMMARY (N_t={n_target})")
+        print(f"{'='*60}")
+        print(f"Liberal AEP: {liberal_aep:.2f} GWh (K={args.k_liberal})")
+        print(f"Reference farm: identical copy ({n_ref} turbines)")
+        print(f"Max regret: {np.nanmax(results_grid):.2f} GWh "
+              f"({100*np.nanmax(results_grid)/liberal_aep:.3f}%)")
+        idx = np.unravel_index(np.nanargmax(results_grid), results_grid.shape)
+        print(f"  at bearing={bearings[idx[1]]:.0f} deg, buffer={distances_D[idx[0]]:.0f}D")
+        print(f"Min regret: {np.nanmin(results_grid):.2f} GWh")
+        print(f"Min inter-farm turbine distance: "
+              f"{np.nanmin(min_turb_dist_grid):.0f} m "
+              f"({np.nanmin(min_turb_dist_grid)/D:.1f}D)")
 
 
 if __name__ == "__main__":
