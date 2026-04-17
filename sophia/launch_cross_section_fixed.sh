@@ -19,7 +19,7 @@ do
 
     for dist in 2 5 10 15 20 30 40; do
         sbatch --job-name="xf-${case_name:0:6}-d${dist}" \
-               --partition=workq \
+               --partition=windq,workq \
                --ntasks=1 --cpus-per-task=32 \
                --time=2-00:00:00 \
                --output="logs/xsec_fixed_${case_name}_d${dist}_%j.out" \
