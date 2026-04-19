@@ -26,7 +26,7 @@ do
                --time=1-12:00:00 \
                --output="logs/xsec_fixed_${case_name}_d${dist}_%j.out" \
                --error="logs/xsec_fixed_${case_name}_d${dist}_%j.err" \
-               --wrap="export PATH=\"\$HOME/.pixi/bin:\$PATH\" && module load rocm/6.0.3 && export JAX_PLATFORMS=rocm && export XLA_FLAGS=\"--xla_gpu_enable_triton_softmax_fusion=false\" && cd /scratch/project_465002609/julian_clusters && pixi run -e rocm --manifest-path pyproject.toml python scripts/run_regret_cross_section.py --n-bearings 24 --distances-D ${dist} --ref-rows 5 --ref-cols 5 --ref-spacing-D 7 --n-inner-starts 500 --inner-max-iter 5000 --deficit bastankhah ${rose_args} --output-dir analysis/cross_section_fixed/${case_name}_d${dist}"
+               --wrap="export PATH=\"\$HOME/.pixi/bin:\$PATH\" && module load rocm/6.0.3 && export JAX_PLATFORMS=rocm && export XLA_FLAGS=\"--xla_gpu_enable_triton_softmax_fusion=false\" && cd /scratch/project_465002609/julian_clusters && pixi run -e rocm --manifest-path pyproject.toml python scripts/run_regret_cross_section.py --n-bearings 24 --distances-D ${dist} --n-inner-starts 300 --inner-max-iter 2000 --k-liberal 300 --deficit bastankhah --chunk-size 50 ${rose_args} --output-dir analysis/cross_section_fixed/${case_name}_d${dist}"
         count=$((count + 1))
     done
 done
