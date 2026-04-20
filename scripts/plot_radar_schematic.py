@@ -99,9 +99,9 @@ def centroid_offset_for_gap(boundary_km, bearing_deg, gap_km, n_per_edge=50):
 
 # Reference farm placements: bearing, gap in km, color, label
 placements = [
-    (270, 5 * D / 1000, "tab:red", "5$D$ buffer\n(upwind)"),
-    (135, 10 * D / 1000, "tab:orange", "10$D$ buffer\n(oblique)"),
-    (0, 15 * D / 1000, "tab:blue", "15$D$ buffer\n(crosswind)"),
+    (270, 15 * D / 1000, "tab:red", "15$D$ buffer\n(upwind)"),
+    (135, 20 * D / 1000, "tab:orange", "20$D$ buffer\n(oblique)"),
+    (0, 30 * D / 1000, "tab:blue", "30$D$ buffer\n(crosswind)"),
 ]
 
 # =========================================================================
