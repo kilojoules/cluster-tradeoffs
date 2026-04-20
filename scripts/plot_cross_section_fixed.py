@@ -15,6 +15,7 @@ from pathlib import Path
 D = 240.0
 
 cases = [
+    ("Single direction\n(wind from E)", "unidir90"),
     ("DEI real\nwind rose", "dei"),
     ("$a$=0.9, $f$=1.0\n(conc. unidir)", "a0.9_f1.0"),
     ("$a$=0.5, $f$=1.0\n(mod. unidir)", "a0.5_f1.0"),
@@ -27,6 +28,10 @@ distances_D = [2, 5, 10, 15, 20, 30, 40]
 
 
 def get_wind_rose(case_dir):
+    if case_dir == "unidir90":
+        dirs = np.array([90.0])
+        freqs = np.array([1.0])
+        return dirs, freqs
     if case_dir == "dei":
         import pandas as pd
         csv_path = Path("energy_island_10y_daily_av_wind.csv")
@@ -78,7 +83,7 @@ for label, case_dir in cases:
     global_max_pct = max(global_max_pct, np.nanmax(regret_pct))
 
 # Plot 6-panel polar heatmap
-fig, axes = plt.subplots(1, 6, figsize=(30, 5.5),
+fig, axes = plt.subplots(1, 7, figsize=(34, 5.5),
                           subplot_kw={"projection": "polar"})
 
 for ax, (label, case_dir) in zip(axes, cases):
