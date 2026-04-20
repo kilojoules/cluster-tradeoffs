@@ -3,6 +3,7 @@
 \usepackage{amsmath}
 \usepackage{graphicx}
 \usepackage{booktabs}
+\usepackage{float}
 %\usepackage{siunitx}  % conflicts with copernicus \unit
 % Use \\, manually or plain text for units
 \usepackage{natbib}
@@ -151,7 +152,7 @@ This represents the most natural ``what-if'' scenario: a neighboring developer b
 At each position, the target farm is re-optimized with $K = 300$ restarts (matching $K_\text{lib}$) while the reference farm remains fixed.
 The resulting polar map separates bearing and distance effects and reveals whether vulnerability is isotropic or directionally concentrated.
 
-\begin{figure}[t]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{figures/radar_schematic.png}
     \caption{Regret cross-section methodology.
@@ -181,7 +182,7 @@ Production configurations: $K = 500$ for the greedy grid sweep and buffer analys
 We sweep $K$ from 1 to 2000 for three configurations spanning the wind rose space (Table~\ref{tab:convergence}, Fig.~\ref{fig:convergence}).
 A $5 \times 5$ reference neighbor farm is placed at a fixed bearing and distance for each.
 
-\begin{figure}[t]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{figures/convergence.png}
     \caption{Convergence of design regret with multistart depth~$K$.
@@ -191,7 +192,7 @@ A $5 \times 5$ reference neighbor farm is placed at a fixed bearing and distance
     \label{fig:convergence}
 \end{figure}
 
-\begin{table}[t]
+\begin{table}[htbp]
     \centering
     \caption{Design regret (GWh/yr) at selected $K$ values.}
     \label{tab:convergence}
@@ -219,7 +220,7 @@ This applies to any study computing AEP differences between strategies---robust 
 Figure~\ref{fig:heatmap} shows design regret across the $(a, f)$ space at $K = 500$.
 Regret ranges from 17.2\,GWh (0.4\,\% of AEP) at $a = 0.5$, $f = 0.0$ to 100.6\,GWh (2.5\,\%) at $a = 0.9$, $f = 1.0$---a six-fold range.
 
-\begin{figure}[t]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{figures/edrose_heatmap_k500.png}
     \caption{Design regret across the wind rose shape space at $K = 500$.
@@ -234,7 +235,7 @@ The folding parameter $f$ is the dominant factor (Fig.~\ref{fig:regret_vs_f}).
 Mean regret increases monotonically from 45.2\,GWh at $f = 0$ to 77.9\,GWh at $f = 1$.
 Concentration ($a$) has a weaker, non-monotonic effect.
 
-\begin{figure}[t]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=0.65\textwidth]{figures/regret_vs_f.png}
     \caption{Regret vs.\ folding $f$ at each concentration $a$ ($K = 500$).
@@ -252,7 +253,7 @@ The DEI wind rose ($a \approx 0.64$, $f \approx 0.38$) falls in the moderate-reg
 
 Figure~\ref{fig:buffer} shows regret vs.\ buffer distance at $K = 500$ for three wind roses.
 
-\begin{figure}[t]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=0.8\textwidth]{figures/buffer_decay_k500.png}
     \caption{Regret vs.\ buffer distance at $K = 500$, expressed as \% of liberal AEP.
@@ -273,7 +274,7 @@ Figure~\ref{fig:cross-section} presents regret cross-sections at $K = 500$ (conv
 The K=500 results show peak regret ratios of 1.07--1.11$\times$ those at K=100, confirming that the directional pattern is robust while magnitudes increase slightly with more optimization starts.
 Peak bearings are unchanged from K=100 to K=500 for three cases and shift slightly (from 135\,$^\circ$ to 105\,$^\circ$) for the mid-range case (Table~\ref{tab:cross-section}).
 
-\begin{figure}[t]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{figures/cross_section_k500.png}
     \caption{Regret cross-sections at $K = 500$: design regret vs.\ neighbor bearing and distance for a $5 \times 5$ reference farm.
@@ -283,7 +284,7 @@ Peak bearings are unchanged from K=100 to K=500 for three cases and shift slight
     \label{fig:cross-section}
 \end{figure}
 
-\begin{table}[t]
+\begin{table}[htbp]
     \centering
     \caption{Peak regret from cross-sections at $K = 500$ (converged).
     Dominant wind: 270\,$^\circ$.}
@@ -333,7 +334,7 @@ This means that for concentrated unidirectional sites, the adversarial upper bou
 
 For North Sea planning, this implies that sites in the German Bight with strongly unidirectional southwesterly winds face \emph{higher} design regret from realistic neighbor behavior than from adversarial placement---the ``wind theft'' problem is worse than the worst case suggests.
 
-\begin{figure}[t]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{figures/si_comparison_k500.png}
     \caption{Adversarial (top row) vs.\ self-interested (bottom row) regret cross-sections at $K = 500$ for three wind roses.
@@ -350,7 +351,7 @@ To ground the parametric results in real planning decisions, we fit the elliptic
 All five sites fall in the moderate-regret region of the $(a, f)$ space, with $a \in [0.62, 0.73]$ and $f \in [0.18, 0.54]$.
 No operational North Sea site in our sample reaches the high-regret corner ($a > 0.8$, $f > 0.75$), though this does not preclude future lease areas---particularly in the southern North Sea---from doing so.
 
-\begin{table}[t]
+\begin{table}[htbp]
     \centering
     \caption{Fitted elliptical wind rose parameters for North Sea offshore sites.
     Data sources: Horns Rev~1 and Lillgrund from PyWake; Borssele from IEA Wind Task~55 ROWP; Princess Amalia from the python-windrose package; DEI from 10-year NEWA timeseries.}
