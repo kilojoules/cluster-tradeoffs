@@ -28,12 +28,12 @@
 \begin{abstract}
 When a wind farm is designed in isolation---ignoring the wakes of potential neighboring farms---how much energy is sacrificed?
 We define this loss as \emph{design regret}: the difference in annual energy production between a layout re-optimized with knowledge of neighbors and the original isolation-designed layout, both evaluated under the same neighbor wakes.
-Using greedy adversarial neighbor placement and converged multistart optimization ($K = 500$ random restarts), we sweep the two-parameter elliptical wind rose space of Hart (2025) and find that design regret varies six-fold across wind climate: from 17\,GWh/yr (0.4\,\% of AEP) under bidirectional conditions to 101\,GWh/yr (2.5\,\%) under concentrated unidirectional conditions.
-Wind rose directionality---specifically the folding parameter controlling uni- versus bidirectionality---is the dominant driver.
-Regret cross-sections at $K = 500$ confirm an ``ambush effect'': peak vulnerability occurs at oblique angles to the dominant wind direction, not along it.
+Using two complementary approaches---greedy adversarial placement of individual turbines (upper bound) and regret cross-sections with an identical neighboring farm copy (realistic scenario)---we sweep the two-parameter elliptical wind rose space of Hart (2025).
+The adversarial upper bound on regret varies six-fold across wind climate: from 17\,GWh/yr (0.4\,\% of AEP) under bidirectional conditions to 101\,GWh/yr (2.5\,\%) under concentrated unidirectional conditions, with wind rose directionality as the dominant driver.
+Regret cross-sections with a realistic identical neighbor farm show substantially lower regret (0.1--0.4\,\% of AEP for multi-directional wind roses), confirming that the adversarial framing overstates risk by roughly an order of magnitude.
+Under a single wind direction, cross-section regret reaches 1.25\,\%, peaking in the upwind direction as expected.
 Critically, we find that the computational effort required for reliable regret estimation far exceeds standard practice: five random starts capture only 55--86\,\% of the converged regret.
 We recommend a minimum of 300 multistart optimizations for any study computing AEP differences between design strategies.
-Buffer distance analysis shows that regret decay depends on wind rose shape: concentrated unidirectional sites require buffers exceeding $40D$ (9.6\,km), while bidirectional sites need minimal separation.
 \end{abstract}
 
 
@@ -75,7 +75,7 @@ This paper makes four contributions:
     \item A convergence study demonstrating that 300+ multistart optimizations are needed for reliable regret estimation---over an order of magnitude more than typical practice.
     \item A systematic sweep of the wind rose shape space showing that design regret varies six-fold with directionality, with concentrated unidirectional sites most vulnerable.
     \item Buffer distance analysis quantifying how neighbor separation reduces regret, and how the decay rate depends on wind rose shape.
-    \item Regret cross-sections revealing an ``ambush effect'' in which peak design vulnerability occurs at oblique angles to the dominant wind direction.
+    \item Regret cross-sections with a realistic identical neighbor farm, showing that design regret is an order of magnitude lower than the adversarial upper bound and peaks in the upwind direction.
 \end{enumerate}
 
 
@@ -267,51 +267,53 @@ The NYSERDA 4\,nmi ($\sim$$31D$) recommendation reduces regret to $<$1\,\% for a
 Wind-rose-dependent buffer standards could allow denser development at low-risk sites (bidirectional, e.g., DEI) while maintaining protection at high-risk sites (unidirectional, e.g., German Bight).
 This is directly relevant to the emerging cross-border coordination frameworks for the North Sea \citep{Fliegner2025}.
 
-\subsection{The ambush effect: directional vulnerability}\label{sec:cross-sections}
+\subsection{Directional vulnerability: regret cross-sections}\label{sec:cross-sections}
 
-Figure~\ref{fig:cross-section} presents regret cross-sections at $K = 500$ (converged) for four elliptical wind roses spanning the shape space.
-The K=500 results show peak regret ratios of 1.07--1.11$\times$ those at K=100, confirming that the directional pattern is robust while magnitudes increase slightly with more optimization starts.
-Peak bearings are unchanged from K=100 to K=500 for three cases and shift slightly (from 135\,$^\circ$ to 105\,$^\circ$) for the mid-range case (Table~\ref{tab:cross-section}).
+The greedy grid search (Sections~\ref{sec:shape}--\ref{sec:buffer}) establishes an adversarial upper bound by placing individual unconstrained turbines.
+To assess regret under more realistic conditions, we now turn to the regret cross-sections, in which an identical copy of the target farm is placed at controlled boundary-gap distances around the target (Section~\ref{sec:cross-section-method}).
+
+Figure~\ref{fig:cross-section} presents cross-sections for seven wind roses at $K_\text{lib} = K_\text{cons} = 300$.
+The first panel shows a single-direction validation case (wind exclusively from 90$^\circ$), which confirms the methodology: regret is zero for all downwind bearings (225--315$^\circ$) and peaks upwind at 1.25\,\% of AEP at $2D$ buffer distance.
+The remaining six panels show the DEI real wind rose and five elliptical parameterizations (Table~\ref{tab:cross-section}).
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{figures/cross_section_k500.png}
-    \caption{Regret cross-sections at $K = 500$: design regret vs.\ neighbor bearing and distance for a $5 \times 5$ reference farm.
+    \includegraphics[width=\textwidth]{figures/cross_section_fixed.png}
+    \caption{Regret cross-sections with corrected boundary-gap distances ($K_\text{lib} = K_\text{cons} = 300$).
+    Each panel shows design regret (\% of AEP) as a function of neighbor bearing and buffer distance for an identical copy of the target farm.
     Stars mark peak regret.
-    Inset wind roses show sector frequencies.
-    Dominant wind: 270\,$^\circ$ (west).}
+    Inset wind roses show the sector frequency distribution.
+    The single-direction case (left) validates the methodology: zero regret downwind, nonzero only upwind.}
     \label{fig:cross-section}
 \end{figure}
 
 \begin{table}[htbp]
     \centering
-    \caption{Peak regret from cross-sections at $K = 500$ (converged).
-    Dominant wind: 270\,$^\circ$.}
+    \caption{Peak regret from cross-sections ($K_\text{lib} = K_\text{cons} = 300$, boundary-gap distance).}
     \label{tab:cross-section}
     \begin{tabular}{lrrrr}
         \toprule
-        Case & Max (GWh) & Max (\%) & Bearing & Distance \\
+        Case & Max (GWh) & Max (\%) & Bearing & Buffer \\
         \midrule
-        $a = 0.5$, $f = 1.0$    & 174.1 & 4.42 & 135\,$^\circ$ &  $5D$ \\
-        DEI real wind rose       & 143.6 & 2.59 & 225\,$^\circ$ & $15D$ \\
-        $a = 0.9$, $f = 1.0$    & 128.6 & 3.24 & 315\,$^\circ$ & $15D$ \\
-        $a = 0.7$, $f = 0.5$    & 127.0 & 3.21 & 105\,$^\circ$ & $15D$ \\
-        $a = 0.9$, $f = 0.0$    & 105.9 & 2.67 & 195\,$^\circ$ & $60D$ \\
-        $a = 0.5$, $f = 0.0$    &  95.3 & 2.42 &  90\,$^\circ$ & $15D$ \\
+        Single direction (from E) & 50.5 & 1.25 & 105$^\circ$ & $2D$ \\
+        DEI real wind rose        & 12.4 & 0.22 & 255$^\circ$ & $2D$ \\
+        $a = 0.9$, $f = 1.0$     & 13.5 & 0.34 & 315$^\circ$ & $2D$ \\
+        $a = 0.5$, $f = 1.0$     &  9.0 & 0.23 & 240$^\circ$ & $2D$ \\
+        $a = 0.7$, $f = 0.5$     &  7.8 & 0.20 & 300$^\circ$ & $2D$ \\
+        $a = 0.9$, $f = 0.0$     & 14.9 & 0.38 & 270$^\circ$ & $2D$ \\
+        $a = 0.5$, $f = 0.0$     &  3.6 & 0.09 &  90$^\circ$ & $2D$ \\
         \bottomrule
     \end{tabular}
 \end{table}
 
-Peak regret consistently occurs at oblique angles to the dominant wind (270\,$^\circ$), not along it.
-We term this the ``ambush effect'': the liberal layout is pre-adapted to the dominant direction and therefore partially resilient to aligned neighbors.
-Off-axis neighbors exploit the layout's blind spots---directions the liberal optimizer did not prioritize.
+For all multi-directional wind roses, peak regret from a realistic identical neighbor farm is modest: 0.09--0.38\,\% of AEP, with all peaks occurring at the closest buffer distance ($2D$).
+This is substantially lower than the greedy adversarial upper bound (0.4--2.5\,\% of AEP from Section~\ref{sec:shape}), confirming that unconstrained individual turbine placement overstates the risk from a realistic neighboring farm by roughly an order of magnitude.
 
-For North Sea cluster planning, this finding is counterintuitive: a developer might assume the most dangerous neighbor is the one directly upwind.
-The ambush effect shows that neighbors at oblique angles---perhaps in an adjacent country's lease area at a different bearing---may cause greater design regret.
-This is relevant for cross-border coordination in the North Sea, where multiple national lease areas surround each farm at various bearings.
+The single-direction case produces markedly higher regret (1.25\,\%) because the entire AEP depends on one wind direction, making the farm maximally vulnerable to a single upwind wake corridor.
+As the wind rose broadens (moving right across the panels in Fig.~\ref{fig:cross-section}), regret drops because wake losses are diluted across multiple directions and no single neighbor bearing dominates.
 
-All six cross-sections are fully converged at $K = 500$.
-The DEI real wind rose shows peak regret of 143.6\,GWh (2.59\,\%) at bearing 225\,$^\circ$ and $15D$---consistent with the ``ambush effect,'' as the DEI prevailing wind is from the southwest ($\theta_\text{prev} \approx 251°$) and peak regret occurs 26\,$^\circ$ south of the dominant direction.
+Regret decays with buffer distance for all cases, reaching negligible levels ($<$0.1\,\%) by 20--40$D$ depending on the wind rose.
+The directional pattern is physically intuitive: peak regret aligns with the prevailing upwind direction in most cases, with some angular offset due to the irregular polygon geometry.
 
 
 
@@ -386,7 +388,7 @@ The computational cost at $K = 500$ was approximately 2\,hours per wind rose on 
 \paragraph{Wake model.}
 We use \citet{Bastankhah2014} with $k = 0.04$ and root-sum-of-squares superposition.
 More sophisticated models (e.g., TurbOPark) may change absolute magnitudes.
-The qualitative findings---folding dominance, the ambush effect---depend on wake corridor geometry, not magnitude, and are expected to be robust.
+The qualitative findings---folding dominance, directional vulnerability patterns---depend on wake corridor geometry, not magnitude, and are expected to be robust.
 
 \paragraph{Adversarial vs.\ realistic neighbors.}
 The greedy grid search places unconstrained individual turbines, while the cross-section uses a fixed reference farm copy.
@@ -423,9 +425,10 @@ The cross-section analysis uses 24 bearings and 7 distances, which may miss fine
     Bidirectional sites achieve comparable levels at $10D$ (2.4\,km).
     Wind-rose-conditional buffer standards could allow denser North Sea development at low-risk sites.
 
-    \item \textbf{Peak vulnerability occurs at oblique angles to the dominant wind.}
-    The ``ambush effect'' means that off-axis neighbors---perhaps from adjacent countries' lease areas---may cause greater design regret than directly upwind neighbors.
-    This is relevant for cross-border coordination in the North Sea.
+    \item \textbf{Realistic neighbor regret is an order of magnitude below the adversarial upper bound.}
+    An identical neighboring farm placed at boundary-gap distances produces 0.1--0.4\,\% regret for multi-directional wind roses (vs.\ 0.4--2.5\,\% from adversarial individual turbines).
+    Under a single wind direction, regret reaches 1.25\,\%, peaking upwind.
+    The directional pattern is physically intuitive and decays with buffer distance.
 \end{enumerate}
 
 The Danish Energy Island, with its partially bidirectional wind rose ($f \approx 0.38$), sits in the low-to-moderate regret region.
