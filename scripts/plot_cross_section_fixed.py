@@ -125,7 +125,7 @@ for ax, (label, case_dir) in zip(axes, cases):
                           axes_class=PolarAxes)
     ax_inset.set_theta_zero_location("N")
     ax_inset.set_theta_direction(-1)
-    wr_width = np.radians(360 / len(wr_dirs))
+    wr_width = np.radians(min(360 / max(len(wr_dirs), 1), 15))  # cap at 15 deg for single-dir
     ax_inset.bar(np.radians(wr_dirs), wr_freq, width=wr_width,
                  color="steelblue", alpha=0.7, edgecolor="navy", linewidth=0.3)
     ax_inset.set_yticks([])
