@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2026.1.27)  9 APR 2026 09:17
+This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2026.1.27)  20 APR 2026 14:25
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -21,17 +21,6 @@ Already applied: [0000/00/00] Old fixltx2e package on input line 53.
 )
 Additional configuration file copernicus.cfg used
 (./copernicus.cfg)
-
-! LaTeX Error: Option "12pt" not supported.
-
-See the LaTeX manual or LaTeX Companion for explanation.
-Type  H <return>  for immediate help.
- ...                                              
-                                                  
-l.109 \if@stage@final
-                     \else\@twostagejnltrue\fi
-The option "12pt" from article.cls is not supported by copernicus.cls.
-
 (/usr/local/texlive/2025/texmf-dist/tex/latex/base/article.cls
 Document Class: article 2024/06/29 v1.4n Standard LaTeX document class
 (/usr/local/texlive/2025/texmf-dist/tex/latex/base/fleqn.clo
@@ -2989,6 +2978,9 @@ Package uniquecounter Info: New unique counter `rerunfilecheck' on input line 2
 )
 \c@reaction=\count338
 \tabularwidth=\dimen256
+Package color Info: Redefining color textcol on input line 2750.
+Package color Info: Redefining color bgcol on input line 2750.
+Package color Info: Redefining color barcol on input line 2750.
 Package color Info: Redefining color textcol on input line 2754.
 Package color Info: Redefining color bgcol on input line 2755.
 Package color Info: Redefining color barcol on input line 2756.
@@ -3014,95 +3006,45 @@ Package: booktabs 2020/01/12 v1.61803398 Publication quality tables
 \@lastruleclass=\count342
 \@thisrulewidth=\dimen269
 )
-(/usr/local/texlive/2025/texmf-dist/tex/latex/siunitx/siunitx.sty
-Package: siunitx 2025-02-27 v3.4.6 A comprehensive (SI) units package
-\l__siunitx_number_uncert_offset_int=\count343
-\l__siunitx_number_exponent_fixed_int=\count344
-\l__siunitx_number_min_decimal_int=\count345
-\l__siunitx_number_min_integer_int=\count346
-\l__siunitx_number_round_precision_int=\count347
-\l__siunitx_number_lower_threshold_int=\count348
-\l__siunitx_number_upper_threshold_int=\count349
-\l__siunitx_number_group_first_int=\count350
-\l__siunitx_number_group_size_int=\count351
-\l__siunitx_number_group_minimum_int=\count352
-\l__siunitx_angle_tmp_dim=\dimen270
-\l__siunitx_angle_marker_box=\box68
-\l__siunitx_angle_unit_box=\box69
-\l__siunitx_compound_count_int=\count353
-
-(/usr/local/texlive/2025/texmf-dist/tex/latex/translations/translations.sty
-Package: translations 2022/02/05 v1.12 internationalization of LaTeX2e packages
- (CN)
-)
-\l__siunitx_table_tmp_box=\box70
-\l__siunitx_table_tmp_dim=\dimen271
-\l__siunitx_table_column_width_dim=\dimen272
-\l__siunitx_table_integer_box=\box71
-\l__siunitx_table_decimal_box=\box72
-\l__siunitx_table_uncert_box=\box73
-\l__siunitx_table_before_box=\box74
-\l__siunitx_table_after_box=\box75
-\l__siunitx_table_before_dim=\dimen273
-\l__siunitx_table_carry_dim=\dimen274
-\l__siunitx_unit_tmp_int=\count354
-\l__siunitx_unit_position_int=\count355
-\l__siunitx_unit_total_int=\count356
-
-
-! LaTeX cmd Error: Command '\unit' already defined.
-
-For immediate help type H <return>.
- ...                                              
-                                                  
-l.9088   }
-          
-
-You have used \NewDocumentCommand with a command that already has a
-definition.
-
-The existing definition of '\unit' will not be altered.
-
-
-)
-LaTeX Font Info:    Trying to load font information for T1+ptm on input line 23
+LaTeX Font Info:    Trying to load font information for T1+ptm on input line 24
 .
- (/usr/local/texlive/2025/texmf-dist/tex/latex/psnfss/t1ptm.fd
+
+(/usr/local/texlive/2025/texmf-dist/tex/latex/psnfss/t1ptm.fd
 File: t1ptm.fd 2001/06/04 font definitions for T1/ptm.
 ) (./main.aux)
 \openout1 = `main.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 23.
-LaTeX Font Info:    ... okay on input line 23.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 23.
-LaTeX Font Info:    ... okay on input line 23.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 23.
-LaTeX Font Info:    ... okay on input line 23.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 23.
-LaTeX Font Info:    ... okay on input line 23.
-LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 23.
-LaTeX Font Info:    ... okay on input line 23.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 23.
-LaTeX Font Info:    ... okay on input line 23.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 23.
-LaTeX Font Info:    ... okay on input line 23.
-LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 23.
-LaTeX Font Info:    ... okay on input line 23.
-LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 23.
-LaTeX Font Info:    ... okay on input line 23.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 24.
+LaTeX Font Info:    ... okay on input line 24.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 24.
+LaTeX Font Info:    ... okay on input line 24.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 24.
+LaTeX Font Info:    ... okay on input line 24.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 24.
+LaTeX Font Info:    ... okay on input line 24.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 24.
+LaTeX Font Info:    ... okay on input line 24.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 24.
+LaTeX Font Info:    ... okay on input line 24.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 24.
+LaTeX Font Info:    ... okay on input line 24.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 24.
+LaTeX Font Info:    ... okay on input line 24.
+LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 24.
+LaTeX Font Info:    ... okay on input line 24.
 
 (/usr/local/texlive/2025/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
 [Loading MPS to PDF converter (version 2006.09.02).]
-\scratchcounter=\count357
-\scratchdimen=\dimen275
-\scratchbox=\box76
-\nofMPsegments=\count358
-\nofMParguments=\count359
+\scratchcounter=\count343
+\scratchdimen=\dimen270
+\scratchbox=\box68
+\nofMPsegments=\count344
+\nofMParguments=\count345
 \everyMPshowfont=\toks41
-\MPscratchCnt=\count360
-\MPscratchDim=\dimen276
-\MPnumerator=\count361
-\makeMPintoPDFobject=\count362
+\MPscratchCnt=\count346
+\MPscratchDim=\dimen271
+\MPnumerator=\count347
+\makeMPintoPDFobject=\count348
 \everyMPtoPDFconversion=\toks42
 ) (/usr/local/texlive/2025/texmf-dist/tex/latex/epstopdf-pkg/epstopdf-base.sty
 Package: epstopdf-base 2020-01-24 v2.11 Base part for package epstopdf
@@ -3118,180 +3060,145 @@ Package caption Info: hyperref package is loaded.
 Package caption Info: listings package is loaded.
 Package caption Info: rotating package is loaded.
 Package caption Info: End \AtBeginDocument code.
-\c@lstlisting=\count363
-Package hyperref Info: Link coloring OFF on input line 23.
-LaTeX Font Info:    Trying to load font information for U+msa on input line 26.
+\c@lstlisting=\count349
+Package hyperref Info: Link coloring OFF on input line 24.
+LaTeX Font Info:    Trying to load font information for U+msa on input line 27.
 
 
 (/usr/local/texlive/2025/texmf-dist/tex/latex/amsfonts/umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 26.
+LaTeX Font Info:    Trying to load font information for U+msb on input line 27.
 
 
 (/usr/local/texlive/2025/texmf-dist/tex/latex/amsfonts/umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 )
-Overfull \hbox (4.98053pt too wide) in paragraph at lines 27--37
-\T1/ptm/m/n/10 conditions. Wind rose directionality---specifically the folding 
-parameter controlling uni- versus bidirectionality---is the dominant
- []
-
-LaTeX Font Info:    Trying to load font information for T1+phv on input line 37
+LaTeX Font Info:    Trying to load font information for T1+phv on input line 38
 .
+
 (/usr/local/texlive/2025/texmf-dist/tex/latex/psnfss/t1phv.fd
 File: t1phv.fd 2020/03/25 scalable font definitions for T1/phv.
 )
 LaTeX Font Info:    Font shape `T1/phv/m/n' will be
-(Font)              scaled to size 8.54997pt on input line 37.
-
-! Undefined control sequence.
-<argument> \introductionname 
-                             \if@cop@home \ifonline \hypertarget {intro}{}\f...
-l.40 
-     
-The control sequence at the end of the top line
-of your error message was never \def'ed. If you have
-misspelled it (e.g., `\hobx'), type `I' and the correct
-spelling (e.g., `I\hbox'). Otherwise just continue,
-and I'll forget about whatever was undefined.
-
-! Undefined control sequence.
-<argument> ...on\endcsname }\fi \introductionname 
-                                                  }{\thepage }{\@currentHref...
-l.40 
-     
-The control sequence at the end of the top line
-of your error message was never \def'ed. If you have
-misspelled it (e.g., `\hobx'), type `I' and the correct
-spelling (e.g., `I\hbox'). Otherwise just continue,
-and I'll forget about whatever was undefined.
-
+(Font)              scaled to size 8.54997pt on input line 38.
 
 
 [1
 
 {/usr/local/texlive/2025/texmf-var/fonts/map/pdftex/updmap/pdftex.map}{/usr/loc
 al/texlive/2025/texmf-dist/fonts/enc/dvips/base/8r.enc}]
+Overfull \hbox (21.53027pt too wide) in paragraph at lines 59--64
+\T1/ptm/m/n/10 sweeping the elliptical wind rose parameterization of []Hart[] (
+[]2025[])---which separates directional concentration from bidirectionality---
+ []
+
+
 
 [2]
-Overfull \hbox (11.14937pt too wide) in paragraph at lines 87--91
-\T1/ptm/m/n/10 derived from the Danish Energy Island concession zone. Minimum i
-nter-turbine spacing is $\OT1/cmr/m/n/10 4\OML/cmm/m/it/10 D$ \T1/ptm/m/n/10 ($
-\OT1/cmr/m/n/10 960$$m$\T1/ptm/m/n/10 ). The baseline configuration
+Overfull \hbox (8.11389pt too wide) in paragraph at lines 115--118
+[]\T1/ptm/b/n/10 Folding parameter $\OML/cmm/m/it/10 f \OMS/cmsy/m/n/10 2 \OT1/
+cmr/m/n/10 [0\OML/cmm/m/it/10 ; \OT1/cmr/m/n/10 1]$\T1/ptm/m/n/10 : controls sy
+mmetry between opposing directions. At $\OML/cmm/m/it/10 f \OT1/cmr/m/n/10 = 0$
+\T1/ptm/m/n/10 , the distribution is bidirectional---
  []
 
 
 
 [3]
-<figures/radar_schematic.png, id=92, 1083.3273pt x 585.02565pt>
-File: figures/radar_schematic.png Graphic file (type png)
-<use figures/radar_schematic.png>
-Package pdftex.def Info: figures/radar_schematic.png  used on input line 140.
-(pdftex.def)             Requested size: 503.61377pt x 271.96269pt.
-<figures/convergence.png, id=101, 1148.73164pt x 354.123pt>
-File: figures/convergence.png Graphic file (type png)
-<use figures/convergence.png>
-Package pdftex.def Info: figures/convergence.png  used on input line 165.
-(pdftex.def)             Requested size: 503.61377pt x 155.24722pt.
+Overfull \hbox (5.83078pt too wide) in paragraph at lines 151--153
+\T1/ptm/m/n/10 fixed. The resulting polar map separates bearing and distance ef
+fects and reveals whether vulnerability is isotropic or directionally
+ []
+
 
 
 [4]
+<figures/radar_schematic.png, id=96, 587.19376pt x 719.44785pt>
+File: figures/radar_schematic.png Graphic file (type png)
+<use figures/radar_schematic.png>
+Package pdftex.def Info: figures/radar_schematic.png  used on input line 156.
+(pdftex.def)             Requested size: 503.61377pt x 617.04445pt.
 
-LaTeX Warning: Text page 5 contains only floats.
+
+LaTeX Warning: Float too large for page by 88.86375pt on input line 162.
+
+<figures/convergence.png, id=106, 1148.73164pt x 354.123pt>
+File: figures/convergence.png Graphic file (type png)
+<use figures/convergence.png>
+Package pdftex.def Info: figures/convergence.png  used on input line 186.
+(pdftex.def)             Requested size: 503.61377pt x 155.24722pt.
 
 
+[5]
 
-[5 <./figures/radar_schematic.png> <./figures/convergence.png>]
-<figures/edrose_heatmap_k500.png, id=125, 988.6536pt x 391.34206pt>
+[6 <./figures/radar_schematic.png>]
+<figures/edrose_heatmap_k500.png, id=126, 988.6536pt x 391.34206pt>
 File: figures/edrose_heatmap_k500.png Graphic file (type png)
 <use figures/edrose_heatmap_k500.png>
-Package pdftex.def Info: figures/edrose_heatmap_k500.png  used on input line 20
-3.
+Package pdftex.def Info: figures/edrose_heatmap_k500.png  used on input line 22
+4.
 (pdftex.def)             Requested size: 503.61377pt x 199.34892pt.
-<figures/regret_vs_f.png, id=127, 570.57166pt x 353.03896pt>
+<figures/regret_vs_f.png, id=128, 570.57166pt x 353.03896pt>
 File: figures/regret_vs_f.png Graphic file (type png)
 <use figures/regret_vs_f.png>
-Package pdftex.def Info: figures/regret_vs_f.png  used on input line 217.
+Package pdftex.def Info: figures/regret_vs_f.png  used on input line 239.
 (pdftex.def)             Requested size: 327.34587pt x 202.5433pt.
-
-
-[6 <./figures/edrose_heatmap_k500.png>]
-<figures/buffer_decay_k500.png, id=140, 570.2103pt x 392.06474pt>
+<figures/buffer_decay_k500.png, id=132, 570.2103pt x 392.06474pt>
 File: figures/buffer_decay_k500.png Graphic file (type png)
 <use figures/buffer_decay_k500.png>
-Package pdftex.def Info: figures/buffer_decay_k500.png  used on input line 235.
+Package pdftex.def Info: figures/buffer_decay_k500.png  used on input line 257.
 
 (pdftex.def)             Requested size: 402.89255pt x 277.02785pt.
-<figures/cross_section_k100.png, id=145, 1926.35686pt x 399.29175pt>
-File: figures/cross_section_k100.png Graphic file (type png)
-<use figures/cross_section_k100.png>
-Package pdftex.def Info: figures/cross_section_k100.png  used on input line 254
+
+
+[7 <./figures/convergence.png>]
+
+[8 <./figures/edrose_heatmap_k500.png> <./figures/regret_vs_f.png>]
+<figures/cross_section_k500.png, id=155, 2061.1404pt x 415.5525pt>
+File: figures/cross_section_k500.png Graphic file (type png)
+<use figures/cross_section_k500.png>
+Package pdftex.def Info: figures/cross_section_k500.png  used on input line 278
 .
-(pdftex.def)             Requested size: 503.61377pt x 104.38611pt.
+(pdftex.def)             Requested size: 503.61377pt x 101.53542pt.
 
 
-[7 <./figures/regret_vs_f.png>]
+[9 <./figures/buffer_decay_k500.png>]
+LaTeX Font Info:    Trying to load font information for TS1+ptm on input line 3
+14.
 
-[8 <./figures/buffer_decay_k500.png> <./figures/cross_section_k100.png>]
+(/usr/local/texlive/2025/texmf-dist/tex/latex/psnfss/ts1ptm.fd
+File: ts1ptm.fd 2001/06/04 font definitions for TS1/ptm.
+)
 
-[9]
-Overfull \hbox (1.6112pt too wide) in paragraph at lines 338--340
+[10 <./figures/cross_section_k500.png>]
+
+[11]
+Overfull \hbox (1.6112pt too wide) in paragraph at lines 398--400
 \T1/ptm/m/n/10 Real North Sea sites have speed--direction correlations. If high
 -speed winds are concentrated in the dominant direction (common
  []
 
 
 
-[10]
-! Undefined control sequence.
-<argument> \conclusionname 
-                           \if@cop@home \ifonline \hypertarget {conclusions}...
-l.351 
-      
-The control sequence at the end of the top line
-of your error message was never \def'ed. If you have
-misspelled it (e.g., `\hobx'), type `I' and the correct
-spelling (e.g., `I\hbox'). Otherwise just continue,
-and I'll forget about whatever was undefined.
-
-! Undefined control sequence.
-<argument> ...tion\endcsname }\fi \conclusionname 
-                                                  }{\thepage }{\@currentHref...
-l.351 
-      
-The control sequence at the end of the top line
-of your error message was never \def'ed. If you have
-misspelled it (e.g., `\hobx'), type `I' and the correct
-spelling (e.g., `I\hbox'). Otherwise just continue,
-and I'll forget about whatever was undefined.
-
-
-Overfull \hbox (46.45134pt too wide) in paragraph at lines 353--357
-[]\T1/ptm/b/n/10 Standard multistart practice drastically underestimates design
- regret. \T1/ptm/m/n/10 Five random starts capture only $\OT1/cmr/m/n/10 55$$%$
- []
+[12]
+Overfull \hbox (12.44814pt too wide) in paragraph at lines 417--420
+\T1/ptm/m/n/10 under bidirectional conditions to 101GWh/yr (2.5%) under concent
+rated unidirectional conditions. Folding ($\OML/cmm/m/it/10 f$\T1/ptm/m/n/10 , 
+bidirectional
  []
 
 
-Overfull \hbox (17.83473pt too wide) in paragraph at lines 358--361
-\T1/ptm/m/n/10 under bidirectional conditions to $\OT1/cmr/m/n/10 101$$[]\OML/c
-mm/m/it/10 =[]$ \T1/ptm/m/n/10 ($\OT1/cmr/m/n/10 2\OML/cmm/m/it/10 :\OT1/cmr/m/
-n/10 5$$%$\T1/ptm/m/n/10 ) under concentrated unidirectional conditions. Foldin
-g ($\OML/cmm/m/it/10 f$\T1/ptm/m/n/10 , bidirectional
- []
-
-
-Overfull \hbox (7.24161pt too wide) in paragraph at lines 367--370
+Overfull \hbox (7.24161pt too wide) in paragraph at lines 426--429
 []\T1/ptm/b/n/10 Peak vulnerability occurs at oblique angles to the dominant wi
 nd. \T1/ptm/m/n/10 The ``ambush effect'' means that off-axis neighbors---
  []
 
 
 
-[11] (./main.bbl
+[13] (./main.bbl
 
-[12]
+[14]
 Underfull \hbox (badness 5954) in paragraph at lines 11--14
 []\T1/ptm/m/n/9 Bastankhah, M. and Porté-Agel, F.: A new analytical model for w
 ind-turbine wakes, Renewable Energy, 70, 116--123,
@@ -3299,45 +3206,43 @@ ind-turbine wakes, Renewable Energy, 70, 116--123,
 
 )
 
-[13] (./main.aux)
+[15] (./main.aux)
  ***********
 LaTeX2e <2024-11-01> patch level 2
 L3 programming layer <2021/03/21>
  ***********
  ) 
 Here is how much of TeX's memory you used:
- 22853 strings out of 473190
- 388278 string characters out of 5715800
- 816226 words of memory out of 5000000
- 45733 multiletter control sequences out of 15000+600000
- 608277 words of font info for 109 fonts, out of 8000000 for 9000
+ 19281 strings out of 473190
+ 280308 string characters out of 5715800
+ 734511 words of memory out of 5000000
+ 42164 multiletter control sequences out of 15000+600000
+ 606761 words of font info for 104 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 84i,11n,93p,541b,1157s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 84i,12n,93p,541b,571s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb
-></usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx7.pfb><
-/usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></
-usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></u
-sr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi5.pfb></usr
-/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb></usr/l
-ocal/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi9.pfb></usr/loc
-al/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmib10.pfb></usr/loc
-al/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/local
-/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmr6.pfb></usr/local/te
-xlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.pfb></usr/local/texli
-ve/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmr9.pfb></usr/local/texlive/
-2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/texlive/2
-025/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.pfb></usr/local/texlive/202
-5/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/local/texlive/2025/
-texmf-dist/fonts/type1/public/amsfonts/cm/cmsy9.pfb></usr/local/texlive/2025/te
-xmf-dist/fonts/type1/public/amsfonts/symbols/msam10.pfb></usr/local/texlive/202
-5/texmf-dist/fonts/type1/urw/helvetic/uhvr8a.pfb></usr/local/texlive/2025/texmf
--dist/fonts/type1/urw/times/utmb8a.pfb></usr/local/texlive/2025/texmf-dist/font
-s/type1/urw/times/utmr8a.pfb></usr/local/texlive/2025/texmf-dist/fonts/type1/ur
-w/times/utmri8a.pfb>
-Output written on main.pdf (13 pages, 1983020 bytes).
+></usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb>
+</usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb><
+/usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi5.pfb></u
+sr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb></usr
+/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi9.pfb></usr/l
+ocal/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/loc
+al/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmr6.pfb></usr/local/
+texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.pfb></usr/local/tex
+live/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmr9.pfb></usr/local/texliv
+e/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/texlive
+/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.pfb></usr/local/texlive/2
+025/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/local/texlive/202
+5/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy9.pfb></usr/local/texlive/2025/
+texmf-dist/fonts/type1/public/amsfonts/symbols/msam10.pfb></usr/local/texlive/2
+025/texmf-dist/fonts/type1/urw/helvetic/uhvr8a.pfb></usr/local/texlive/2025/tex
+mf-dist/fonts/type1/urw/times/utmb8a.pfb></usr/local/texlive/2025/texmf-dist/fo
+nts/type1/urw/times/utmr8a.pfb></usr/local/texlive/2025/texmf-dist/fonts/type1/
+urw/times/utmri8a.pfb>
+Output written on main.pdf (15 pages, 1764661 bytes).
 PDF statistics:
- 345 PDF objects out of 1000 (max. 8388607)
- 273 compressed objects within 3 object streams
- 79 named destinations out of 1000 (max. 500000)
+ 348 PDF objects out of 1000 (max. 8388607)
+ 278 compressed objects within 3 object streams
+ 86 named destinations out of 1000 (max. 500000)
  31 words of extra memory for PDF output out of 10000 (max. 10000000)
 
