@@ -134,12 +134,11 @@ def build_neighbor_grid(boundary_np, grid_spacing, pad, buffer=2 * D):
     gy = np.arange(y_lo, y_hi, grid_spacing)
     gx_2d, gy_2d = np.meshgrid(gx, gy)
     candidates = np.column_stack([gx_2d.ravel(), gy_2d.ravel()])
-    hull = ConvexHull(boundary_np)
-    hull_pts = boundary_np[hull.vertices]
-    centroid = hull_pts.mean(axis=0)
-    expanded = centroid + (hull_pts - centroid) * (
-        1 + buffer / np.linalg.norm(hull_pts - centroid, axis=1, keepdims=True)
-    )
+    from shapely.geometry import Polygon
+    poly = Polygon(boundary_np)
+    expanded_poly = poly.buffer(buffer)
+    xx, yy = expanded_poly.exterior.xy
+    expanded = np.column_stack([np.array(xx), np.array(yy)])
     exclusion_path = MplPath(expanded)
     outside = ~exclusion_path.contains_points(candidates)
     grid = candidates[outside]

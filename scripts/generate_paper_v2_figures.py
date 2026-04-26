@@ -12,7 +12,7 @@ import matplotlib.patheffects
 from pathlib import Path
 
 D = 240.0
-OUT = Path("paper_v2/figures")
+OUT = Path("paper_v3/figures")
 OUT.mkdir(parents=True, exist_ok=True)
 
 # =============================================================================
@@ -65,7 +65,7 @@ liberal_aep = np.zeros_like(regret)
 
 for i, a in enumerate(a_vals):
     for j, f in enumerate(f_vals):
-        d = json.load(open(f"analysis/edrose_sweep_k500/a{a}_f{f}/results.json"))
+        d = json.load(open(f"analysis/edrose_sweep_quadruple/a{a}_f{f}/results.json"))
         regret[i, j] = d["regret_gwh"]
         liberal_aep[i, j] = d["liberal_aep_gwh"]
 
@@ -158,7 +158,7 @@ for label, a, f, color, marker in buf_configs:
     regrets_buf = []
     lib_aep_buf = None
     for b in buffers_D:
-        d = json.load(open(f"analysis/buffer_sweep_k500/a{a}_f{f}_buf{b}D/results.json"))
+        d = json.load(open(f"analysis/buffer_sweep_quadruple/a{a}_f{f}_buf{b}D/results.json"))
         regrets_buf.append(d["regret_gwh"])
         if lib_aep_buf is None:
             lib_aep_buf = d["liberal_aep_gwh"]

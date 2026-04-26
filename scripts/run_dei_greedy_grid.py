@@ -168,18 +168,47 @@ def build_neighbor_grid(boundary_np, grid_spacing, pad, buffer=2 * D):
     gx_2d, gy_2d = np.meshgrid(gx, gy)
     candidates = np.column_stack([gx_2d.ravel(), gy_2d.ravel()])
 
-    # Offset polygon outward by buffer for exclusion zone
-    from scipy.spatial import ConvexHull
-    hull = ConvexHull(boundary_np)
-    hull_pts = boundary_np[hull.vertices]
-    centroid = hull_pts.mean(axis=0)
+    # Exclusion zone = every point within `buffer` metres of nearest point
+    # on the target polygon boundary (true min-distance, not centroid-radial).
+    # Compute distance from each candidate to every polygon edge; keep points
+    # both outside the polygon AND at least `buffer` from every edge.
+    def _point_seg_dist_sq(pts, a, b):
+        """Squared distance from pts (N,2) to segments a->b (M,2)->(M,2)."""
+        ab = b - a                      # (M,2)
+        ab_len2 = np.sum(ab * ab, axis=1)  # (M,)
+        ap = pts[:, None, :] - a[None, :, :]  # (N,M,2)
+        t = np.einsum("nmi,mi->nm", ap, ab) / np.maximum(ab_len2[None, :], 1e-12)
+        t = np.clip(t, 0.0, 1.0)
+        closest = a[None, :, :] + t[:, :, None] * ab[None, :, :]  # (N,M,2)
+        diff = pts[:, None, :] - closest
+        return np.sum(diff * diff, axis=2)  # (N,M)
 
-    # Expand hull outward by buffer
-    expanded = centroid + (hull_pts - centroid) * (1 + buffer / np.linalg.norm(hull_pts - centroid, axis=1, keepdims=True))
+    poly_a = boundary_np
+    poly_b = np.roll(boundary_np, -1, axis=0)
+    d2 = _point_seg_dist_sq(candidates, poly_a, poly_b)  # (N_cand, N_edge)
+    min_dist = np.sqrt(d2.min(axis=1))
+    inside = MplPath(boundary_np).contains_points(candidates)
+    # Need the exclusion boundary polygon for plotting / downstream use.
+    # Trace it by evaluating min_dist on a denser grid boundary via level set —
+    # cheap approximation: expand each edge normal by `buffer` and take convex hull.
+    # (Used only for visualization; logic filter is exact.)
+    normals = np.stack([(poly_b - poly_a)[:, 1], -(poly_b - poly_a)[:, 0]], axis=1)
+    normals = normals / np.maximum(np.linalg.norm(normals, axis=1, keepdims=True), 1e-12)
+    # Outward-facing? Flip if pointing toward centroid.
+    cent = boundary_np.mean(axis=0)
+    mids = 0.5 * (poly_a + poly_b)
+    out_sign = np.sign(np.sum((mids - cent) * normals, axis=1))
+    normals = normals * out_sign[:, None]
+    expanded_pts = np.vstack([poly_a + buffer * normals, poly_b + buffer * normals])
+    from scipy.spatial import ConvexHull as _CH
+    _h = _CH(expanded_pts)
+    expanded = expanded_pts[_h.vertices]
     exclusion_path = MplPath(expanded)
 
-    # Keep only points outside the exclusion zone
-    outside = ~exclusion_path.contains_points(candidates)
+    # Keep only points BOTH outside the polygon AND at least `buffer` from its boundary.
+    # This is the exact Minkowski complement; the exclusion_path above is only
+    # used for downstream plotting.
+    outside = (~inside) & (min_dist >= buffer)
     grid = candidates[outside]
 
     print(f"Neighbor grid: {len(grid)} candidates outside exclusion zone "

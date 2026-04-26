@@ -15,7 +15,6 @@ from pathlib import Path
 D = 240.0
 
 cases = [
-    ("Single direction\n(wind from E)", "unidir90"),
     ("DEI real\nwind rose", "dei"),
     ("$a$=0.9, $f$=1.0\n(conc. unidir)", "a0.9_f1.0"),
     ("$a$=0.5, $f$=1.0\n(mod. unidir)", "a0.5_f1.0"),
@@ -23,6 +22,7 @@ cases = [
     ("$a$=0.9, $f$=0.0\n(conc. bidir)", "a0.9_f0.0"),
     ("$a$=0.5, $f$=0.0\n(mod. bidir)", "a0.5_f0.0"),
 ]
+unidir_case = ("Single direction\n(wind from E)", "unidir90")
 
 distances_D = [2, 5, 10, 15, 20, 30, 40]
 
@@ -59,7 +59,7 @@ def get_wind_rose(case_dir):
 # Load and merge per-distance results
 all_data = {}
 global_max_pct = 0
-for label, case_dir in cases:
+for label, case_dir in cases + [unidir_case]:
     regret_rows = []
     lib_aep = None
     bearings = None
@@ -80,10 +80,11 @@ for label, case_dir in cases:
         "distances_D": distances_D,
         "liberal_aep_gwh": lib_aep,
     }
-    global_max_pct = max(global_max_pct, np.nanmax(regret_pct))
+    if case_dir != unidir_case[1]:
+        global_max_pct = max(global_max_pct, np.nanmax(regret_pct))
 
-# Plot 6-panel polar heatmap
-fig, axes = plt.subplots(1, 7, figsize=(34, 5.5),
+# Multidir figure: 6 panels, shared color scale to multidir max
+fig, axes = plt.subplots(1, 6, figsize=(30, 5.5),
                           subplot_kw={"projection": "polar"})
 
 for ax, (label, case_dir) in zip(axes, cases):
@@ -132,7 +133,7 @@ for ax, (label, case_dir) in zip(axes, cases):
     ax_inset.set_xticks([])
     ax_inset.patch.set_alpha(0.8)
 
-fig.suptitle("Regret Cross-Sections (corrected boundary-gap distance, K=300)\n"
+fig.suptitle("Regret Cross-Sections: multi-directional wind roses ($K_{lib}=K_{cons}=300$)\n"
              "Identical reference farm placed at boundary gap distances 2-40$D$",
              fontsize=12, y=1.02)
 
@@ -143,6 +144,58 @@ plt.tight_layout(rect=[0, 0, 0.91, 0.95])
 out = Path("paper_v3/figures/cross_section_fixed.png")
 fig.savefig(str(out), dpi=200, bbox_inches="tight")
 print(f"Saved: {out}")
+
+# Separate single-direction figure (own color scale — regret much larger)
+fig2, ax2 = plt.subplots(1, 1, figsize=(7, 6.5),
+                          subplot_kw={"projection": "polar"})
+label, case_dir = unidir_case
+d = all_data[case_dir]
+bearings = d["bearings_deg"]
+dists = np.array(d["distances_D"])
+regret_pct = d["regret_grid_pct"]
+uni_max = float(np.nanmax(regret_pct))
+
+ax2.set_theta_zero_location("N")
+ax2.set_theta_direction(-1)
+
+dbear = bearings[1] - bearings[0]
+bear_edges = np.radians(np.concatenate([bearings - dbear/2,
+                                         [bearings[-1] + dbear/2]]))
+dist_edges = [dists[0] - (dists[1] - dists[0]) / 2]
+for i in range(len(dists) - 1):
+    dist_edges.append((dists[i] + dists[i+1]) / 2)
+dist_edges.append(dists[-1] + (dists[-1] - dists[-2]) / 2)
+dist_edges = np.maximum(np.array(dist_edges), 0)
+theta_grid, r_grid = np.meshgrid(bear_edges, dist_edges)
+im2 = ax2.pcolormesh(theta_grid, r_grid, np.clip(regret_pct, 0, None),
+                     cmap="YlOrRd", vmin=0, vmax=uni_max, shading="flat")
+idx = np.unravel_index(np.nanargmax(regret_pct), regret_pct.shape)
+ax2.plot(np.radians(bearings[idx[1]]), dists[idx[0]],
+         "k*", markersize=16, zorder=10)
+ax2.set_title(label, fontsize=11, pad=15)
+ax2.set_rlabel_position(135)
+ax2.set_yticks([5, 10, 20, 30, 40])
+ax2.set_yticklabels(["5D", "10D", "20D", "30D", "40D"], fontsize=8)
+
+wr_dirs, wr_freq = get_wind_rose(case_dir)
+ax_inset = inset_axes(ax2, width="28%", height="28%", loc="lower right",
+                      axes_class=PolarAxes)
+ax_inset.set_theta_zero_location("N")
+ax_inset.set_theta_direction(-1)
+wr_width = np.radians(min(360 / max(len(wr_dirs), 1), 15))
+ax_inset.bar(np.radians(wr_dirs), wr_freq, width=wr_width,
+             color="steelblue", alpha=0.7, edgecolor="navy", linewidth=0.3)
+ax_inset.set_yticks([]); ax_inset.set_xticks([])
+ax_inset.patch.set_alpha(0.8)
+
+fig2.suptitle("Cross-section: single wind direction (wind from 90$^\\circ$)\n"
+              "Regret reaches 1.25\\% — own color scale, much larger than multi-dir cases",
+              fontsize=11)
+fig2.colorbar(im2, ax=ax2, shrink=0.75, label="Design Regret (% of AEP)", pad=0.12)
+plt.tight_layout()
+out2 = Path("paper_v3/figures/cross_section_unidir.png")
+fig2.savefig(str(out2), dpi=200, bbox_inches="tight")
+print(f"Saved: {out2}")
 
 # Summary
 print(f"\n{'='*80}")
