@@ -31,6 +31,11 @@ from pixwake.deficit import BastankhahGaussianDeficit
 from pixwake.deficit.gaussian import TurboGaussianDeficit
 from pixwake.optim.sgd import SGDSettings, topfarm_sgd_solve
 
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).resolve().parent))
+from schedules import funwake_iter192  # noqa: E402
+from scheduled_sgd import scheduled_sgd_solve  # noqa: E402
+
 print = partial(print, flush=True)
 
 D = 240.0
@@ -243,8 +248,16 @@ def main():
     parser.add_argument("--superposition", type=str, default="squaredsum",
                         choices=["squaredsum", "linearsum"])
     parser.add_argument("--ti", type=float, default=0.06)
+    parser.add_argument("--blockage", action="store_true",
+                        help="Include SelfSimilarityBlockageDeficit2020")
+    parser.add_argument("--ref-independent", action="store_true",
+                        help="Use an independently-liberal-optimized neighbor "
+                             "(different multistart seeds) instead of identical-copy")
 
     parser.add_argument("--output-dir", type=str, default="analysis/regret_cross_section")
+    parser.add_argument("--schedule", type=str, default="sgd_baseline",
+                        choices=["sgd_baseline", "funwake_iter192"],
+                        help="Inner SGD schedule: pixwake default or FunWake iter_192")
     args = parser.parse_args()
 
     n_target_list = [int(x) for x in args.n_target.split(",")]
@@ -290,7 +303,11 @@ def main():
         deficit = BastankhahGaussianDeficit(k=0.04, superposition=sup)
     elif args.deficit == "turbopark":
         deficit = TurboGaussianDeficit(A=0.04, superposition=sup)
-    sim = WakeSimulation(turbine, deficit)
+    blockage_model = None
+    if args.blockage:
+        from pixwake.deficit.selfsimilarity import SelfSimilarityBlockageDeficit2020
+        blockage_model = SelfSimilarityBlockageDeficit2020()
+    sim = WakeSimulation(turbine, deficit, blockage=blockage_model)
     ti_amb = args.ti if args.deficit == "turbopark" else None
 
     sgd_settings = SGDSettings(
@@ -312,6 +329,24 @@ def main():
             upper=sgd_settings.bisect_upper,
         )
         sgd_settings = _dc_replace(sgd_settings, mid=computed_mid)
+
+    # Build solver dispatch: either pixwake default SGD or FunWake-scheduled SGD.
+    # `solve_layout(obj_fn, sx, sy)` returns (opt_x, opt_y) for either path.
+    if args.schedule == "funwake_iter192":
+        _funwake_apply = funwake_iter192(lr_init=args.inner_lr)
+
+        def solve_layout(obj_fn, sx, sy):
+            return scheduled_sgd_solve(
+                obj_fn, sx, sy, boundary, D * 4,
+                _funwake_apply, args.inner_max_iter,
+                lr_init=args.inner_lr,
+            )
+        print(f"Using FunWake iter_192 schedule (lr_init={args.inner_lr}, "
+              f"total_iter={args.inner_max_iter})")
+    else:
+        def solve_layout(obj_fn, sx, sy):
+            return topfarm_sgd_solve(obj_fn, sx, sy, boundary, D * 4, sgd_settings)
+        print(f"Using pixwake baseline SGD schedule")
 
     # Pre-compute centroid offsets for all (bearing, distance) pairs
     print("Pre-computing boundary-gap offsets...")
@@ -370,7 +405,7 @@ def main():
                     pts.extend(cands[inside].tolist())
                 pts = np.array(pts[:n_target])
                 sx, sy = jnp.array(pts[:, 0]), jnp.array(pts[:, 1])
-            lx, ly = topfarm_sgd_solve(liberal_objective, sx, sy, boundary, D * 4, sgd_settings)
+            lx, ly = solve_layout(liberal_objective, sx, sy)
             lib_aep = float(-liberal_objective(lx, ly))
             if lib_aep > lib_best_aep:
                 lib_best_aep = lib_aep
@@ -380,9 +415,47 @@ def main():
         liberal_aep = lib_best_aep
         print(f"Liberal AEP: {liberal_aep:.2f} GWh (best of {args.k_liberal} starts)")
 
-        # Reference farm = liberal layout (identical copy)
-        ref_x_local = np.array(liberal_x)
-        ref_y_local = np.array(liberal_y)
+        # Reference farm: identical copy by default.
+        # If --ref-independent: run a separate liberal multistart in the same
+        # polygon to obtain an INDEPENDENT neighbor layout (different local
+        # optimum than the target's liberal). This breaks the identical-copy
+        # assumption and tests whether a self-interested neighbour produces
+        # higher target regret than a mirror-image one.
+        if args.ref_independent:
+            print(f"Independent neighbor liberal multistart with K={args.k_liberal}...")
+            best_ref_aep = -np.inf
+            best_ref_x, best_ref_y = init_x, init_y
+            for k in range(args.k_liberal):
+                if k == 0:
+                    sx, sy = init_x, init_y
+                else:
+                    key = jax.random.PRNGKey(k * 4079 + 4099)
+                    pts = []
+                    while len(pts) < n_target:
+                        rx = jax.random.uniform(key, (n_target * 3,),
+                                                minval=boundary_np[:, 0].min(),
+                                                maxval=boundary_np[:, 0].max())
+                        key, _ = jax.random.split(key)
+                        ry = jax.random.uniform(key, (n_target * 3,),
+                                                minval=boundary_np[:, 1].min(),
+                                                maxval=boundary_np[:, 1].max())
+                        key, _ = jax.random.split(key)
+                        cands = np.column_stack([np.array(rx), np.array(ry)])
+                        inside = _polygon_path.contains_points(cands)
+                        pts.extend(cands[inside].tolist())
+                    pts = np.array(pts[:n_target])
+                    sx, sy = jnp.array(pts[:, 0]), jnp.array(pts[:, 1])
+                rx, ry = solve_layout(liberal_objective, sx, sy)
+                ra = float(-liberal_objective(rx, ry))
+                if ra > best_ref_aep:
+                    best_ref_aep = ra
+                    best_ref_x, best_ref_y = rx, ry
+            ref_x_local = np.array(best_ref_x)
+            ref_y_local = np.array(best_ref_y)
+            print(f"Independent neighbor liberal AEP: {best_ref_aep:.2f} GWh")
+        else:
+            ref_x_local = np.array(liberal_x)
+            ref_y_local = np.array(liberal_y)
         n_ref = n_target
 
         # =================================================================
@@ -455,8 +528,7 @@ def main():
                 result = sim(x_all, y_all, ws_amb=ws, wd_amb=wd, ti_amb=ti_amb)
                 power = result.power()[:, :n_target]
                 return -jnp.sum(power * weights[:, None]) * 8760 / 1e6
-            opt_x, opt_y = topfarm_sgd_solve(
-                objective, sx, sy, boundary, D * 4, sgd_settings)
+            opt_x, opt_y = solve_layout(objective, sx, sy)
             return -objective(opt_x, opt_y)
 
         CHUNK = args.chunk_size
@@ -514,6 +586,7 @@ def main():
                 "regret_pct": float(pct),
                 "liberal_aep_present_gwh": lib_aep_present,
                 "conservative_aep_gwh": best_cons,
+                "all_cons_aeps_gwh": np.asarray(cons_aeps[pi]).tolist(),
             })
             if pi % args.n_bearings == 0:
                 print(f"  {pi:>3}  {bearing:>7.0f}  {distances_D[di]:>5.0f}  "
@@ -558,6 +631,7 @@ def main():
                 "ti": args.ti,
                 "inner_max_iter": args.inner_max_iter,
                 "inner_lr": args.inner_lr,
+                "schedule": args.schedule,
                 "ed_a": args.ed_a if args.wind_rose in ("elliptical", "mixture") else None,
                 "ed_f": args.ed_f if args.wind_rose in ("elliptical", "mixture") else None,
             },
