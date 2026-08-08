@@ -99,9 +99,9 @@ def centroid_offset_for_gap(boundary_km, bearing_deg, gap_km, n_per_edge=50):
 
 # Reference farm placements: bearing, gap in km, color, label
 placements = [
-    (270, 15 * D / 1000, "tab:red", "15$D$ buffer\n(upwind)"),
-    (135, 20 * D / 1000, "tab:orange", "20$D$ buffer\n(oblique)"),
-    (0, 30 * D / 1000, "tab:blue", "30$D$ buffer\n(crosswind)"),
+    (270, 15 * D / 1000, "tab:red", "15$D$ buffer"),
+    (135, 20 * D / 1000, "tab:orange", "20$D$ buffer"),
+    (0, 30 * D / 1000, "tab:blue", "30$D$ buffer"),
 ]
 
 # =========================================================================
@@ -170,12 +170,6 @@ for angle, lbl in [(0, "N"), (90, "E"), (180, "S"), (270, "W")]:
     ax.text(r * np.sin(rad), r * np.cos(rad), lbl,
             fontsize=14, ha="center", va="center", fontweight="bold",
             color="gray")
-
-# Wind arrow
-ax.annotate("", xy=(-20, 0), xytext=(-25, 0),
-            arrowprops=dict(arrowstyle="-|>", color="steelblue", lw=3))
-ax.text(-22.5, 1.5, "Prevailing\nwind (270$^\\circ$)", fontsize=9,
-        color="steelblue", ha="center", va="bottom", fontweight="bold")
 
 # Set limits
 all_x = [bnd_km[:, 0].min()]

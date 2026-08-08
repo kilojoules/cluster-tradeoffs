@@ -31,6 +31,7 @@ from scipy.spatial import ConvexHull
 
 from pixwake import Curve, Turbine, WakeSimulation
 from pixwake.deficit import BastankhahGaussianDeficit
+from pixwake.deficit.gaussian import TurboGaussianDeficit
 from pixwake.optim.sgd import SGDSettings, topfarm_sgd_solve
 
 print = partial(print, flush=True)
@@ -168,7 +169,7 @@ def draw_wind_rose(ax, wd_bins, ws_bins, weights):
 
 
 def compute_aep(sim, target_x, target_y, ws_amb, wd_amb, weights,
-                neighbor_x=None, neighbor_y=None):
+                neighbor_x=None, neighbor_y=None, ti_amb=None):
     """Compute AEP in GWh for the target turbines."""
     n_target = len(target_x)
     if neighbor_x is not None and len(neighbor_x) > 0:
@@ -177,7 +178,7 @@ def compute_aep(sim, target_x, target_y, ws_amb, wd_amb, weights,
     else:
         all_x = target_x
         all_y = target_y
-    result = sim(all_x, all_y, ws_amb=ws_amb, wd_amb=wd_amb)
+    result = sim(all_x, all_y, ws_amb=ws_amb, wd_amb=wd_amb, ti_amb=ti_amb)
     power = result.power()[:, :n_target]  # (n_dirs, n_target)
     weighted_power = jnp.sum(power * weights[:, None])
     return weighted_power * 8760 / 1e6  # kW -> GWh
@@ -190,7 +191,7 @@ def reconstruct_regret_maps(sim, grid, placement_order, liberal_x, liberal_y,
     n_cands = len(grid)
 
     # Liberal AEP (no neighbors)
-    liberal_aep = compute_aep(sim, liberal_x, liberal_y, ws_amb, wd_amb, weights)
+    liberal_aep = compute_aep(sim, liberal_x, liberal_y, ws_amb, wd_amb, weights, ti_amb=ti_amb)
     print(f"Liberal AEP (no neighbors): {liberal_aep:.3f} GWh")
 
     regret_maps = []
@@ -511,6 +512,8 @@ def main():
     parser.add_argument("--wind-dir", type=float, default=270.0)
     parser.add_argument("--wind-speed", type=float, default=9.0)
     parser.add_argument("--n-bins", type=int, default=24)
+    parser.add_argument("--deficit", type=str, default="bastankhah",
+                        choices=["bastankhah", "turbopark"])
     parser.add_argument("--ed-a", type=float, default=0.8)
     parser.add_argument("--ed-f", type=float, default=1.0)
     parser.add_argument("--ed-a2", type=float, default=0.8)
@@ -559,7 +562,10 @@ def main():
         wd = jnp.array(mix.wind_directions)
         weights = jnp.array(mix.sector_frequencies)
         ws = jnp.full_like(wd, args.wind_speed)
-    sim = WakeSimulation(turbine, BastankhahGaussianDeficit(k=0.04))
+    if args.deficit == "turbopark":
+        sim = WakeSimulation(turbine, TurboGaussianDeficit(A=0.04))
+    else:
+        sim = WakeSimulation(turbine, BastankhahGaussianDeficit(k=0.04))
 
     grid, gx_1d, gy_1d, exclusion_hull = build_neighbor_grid(
         boundary_np, GRID_SPACING_D * D, args.grid_pad_D * D, args.buffer_D * D)

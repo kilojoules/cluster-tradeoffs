@@ -109,10 +109,13 @@ FIGS = [
          title="Where re-design actually moves the turbines",
          source="gbar",
          body="Arrows from each turbine's liberal position to where the neighbor-aware optimizer puts "
-              "it. If the escape-route account is right, the arrows should point away from the single "
-              "wake corridor when one neighbor is present, and shrink toward nothing as the ring closes. "
-              "This needs the conservative layout coordinates, which the production runs did not store — "
-              "hence a fresh campaign."),
+              "it. The prediction was that escape moves should shrink as the ring closes, and they do: "
+              "the median turbine travels 6.6D with one neighbor and 5.2D with eight, falling at every "
+              "step, while the recoverable fraction falls 0.33 to 0.18 alongside it. One caveat worth "
+              "stating plainly — the liberal and conservative layouts are independent multistart optima, "
+              "so turbine index means nothing between them; the pairing here is the assignment that "
+              "minimises total travel. Pairing by index instead reports a spurious 55D of movement that "
+              "is mostly relabeling. Shown for Bastankhah, whose layout series completed first."),
     dict(file="mech_angular_spread.png",
          eyebrow="the controlled test",
          title="Angular spread with everything else held still",

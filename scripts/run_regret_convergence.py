@@ -215,6 +215,9 @@ def vmap_solve_batch(sim, starts_x, starts_y, boundary, min_spacing,
 def main():
     parser = argparse.ArgumentParser(description="Comprehensive convergence study")
     parser.add_argument("--output-dir", type=str, default="analysis/convergence_study")
+    parser.add_argument("--deficit", type=str, default="bastankhah",
+                        choices=["bastankhah", "turbopark"])
+    parser.add_argument("--ti", type=float, default=0.06)
     parser.add_argument("--chunk-size", type=int, default=50,
                         help="Number of parallel solves per vmap chunk")
     args = parser.parse_args()
@@ -223,7 +226,13 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     turbine = create_dei_turbine()
-    deficit = BastankhahGaussianDeficit(k=0.04)
+    if args.deficit == "turbopark":
+        from pixwake.deficit.gaussian import TurboGaussianDeficit
+        deficit = TurboGaussianDeficit(A=0.04)
+        ti_amb_val = args.ti
+    else:
+        deficit = BastankhahGaussianDeficit(k=0.04)
+        ti_amb_val = None
     sim = WakeSimulation(turbine, deficit)
     init_x, init_y = generate_target_grid(boundary_np, N_TARGET, spacing=4*D)
 
@@ -238,7 +247,7 @@ def main():
     ]
 
     # Pre-generate a large pool of random starts
-    K_MAX = 2000
+    K_MAX = 5000
     print(f"Pre-generating {K_MAX} random starts...")
     random_xs, random_ys = [], []
     for k in range(K_MAX):
@@ -275,7 +284,7 @@ def main():
         print("PART A: Liberal layout convergence (200 starts, vmap)")
         print(f"{'='*60}")
 
-        K_lib_values = [1, 2, 5, 10, 20, 50, 100, 200, 500]
+        K_lib_values = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000]
         K_lib_max = max(K_lib_values)
         lib_settings = SGDSettings(learning_rate=50.0, max_iter=10000,
                                    additional_constant_lr_iterations=10000, tol=1e-6)
@@ -288,7 +297,8 @@ def main():
         t0 = time.time()
         lib_all_aeps = vmap_solve_batch(
             sim, lib_starts_x, lib_starts_y, boundary, D * 4,
-            lib_settings, ws, wd, weights, chunk_size=args.chunk_size)
+            lib_settings, ws, wd, weights, ti_amb=ti_amb_val,
+            chunk_size=args.chunk_size)
         lib_elapsed = time.time() - t0
         lib_all_aeps_np = np.array(lib_all_aeps)
         print(f"  {K_lib_max} liberal solves in {lib_elapsed:.1f}s "
@@ -311,7 +321,7 @@ def main():
         best_lib_idx = int(lib_all_aeps_np[:200].argmax())
         print(f"\n  Re-solving best liberal start ({best_lib_idx}) to get layout...")
         def lib_obj(x, y):
-            return -compute_aep(sim, x, y, ws, wd, weights)
+            return -compute_aep(sim, x, y, ws, wd, weights, ti_amb=ti_amb_val)
         liberal_x, liberal_y = topfarm_sgd_solve(
             lib_obj, lib_starts_x[best_lib_idx], lib_starts_y[best_lib_idx],
             boundary, D * 4, lib_settings)
@@ -328,13 +338,13 @@ def main():
         nx, ny = place_reference_farm(cfg["bearing"], cfg["distance_D"])
         lib_aep_present = float(compute_aep(
             sim, liberal_x, liberal_y, ws, wd, weights,
-            neighbor_x=nx, neighbor_y=ny))
+            neighbor_x=nx, neighbor_y=ny, ti_amb=ti_amb_val))
         print(f"Liberal AEP with neighbors: {lib_aep_present:.2f} GWh")
 
         cons_settings = SGDSettings(learning_rate=50.0, max_iter=5000,
                                     additional_constant_lr_iterations=5000, tol=1e-6)
 
-        K_cons_values = [1, 2, 3, 5, 10, 20, 50, 100, 200, 300, 500, 750, 1000, 1500, 2000]
+        K_cons_values = [1, 2, 3, 5, 10, 20, 50, 100, 200, 300, 500, 750, 1000, 1500, 2000, 3000, 5000]
         max_K_cons = max(K_cons_values)
 
         # Stack conservative starts: grid, liberal, then randoms
@@ -350,7 +360,7 @@ def main():
         t0 = time.time()
         cons_all_aeps = vmap_solve_batch(
             sim, cons_starts_x, cons_starts_y, boundary, D * 4,
-            cons_settings, ws, wd, weights,
+            cons_settings, ws, wd, weights, ti_amb=ti_amb_val,
             neighbor_x=nx, neighbor_y=ny, chunk_size=args.chunk_size)
         cons_elapsed = time.time() - t0
         cons_all_aeps_np = np.array(cons_all_aeps)
@@ -397,6 +407,7 @@ def main():
             iter_aeps = vmap_solve_batch(
                 sim, cons_starts_x[:K_iter], cons_starts_y[:K_iter],
                 boundary, D * 4, iter_settings, ws, wd, weights,
+                ti_amb=ti_amb_val,
                 neighbor_x=nx, neighbor_y=ny, chunk_size=args.chunk_size)
             elapsed = time.time() - t0
 

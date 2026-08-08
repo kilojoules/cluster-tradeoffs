@@ -22,7 +22,7 @@ print("Figure 1: Convergence study...")
 with open("analysis/convergence_study/results.json") as f:
     conv = json.load(f)
 
-fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+fig, axes = plt.subplots(2, 3, figsize=(16, 9), sharex=True)
 
 configs = [
     ("concentrated_unidir_close", "Conc. unidir, 5D"),
@@ -30,24 +30,42 @@ configs = [
     ("moderate_bidir", "Moderate bidir, 5D"),
 ]
 
-for ax, (name, label) in zip(axes, configs):
+for col, (name, label) in enumerate(configs):
     cfg = conv[name]
+    lib = cfg["liberal_convergence"]
     cons = cfg["conservative_convergence"]
-    K_vals = [c["K"] for c in cons]
+    lib_aep_present = cfg["liberal_aep_present_gwh"]
+
+    # ----- top row: AEP convergence (liberal & best conservative) -----
+    ax = axes[0, col]
+    K_lib = [c["K_lib"] for c in lib]
+    lib_best = [c["best_aep"] for c in lib]
+    K_cons = [c["K"] for c in cons]
+    cons_best = [c["best_cons_aep"] for c in cons]
+    ax.semilogx(K_lib, lib_best, "o-", color="steelblue", lw=2, markersize=5,
+                label="Liberal (no nbr) AEP")
+    ax.semilogx(K_cons, cons_best, "s-", color="firebrick", lw=2, markersize=5,
+                label="Conservative AEP (with nbr)")
+    ax.axhline(lib_aep_present, color="gray", ls=":", alpha=0.6,
+               label=f"Liberal w/ nbr (fixed): {lib_aep_present:.1f}")
+    ax.set_ylabel("Best AEP (GWh/yr)")
+    ax.set_title(label)
+    ax.legend(fontsize=8, loc="lower right")
+    ax.grid(True, alpha=0.3)
+
+    # ----- bottom row: regret -----
+    ax = axes[1, col]
     regrets = [c["regret_gwh"] for c in cons]
-    ax.semilogx(K_vals, regrets, "o-", color="firebrick", linewidth=2, markersize=6)
-    ax.axhline(regrets[-1], color="gray", ls="--", alpha=0.5, label=f"K=2000: {regrets[-1]:.1f}")
-    # Mark K=5
-    k5_r = [c["regret_gwh"] for c in cons if c["K"] == 5][0]
-    ax.axhline(k5_r, color="steelblue", ls=":", alpha=0.5, label=f"K=5: {k5_r:.1f}")
+    ax.semilogx(K_cons, regrets, "o-", color="firebrick", lw=2, markersize=6)
+    ax.axhline(regrets[-1], color="gray", ls="--", alpha=0.5,
+               label=f"converged $K{{=}}2000$: {regrets[-1]:.1f}")
     ax.set_xlabel("Number of starts $K$")
     ax.set_ylabel("Design regret (GWh/yr)")
-    ax.set_title(label)
-    ax.legend(fontsize=9)
+    ax.legend(fontsize=8)
     ax.grid(True, alpha=0.3)
     ax.set_xlim(0.8, 2500)
 
-fig.suptitle("Convergence of Design Regret with Multistart Optimization Depth",
+fig.suptitle("Convergence of liberal AEP, conservative AEP, and design regret with multistart depth",
              fontsize=13)
 plt.tight_layout()
 fig.savefig(OUT / "convergence.png", dpi=200, bbox_inches="tight")
@@ -153,18 +171,51 @@ buf_configs = [
     ("$a$=0.5, $f$=0.0 (mod. bidir)", "0.5", "0.0", "tab:blue", "D"),
 ]
 
-fig, ax = plt.subplots(figsize=(8, 5.5))
+import io
+from matplotlib.offsetbox import OffsetImage, HPacker, VPacker, TextArea, AnchoredOffsetbox
+
+def render_rose_icon(a_val, f_val, color, theta_prev=270, n=24, size=0.55):
+    from edrose import EllipticalWindRose
+    wr = EllipticalWindRose(a=float(a_val), f=float(f_val),
+                            theta_prev=theta_prev, n_sectors=n)
+    fr = plt.figure(figsize=(size, size), dpi=150)
+    ar = fr.add_subplot(111, projection="polar")
+    ar.set_theta_zero_location("N"); ar.set_theta_direction(-1)
+    width = np.deg2rad(360 / n) * 0.95
+    ar.bar(np.deg2rad(np.array(wr.wind_directions)),
+           np.array(wr.sector_frequencies), width=width,
+           color=color, edgecolor=color, alpha=1.0, linewidth=0)
+    ar.set_yticks([]); ar.set_xticks([])
+    ar.set_facecolor("none")
+    fr.patch.set_alpha(0)
+    buf = io.BytesIO()
+    fr.savefig(buf, format="png", dpi=150, transparent=True,
+               bbox_inches="tight", pad_inches=0.02)
+    plt.close(fr); buf.seek(0)
+    import matplotlib.image as mpimg
+    return mpimg.imread(buf)
+
+fig, ax = plt.subplots(figsize=(9, 6))
+rose_imgs = {}
 for label, a, f, color, marker in buf_configs:
-    regrets_buf = []
-    lib_aep_buf = None
-    for b in buffers_D:
-        d = json.load(open(f"analysis/buffer_sweep_quadruple/a{a}_f{f}_buf{b}D/results.json"))
-        regrets_buf.append(d["regret_gwh"])
-        if lib_aep_buf is None:
-            lib_aep_buf = d["liberal_aep_gwh"]
-    regrets_buf = np.array(regrets_buf)
-    ax.plot(buffers_D, 100 * regrets_buf / lib_aep_buf, f"{marker}-", color=color,
-            label=label, linewidth=2, markersize=8)
+    rose_imgs[(a, f)] = render_rose_icon(a, f, color)
+    for source, ls, model_lbl in [("buffer_sweep_tp", "-", "TP"),
+                                    ("buffer_sweep_quadruple", "--", "Bk")]:
+        regrets_buf = []
+        lib_aep_buf = None
+        for b in buffers_D:
+            p = f"analysis/{source}/a{a}_f{f}_buf{b}D/results.json"
+            try:
+                d = json.load(open(p))
+            except FileNotFoundError:
+                regrets_buf.append(np.nan); continue
+            regrets_buf.append(d["regret_gwh"])
+            if lib_aep_buf is None:
+                lib_aep_buf = d["liberal_aep_gwh"]
+        regrets_buf = np.array(regrets_buf)
+        if lib_aep_buf is None: continue
+        ax.plot(buffers_D, 100 * regrets_buf / lib_aep_buf, marker + ls, color=color,
+                linewidth=2, markersize=8)
 
 nyserda_D = 4 * 1.852 * 1000 / D  # 4 nm in rotor diameters
 ax.axvline(nyserda_D, color="gray", ls="--", lw=1.5, alpha=0.7)
@@ -173,10 +224,28 @@ ax.text(nyserda_D + 1, ax.get_ylim()[1] * 0.9,
 ax.set_xlabel("Buffer distance ($D$)")
 ax.set_ylabel("Design regret (% of liberal AEP)")
 ax.grid(True, alpha=0.3)
-ax.legend(fontsize=9)
+# Custom legend: tiny rose icons + TP/Bk style swatches
+rows = []
+for (a, f), img in rose_imgs.items():
+    color = next(c for _, aa, ff, c, _ in buf_configs if aa == a and ff == f)
+    icon = OffsetImage(img, zoom=0.32)
+    txt = TextArea(" ", textprops={"fontsize": 9, "color": color})
+    rows.append(HPacker(children=[icon, txt], pad=0, sep=2, align="center"))
+# Style key (TP solid, Bk dashed)
+from matplotlib.lines import Line2D
+ls_handles = [Line2D([0], [0], color="black", ls="-", lw=2, label="TurboPark"),
+              Line2D([0], [0], color="black", ls="--", lw=2, label="Bastankhah")]
+legend_main = ax.legend(handles=ls_handles, loc="upper right", fontsize=9, framealpha=0.9)
+ax.add_artist(legend_main)
+legend_box = VPacker(children=rows, pad=4, sep=2, align="left")
+anchored = AnchoredOffsetbox(loc="upper left", child=legend_box,
+                              pad=0.3, borderpad=0.3, frameon=True)
+anchored.patch.set_facecolor("white"); anchored.patch.set_alpha(0.92)
+ax.add_artist(anchored)
 ax_top = ax.secondary_xaxis("top", functions=(lambda x: x*D/1000, lambda x: x*1000/D))
 ax_top.set_xlabel("Buffer distance (km)")
-fig.suptitle("Buffer Distance Decay of Design Regret (K=500 Multistart)", fontsize=12)
+fig.suptitle("Buffer Distance Decay of Design Regret ($K = 500$). "
+             "Solid = TurboPark, dashed = Bastankhah.", fontsize=11)
 plt.tight_layout()
 fig.savefig(OUT / "buffer_decay_k500.png", dpi=200, bbox_inches="tight")
 print(f"  Saved: {OUT / 'buffer_decay_k500.png'}")

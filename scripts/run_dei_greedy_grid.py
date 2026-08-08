@@ -512,6 +512,8 @@ def main():
     parser.add_argument("--deficit", type=str, default="bastankhah",
                         choices=["bastankhah", "turbopark"],
                         help="Wake deficit model")
+    parser.add_argument("--blockage", action="store_true",
+                        help="Include SelfSimilarityBlockageDeficit2020")
     parser.add_argument("--wind-rose", type=str, default="dei",
                         choices=["dei", "unidirectional", "uniform", "elliptical", "mixture"],
                         help="Wind rose type: dei (real data), unidirectional (270 deg), "
@@ -611,7 +613,11 @@ def main():
         deficit = BastankhahGaussianDeficit(k=0.04, superposition=sup)
     elif args.deficit == "turbopark":
         deficit = TurboGaussianDeficit(A=0.04, superposition=sup)
-    sim = WakeSimulation(turbine, deficit)
+    blockage_model = None
+    if args.blockage:
+        from pixwake.deficit.selfsimilarity import SelfSimilarityBlockageDeficit2020
+        blockage_model = SelfSimilarityBlockageDeficit2020()
+    sim = WakeSimulation(turbine, deficit, blockage=blockage_model)
     print(f"  Superposition: {type(sup).__name__}")
 
     print(f"\nBoundary: {boundary_np.shape[0]} vertices (CCW)")

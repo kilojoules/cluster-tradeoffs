@@ -38,13 +38,22 @@ def load_rings(pattern):
 # =============================================================================
 # Displacement field
 # =============================================================================
-def fig_displacement(wake_tag="_tp", rose="a0.9_f1.0"):
-    series = load_rings(f"analysis/ring_disp{wake_tag}_funwake/*/results.json")
-    rows = series.get(rose, {})
+def fig_displacement(rose="a0.9_f1.0"):
+    """Use whichever wake model has the most complete layout series."""
+    best, wake_tag, wake_name, rows = -1, None, None, {}
+    for tag, name in [("_tp", "TurboPark"), ("", "Bastankhah")]:
+        s = load_rings(f"analysis/ring_disp{tag}_funwake/*/results.json").get(rose, {})
+        have = len([n for n in [1, 2, 4, 8] if n in s and "cons_x" in s[n]])
+        if have > best:
+            best, wake_tag, wake_name, rows = have, tag, name, s
     show = [n for n in [1, 2, 4, 8] if n in rows and "cons_x" in rows[n]]
     if not show:
-        print(f"[displacement] no layout data yet for {rose}{wake_tag} — skipping")
+        print(f"[displacement] no layout data yet for {rose} — skipping")
         return False
+    print(f"[displacement] using {wake_name} ({len(show)} ring sizes)")
+    _lx0 = np.array(rows[show[0]]["_liberal_x"]) / D
+    _ly0 = np.array(rows[show[0]]["_liberal_y"]) / D
+    span_D = 1.9 * max(np.abs(np.concatenate([_lx0, _ly0])).max(), 1.0)
     fig, axes = plt.subplots(1, len(show), figsize=(4.3 * len(show), 4.8))
     if len(show) == 1:
         axes = [axes]
@@ -72,9 +81,10 @@ def fig_displacement(wake_tag="_tp", rose="a0.9_f1.0"):
         disp = np.hypot(cx - lx, cy - ly)
         ax.quiver(lx, ly, cx - lx, cy - ly, angles="xy", scale_units="xy",
                   scale=1, width=0.005, color="k", alpha=0.85)
-        span = max(np.abs(np.concatenate([nx, ny]))) * 1.05
-        ax.set_xlim(-span, span)
-        ax.set_ylim(-span, span)
+        # Common zoom on the target farm across every panel, so the arrows stay
+        # comparable; distant neighbors simply clip out of view.
+        ax.set_xlim(-span_D, span_D)
+        ax.set_ylim(-span_D, span_D)
         ax.set_aspect("equal")
         ax.set_title(f"$n$={n}   median shift {np.median(disp):.1f}$D$\n"
                      f"regret {r['regret_pct']:.2f}%   "
@@ -85,10 +95,11 @@ def fig_displacement(wake_tag="_tp", rose="a0.9_f1.0"):
             ax.set_ylabel("$y/D$")
             ax.legend(fontsize=7, loc="upper left")
         ax.grid(True, alpha=0.2)
-    fig.suptitle("Where re-design actually moves turbines: arrows run from the liberal layout to the "
-                 "neighbor-aware (conservative) layout, paired by minimum-travel assignment\n"
-                 "(the two are independent multistart optima, so turbine index carries no "
-                 "correspondence). As the ring closes, the escape moves shrink.", fontsize=10.5)
+    fig.suptitle(f"Where re-design actually moves turbines ({wake_name}, conc. unidirectional rose, $2D$): "
+                 "arrows run from the liberal layout to the neighbor-aware layout,\npaired by "
+                 "minimum-travel assignment (the two are independent multistart optima, so turbine "
+                 "index carries no correspondence).\nAs the ring closes, the escape moves shrink.",
+                 fontsize=10.5)
     fig.tight_layout(rect=[0, 0, 1, 0.90])
     out = FIGDIR / "mech_displacement.png"
     fig.savefig(out, dpi=180, bbox_inches="tight")
@@ -158,5 +169,5 @@ def fig_angular_spread():
 
 if __name__ == "__main__":
     FIGDIR.mkdir(parents=True, exist_ok=True)
-    fig_displacement("_tp", "a0.9_f1.0")
+    fig_displacement("a0.9_f1.0")
     fig_angular_spread()
