@@ -49,13 +49,58 @@ _polygon_path = cs._polygon_path
 MIN_NEIGHBOR_GAP_M = 2 * D
 
 
-def ring_offsets(n, base_bearing, gap_m):
+def offset_for_gap_poly(target_poly, nbr_poly, bearing_deg, gap_m,
+                        lo=0.0, hi=None, iters=60):
+    """Centroid offset along `bearing_deg` so the boundary gap between
+    `target_poly` and the shifted `nbr_poly` equals `gap_m`.
+
+    Generalizes cs.centroid_offset_for_gap to a neighbor polygon that differs
+    from the target (used for scaled split-neighbor rings).
+    """
+    th = np.radians(bearing_deg)
+    direction = np.array([np.sin(th), np.cos(th)])  # bearing: 0=N, cw
+    if hi is None:
+        span = np.ptp(target_poly, axis=0).max() + np.ptp(nbr_poly, axis=0).max()
+        hi = span + gap_m * 3 + 1.0
+    for _ in range(iters):
+        mid = 0.5 * (lo + hi)
+        g = cs.compute_boundary_gap(target_poly, nbr_poly + mid * direction)
+        if g < gap_m:
+            lo = mid
+        else:
+            hi = mid
+    off = 0.5 * (lo + hi)
+    return off, direction, cs.compute_boundary_gap(target_poly, nbr_poly + off * direction)
+
+
+def ring_offsets_poly(n, base_bearing, gap_m, nbr_poly, min_neighbor_gap_m):
+    """Ring offsets for n copies of an arbitrary neighbor polygon."""
+    bearings = [(base_bearing + i * 360.0 / n) % 360.0 for i in range(n)]
+    base = [offset_for_gap_poly(boundary_np, nbr_poly, b, gap_m)[:2] for b in bearings]
+    mult = 1.0
+    for _ in range(200):
+        shifted = [nbr_poly + mult * off * dirn for off, dirn in base]
+        ok = all(cs.compute_boundary_gap(shifted[i], shifted[j]) >= min_neighbor_gap_m
+                 for i in range(n) for j in range(i + 1, n))
+        if ok:
+            break
+        mult *= 1.02
+    else:
+        raise RuntimeError(f"split ring n={n}: could not separate neighbors")
+    gaps = [cs.compute_boundary_gap(boundary_np, nbr_poly + mult * off * dirn)
+            for off, dirn in base]
+    return bearings, [mult * o for o, _ in base], [d for _, d in base], gaps, mult
+
+
+def ring_offsets(n, base_bearing, gap_m, min_neighbor_gap_m=None):
     """Centroid offsets for n evenly-spaced copies at nominal boundary gap.
 
     Returns (offsets, directions, realized_target_gaps, multiplier).
     Offsets are scaled by a common multiplier so every pairwise
-    neighbor-neighbor boundary gap is >= MIN_NEIGHBOR_GAP_M.
+    neighbor-neighbor boundary gap is >= min_neighbor_gap_m.
     """
+    if min_neighbor_gap_m is None:
+        min_neighbor_gap_m = MIN_NEIGHBOR_GAP_M
     bearings = [(base_bearing + i * 360.0 / n) % 360.0 for i in range(n)]
     base = []
     for b in bearings:
@@ -68,7 +113,7 @@ def ring_offsets(n, base_bearing, gap_m):
         ok = True
         for i in range(n):
             for j in range(i + 1, n):
-                if cs.compute_boundary_gap(shifted[i], shifted[j]) < MIN_NEIGHBOR_GAP_M:
+                if cs.compute_boundary_gap(shifted[i], shifted[j]) < min_neighbor_gap_m:
                     ok = False
                     break
             if not ok:
@@ -114,8 +159,21 @@ def main():
     parser.add_argument("--ti", type=float, default=0.06)
     parser.add_argument("--schedule", type=str, default="funwake_iter192",
                         choices=["sgd_baseline", "funwake_iter192"])
+    parser.add_argument("--min-neighbor-gap-D", type=float, default=2.0,
+                        help="Minimum boundary gap between neighbor copies. "
+                             "Lower values let dense rings stay at the nominal "
+                             "target gap, separating encirclement from distance.")
+    parser.add_argument("--split-neighbors", action="store_true",
+                        help="Hold TOTAL neighbor capacity and area fixed: each of "
+                             "the n neighbors is the target polygon scaled by "
+                             "1/sqrt(n) containing ~n_target/n turbines. Isolates "
+                             "angular spread from amount-of-wake and distance.")
+    parser.add_argument("--save-layouts", action="store_true",
+                        help="Store the best conservative layout per ring "
+                             "(for displacement-field plots)")
     parser.add_argument("--output-dir", type=str, default="analysis/ring_regret")
     args = parser.parse_args()
+    min_nbr_gap_m = args.min_neighbor_gap_D * D
 
     n_target = args.n_target
     n_list = [int(x) for x in args.n_farms.split(",")]
@@ -238,15 +296,27 @@ def main():
     t0 = time.time()
     for n in n_list:
         print(f"\n{'=' * 60}\nRING n={n}\n{'=' * 60}")
-        bearings, offsets, directions, target_gaps, mult = ring_offsets(
-            n, args.base_bearing, gap_m)
+        if args.split_neighbors:
+            scale = 1.0 / np.sqrt(n)
+            nbr_poly = boundary_np * scale
+            n_per = max(int(round(n_target / n)), 4)
+            gx, gy = cs.generate_target_grid(nbr_poly, n_per, spacing=4 * D * scale)
+            nbr_x_local, nbr_y_local = np.array(gx), np.array(gy)
+            bearings, offsets, directions, target_gaps, mult = ring_offsets_poly(
+                n, args.base_bearing, gap_m, nbr_poly, min_nbr_gap_m)
+            print(f"  split mode: {n} x {len(nbr_x_local)} turbines "
+                  f"(total {n*len(nbr_x_local)}), polygon scale {scale:.3f}")
+        else:
+            nbr_x_local, nbr_y_local = ref_x, ref_y
+            bearings, offsets, directions, target_gaps, mult = ring_offsets(
+                n, args.base_bearing, gap_m, min_nbr_gap_m)
         print(f"  bearings: {[f'{b:.0f}' for b in bearings]}")
         print(f"  separation multiplier: {mult:.3f}  "
               f"realized target gaps (D): {[f'{g/D:.1f}' for g in target_gaps]}")
 
-        nx = np.concatenate([ref_x + off * dirn[0]
+        nx = np.concatenate([nbr_x_local + off * dirn[0]
                              for off, dirn in zip(offsets, directions)])
-        ny = np.concatenate([ref_y + off * dirn[1]
+        ny = np.concatenate([nbr_y_local + off * dirn[1]
                              for off, dirn in zip(offsets, directions)])
         nx_j, ny_j = jnp.array(nx), jnp.array(ny)
 
@@ -263,15 +333,21 @@ def main():
                 power = result.power()[:, :n_target]
                 return -jnp.sum(power * weights[:, None]) * 8760 / 1e6
             opt_x, opt_y = solve_layout(objective, sx, sy)
-            return -objective(opt_x, opt_y)
+            return -objective(opt_x, opt_y), opt_x, opt_y
 
         cons_aeps = np.zeros(K)
+        cons_xs = np.zeros((K, n_target)) if args.save_layouts else None
+        cons_ys = np.zeros((K, n_target)) if args.save_layouts else None
         CHUNK = args.chunk_size
         tn = time.time()
         for start in range(0, K, CHUNK):
             end = min(start + CHUNK, K)
-            chunk = jax.vmap(solve_one)(start_xs[start:end], start_ys[start:end])
-            cons_aeps[start:end] = np.array(chunk)
+            aeps_c, xs_c, ys_c = jax.vmap(solve_one)(
+                start_xs[start:end], start_ys[start:end])
+            cons_aeps[start:end] = np.array(aeps_c)
+            if args.save_layouts:
+                cons_xs[start:end] = np.array(xs_c)
+                cons_ys[start:end] = np.array(ys_c)
             el = time.time() - tn
             print(f"  starts {start:>4}-{end:>4} ({100*end/K:5.1f}%)  "
                   f"elapsed={el/60:.1f}min  eta={el/end*(K-end)/60:.1f}min")
@@ -282,12 +358,14 @@ def main():
               f"regret={100*regret/liberal_aep:.3f}%  "
               f"regret/loss={regret/aep_loss if aep_loss > 0 else float('nan'):.2f}")
 
-        ring_results.append({
+        entry = {
             "n_farms": n,
             "bearings_deg": bearings,
             "nominal_gap_D": args.distance_D,
             "realized_target_gaps_D": [g / D for g in target_gaps],
             "separation_multiplier": mult,
+            "n_turbines_per_neighbor": int(len(nbr_x_local)),
+            "n_neighbor_turbines_total": int(len(nx)),
             "liberal_aep_present_gwh": lib_present,
             "aep_loss_gwh": float(aep_loss),
             "aep_loss_pct": float(100 * aep_loss / liberal_aep),
@@ -296,17 +374,26 @@ def main():
             "regret_pct": float(100 * regret / liberal_aep),
             "regret_over_loss": float(regret / aep_loss) if aep_loss > 0 else None,
             "all_cons_aeps_gwh": cons_aeps.tolist(),
-        })
+        }
+        if args.save_layouts:
+            kbest = int(np.argmax(cons_aeps))
+            entry["best_start_index"] = kbest
+            entry["cons_x"] = cons_xs[kbest].tolist()
+            entry["cons_y"] = cons_ys[kbest].tolist()
+            entry["neighbor_x"] = nx.tolist()
+            entry["neighbor_y"] = ny.tolist()
+        ring_results.append(entry)
 
     out = Path(args.output_dir)
     out.mkdir(parents=True, exist_ok=True)
     with open(out / "results.json", "w") as f:
         json.dump({
             "n_target": n_target,
-            "methodology": "ring_identical_copy",
+            "methodology": "ring_split_fixed_capacity" if args.split_neighbors
+                           else "ring_identical_copy",
             "base_bearing_deg": args.base_bearing,
             "nominal_gap_D": args.distance_D,
-            "min_neighbor_gap_D": MIN_NEIGHBOR_GAP_M / D,
+            "min_neighbor_gap_D": args.min_neighbor_gap_D,
             "liberal_aep_gwh": float(liberal_aep),
             "liberal_x": ref_x.tolist(),
             "liberal_y": ref_y.tolist(),
