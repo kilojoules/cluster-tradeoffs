@@ -120,10 +120,22 @@ def peak_cell_fraction(path):
     return ev["regret_gwh"] / loss, 100 * loss / lib, 100 * ev["regret_gwh"] / lib
 
 
+def load_split(tag):
+    series = defaultdict(dict)
+    for fp in sorted(glob.glob(f"analysis/ring_split{tag}_funwake/*/results.json")):
+        d = json.load(open(fp))
+        key = fp.split("/")[-2].rsplit("_", 1)[0]
+        for r in d["rings"]:
+            series[key][r["n_farms"]] = r
+    return series
+
+
 def fig_two_paths():
+    """Three interventions, one governing quantity: how much wake mass sits in
+    the directions that carry energy."""
     F_VALS = [0.0, 0.25, 0.5, 0.75, 1.0]
-    fig, axes = plt.subplots(1, 2, figsize=(13, 5.4), sharey=True)
-    ax_w, ax_n = axes
+    fig, axes = plt.subplots(1, 3, figsize=(16.5, 5.2), sharey=True)
+    ax_w, ax_n, ax_s = axes
 
     # --- left: symmetry via the wind rose (single neighbor, vary folding f) ---
     for wake, base, color, mk in [("Bastankhah", "analysis/buffer_table_funwake", "C0", "o"),
@@ -169,18 +181,43 @@ def fig_two_paths():
                           markeredgecolor=color)
     ax_n.axvspan(4.5, 8.5, color="gray", alpha=0.08)
     ax_n.set_xlabel("Number of neighboring farms $n$")
-    ax_n.set_title("Symmetry from the neighbors\n(fixed rose, vary how encircled the target is)")
+    ax_n.set_title("2. Add full-size farms\n(each new farm is another 50 turbines)")
     ax_n.set_xticks(range(1, 9))
     ax_n.grid(True, alpha=0.3)
-    ax_n.legend(fontsize=8)
-    ax_n.annotate("more encircled\n$\\rightarrow$ less recoverable", (0.55, 0.9),
+    ax_n.legend(fontsize=8, loc="lower left")
+    ax_n.annotate("mass added\n$\\rightarrow$ less recoverable", (0.97, 0.95),
+                  xycoords="axes fraction", fontsize=8, color="gray",
+                  ha="right", va="top")
+
+    # --- right: split a FIXED total capacity across n farms, gap held fixed ---
+    for wake, tag, color, mk in [("Bastankhah", "", "C0", "o"),
+                                 ("TurboPark", "_tp", "C3", "s")]:
+        split = load_split(tag)
+        for rose, ls, rlabel in [("a0.9_f1.0", "-", "conc. unidir"),
+                                 ("a0.5_f0.0", "--", "mod. bidir")]:
+            rows = split.get(rose, {})
+            keep = [n for n in sorted(rows)
+                    if rows[n]["separation_multiplier"] == 1.0]
+            if not keep:
+                continue
+            ax_s.plot(keep, [rows[n]["regret_over_loss"] or np.nan for n in keep],
+                      ls, marker=mk, color=color, lw=2, ms=6,
+                      label=f"{wake}, {rlabel}")
+    ax_s.set_xlabel("Number of neighboring farms $n$")
+    ax_s.set_title("3. Split a fixed total capacity\n(same turbines and gap, smaller farms)")
+    ax_s.set_xticks(range(1, 6))
+    ax_s.grid(True, alpha=0.3)
+    ax_s.legend(fontsize=8)
+    ax_s.annotate("mass divided\n$\\rightarrow$ more recoverable", (0.42, 0.06),
                   xycoords="axes fraction", fontsize=8, color="gray")
 
-    fig.suptitle("Two routes to the same place: symmetrizing the threat destroys the value of neighbor foresight.\n"
-                 "Left, symmetry comes from the wind; right, from the neighbors. "
-                 "The trend is resolved under TurboPark (large regret signal);\n"
-                 "Bastankhah curves sit near the multistart noise floor and are shown for completeness only.",
-                 fontsize=10.5)
+    ax_w.set_title("1. Change the wind rose\n(one neighbor, vary directional symmetry)")
+
+    fig.suptitle("What governs the recoverable share is wake mass in the directions that carry energy — not symmetry as such.\n"
+                 "Concentrating energy on one axis (1) or dividing a fixed neighbor capacity into smaller farms (3) both leave "
+                 "escape routes open; piling on\nfull-size farms (2) closes them. Trends are resolved under TurboPark; the "
+                 "Bastankhah curves sit near the multistart noise floor and disagree with each other.",
+                 fontsize=10)
     fig.tight_layout(rect=[0, 0, 1, 0.89])
     out = FIGDIR / "mech_two_paths.png"
     fig.savefig(out, dpi=180, bbox_inches="tight")

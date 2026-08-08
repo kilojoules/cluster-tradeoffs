@@ -150,15 +150,17 @@ def fig_angular_spread():
             ["Design regret (% of AEP)", "AEP loss (% of AEP)",
              "Recoverable fraction"],
             ["Regret", "AEP loss", "Recoverable fraction"]):
-        ax.set_xlabel("Number of neighboring farms $n$\n(total capacity and buffer gap held fixed)")
+        ax.set_xlabel("Number of neighboring farms $n$\n(total capacity, area and buffer gap held fixed)")
         ax.set_ylabel(ylab)
         ax.set_title(title)
+        ax.set_xticks(range(1, 6))
         ax.grid(True, alpha=0.3)
     axes[0].legend(fontsize=7.5)
-    fig.suptitle("Pure angular-spread test: the same total neighbor capacity and area, at the same $2D$ buffer gap, "
-                 "split into $n$ farms around the target.\nDistance and amount of wake are held constant, so any "
-                 "change isolates the effect of spreading the threat in angle. "
-                 "Dotted: identical-copy ring for reference.", fontsize=10.5)
+    fig.suptitle("Dividing a fixed neighbor capacity: the same total turbines and area at the same $2D$ gap, split into "
+                 "$n$ smaller farms around the target.\nLoss follows the wind — spreading raises it under a bidirectional "
+                 "rose and lowers it under a unidirectional one — but the recoverable fraction rises in both,\nbecause every "
+                 "individual wake corridor gets narrower. Concentration of wake mass, not angular symmetry, is what closes "
+                 "escape routes. Dotted: identical-copy ring.", fontsize=10)
     fig.tight_layout(rect=[0, 0, 1, 0.87])
     out = FIGDIR / "mech_angular_spread.png"
     fig.savefig(out, dpi=180, bbox_inches="tight")

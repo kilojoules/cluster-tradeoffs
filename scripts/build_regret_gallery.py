@@ -96,14 +96,15 @@ FIGS = [
               "is entangled with it. Separating the two is what the pending runs are for."),
     dict(file="mech_two_paths.png",
          eyebrow="the unification",
-         title="Two routes to symmetry, one mechanism",
-         source="on disk",
+         title="Three interventions, one governing quantity",
+         source="on disk + gbar",
          body="Design regret is the value of knowing about damage in advance, and information is only "
-              "worth something if you can act on it. Symmetric threats cannot be dodged. Symmetry "
-              "arriving from the wind (left, folding the rose from unidirectional toward bidirectional) "
-              "and symmetry arriving from the neighbors (right, closing the ring) push the recoverable "
-              "fraction the same way. The trend resolves under TurboPark; the Bastankhah curves sit at "
-              "the multistart noise floor and are shown for completeness, not as evidence."),
+              "worth something if you can act on it. The question is what closes off the acting. Three "
+              "different interventions answer it together: concentrating the wind onto one axis leaves "
+              "an escape route open, dividing a fixed neighbor capacity into smaller farms opens more, "
+              "and piling on additional full-size farms closes them. The common thread is not symmetry — "
+              "an earlier reading of this study said it was, and the third panel disproved it — but how "
+              "much wake mass sits in the directions that carry energy, and how concentrated that mass is."),
     dict(file="mech_displacement.png",
          eyebrow="the mechanism, literally",
          title="Where re-design actually moves the turbines",
@@ -120,12 +121,15 @@ FIGS = [
          eyebrow="the controlled test",
          title="Angular spread with everything else held still",
          source="gbar",
-         body="The cleanest version of the question. The same total neighboring capacity and the same "
-              "total area, at the same 2D buffer gap, divided into n farms spread around the target. "
-              "Amount of wake and distance are constant by construction, so whatever changes is "
-              "attributable to angular spread alone. Identical-copy 50-turbine farms physically cannot "
-              "ring closer than about 44D beyond four of them, which is why this variant scales the "
-              "neighbors down rather than pushing them away."),
+         body="The test that overturned the tidy version of this story. Total neighbor capacity, total "
+              "area and buffer gap are all held fixed while the capacity is divided into n smaller farms "
+              "around the target — identical 50-turbine copies physically cannot ring closer than about "
+              "44D past four of them, so scaling down was the only way to hold distance constant. "
+              "Loss behaves as expected, rising under a bidirectional rose and falling under a "
+              "unidirectional one as wake moves into or out of the directions carrying energy. But the "
+              "recoverable fraction rises in every case, the opposite of the encirclement ring, because "
+              "each individual corridor is now narrower and easier to slide out of. So what closes escape "
+              "routes is concentrated wake mass, not angular symmetry."),
 ]
 
 
@@ -445,19 +449,21 @@ def main():
       farms around a target raises the first term and lowers the second, because each new farm closes
       off another direction the optimizer could have escaped toward. The product peaks somewhere in
       the middle.</p>
-    <p class="pull">Perfect knowledge of a threat you cannot dodge is worth nothing. A fully
-      encircled farm is damaged from every side at once, so the layout you would build knowing
-      the neighbors and the layout you would build blind converge — and the regret between them
-      collapses, even as the total loss is at its worst.</p>
-    <p>The same logic already governs this paper's wind-rose result. Unidirectional wind leaves a
-      single wake corridor and room to slide sideways out of it, so regret is high; bidirectional
-      wind attacks from opposing sides and no rearrangement escapes both, so regret is low. Folding
-      the wind rose and closing the neighbor ring are the same operation performed on different
-      variables. Both symmetrize the threat, and symmetry is what destroys the value of knowing.</p>
+    <p class="pull">Perfect knowledge of a threat you cannot dodge is worth nothing. A farm boxed in
+      by wake on the directions its energy arrives from is damaged whatever it does, so the layout
+      you would build knowing the neighbors and the layout you would build blind converge — and the
+      regret between them collapses, even as the total loss is at its worst.</p>
+    <p>The obvious reading of that is <em>symmetry</em>: encircle a farm and it has nowhere to go.
+      It is also what this study set out to confirm, and it did not survive the controlled test. Holding
+      total neighbor capacity and distance fixed while dividing it into more, smaller farms spreads the
+      threat around the compass and yet makes escape <em>easier</em>, not harder. The quantity that
+      actually governs the recoverable share is how much wake mass sits in the directions carrying
+      energy, and how concentrated it is — adding full-size farms piles it on, dividing a fixed
+      capacity thins it out.</p>
     <p>The first five figures come from results already on disk. The last two required new
       cluster runs, because they test the account rather than restate it — one by showing the
-      turbine movements directly, the other by holding distance and wake volume fixed so that
-      angular spread is the only thing left varying.</p>
+      turbine movements directly, the other by holding capacity, area and distance fixed so that
+      the number and size of the neighbors is what varies.</p>
   </section>
 
   <div class="gallery">{''.join(cards)}
