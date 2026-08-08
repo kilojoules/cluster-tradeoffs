@@ -56,6 +56,15 @@ def fig_displacement(wake_tag="_tp", rose="a0.9_f1.0"):
         cy = np.array(r["cons_y"]) / D
         nx = np.array(r["neighbor_x"]) / D
         ny = np.array(r["neighbor_y"]) / D
+        # Liberal and conservative layouts are independent multistart optima, so
+        # turbine index carries no correspondence. Pair them by the assignment
+        # that minimises total travel — the physically meaningful "how far did
+        # the layout have to move" measure.
+        from scipy.optimize import linear_sum_assignment
+        cost = np.hypot(lx[:, None] - cx[None, :], ly[:, None] - cy[None, :])
+        ri, ci = linear_sum_assignment(cost)
+        lx, ly = lx[ri], ly[ri]
+        cx, cy = cx[ci], cy[ci]
         ax.plot(nx, ny, ".", color="lightcoral", ms=2.5, alpha=0.7,
                 label="neighbor turbines" if n == show[0] else None)
         ax.plot(lx, ly, "o", mfc="none", mec="steelblue", ms=4.5, mew=0.9,
@@ -67,7 +76,7 @@ def fig_displacement(wake_tag="_tp", rose="a0.9_f1.0"):
         ax.set_xlim(-span, span)
         ax.set_ylim(-span, span)
         ax.set_aspect("equal")
-        ax.set_title(f"$n$={n}   mean shift {disp.mean():.2f}$D$\n"
+        ax.set_title(f"$n$={n}   median shift {np.median(disp):.1f}$D$\n"
                      f"regret {r['regret_pct']:.2f}%   "
                      f"recoverable {r['regret_over_loss'] or float('nan'):.2f}",
                      fontsize=9.5)
@@ -77,8 +86,9 @@ def fig_displacement(wake_tag="_tp", rose="a0.9_f1.0"):
             ax.legend(fontsize=7, loc="upper left")
         ax.grid(True, alpha=0.2)
     fig.suptitle("Where re-design actually moves turbines: arrows run from the liberal layout to the "
-                 "neighbor-aware (conservative) layout.\nAs the ring closes, the escape moves shrink — "
-                 "the mechanism behind the falling recoverable fraction.", fontsize=11)
+                 "neighbor-aware (conservative) layout, paired by minimum-travel assignment\n"
+                 "(the two are independent multistart optima, so turbine index carries no "
+                 "correspondence). As the ring closes, the escape moves shrink.", fontsize=10.5)
     fig.tight_layout(rect=[0, 0, 1, 0.90])
     out = FIGDIR / "mech_displacement.png"
     fig.savefig(out, dpi=180, bbox_inches="tight")
