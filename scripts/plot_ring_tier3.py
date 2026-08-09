@@ -74,6 +74,19 @@ def fig_displacement(rose="a0.9_f1.0"):
         ri, ci = linear_sum_assignment(cost)
         lx, ly = lx[ri], ly[ri]
         cx, cy = cx[ci], cy[ci]
+        # Farm boundary polygons, so the buffer geometry is unambiguous.
+        import run_ring_regret as rr
+        from matplotlib.patches import Polygon as MplPolygon
+        poly_t = rr.boundary_np / D
+        ax.add_patch(MplPolygon(poly_t, closed=True, fill=False,
+                                edgecolor="steelblue", lw=1.1, alpha=0.85, zorder=1))
+        _b, _offs, _dirs, _gaps, _mult = rr.ring_offsets(n, 270.0, 2 * D, 2 * D)
+        for _o, _dv in zip(_offs, _dirs):
+            pn = (rr.boundary_np + _o * np.asarray(_dv)) / D
+            ax.add_patch(MplPolygon(pn, closed=True, fill=False,
+                                    edgecolor="indianred", lw=0.9, alpha=0.7,
+                                    linestyle="--", zorder=1))
+        gap_lbl = f"{min(_gaps)/D:.0f}$D$ gap"
         ax.plot(nx, ny, ".", color="lightcoral", ms=2.5, alpha=0.7,
                 label="neighbor turbines" if n == show[0] else None)
         ax.plot(lx, ly, "o", mfc="none", mec="steelblue", ms=4.5, mew=0.9,
@@ -86,7 +99,7 @@ def fig_displacement(rose="a0.9_f1.0"):
         ax.set_xlim(-span_D, span_D)
         ax.set_ylim(-span_D, span_D)
         ax.set_aspect("equal")
-        ax.set_title(f"$n$={n}   median shift {np.median(disp):.1f}$D$\n"
+        ax.set_title(f"$n$={n}   {gap_lbl}   median shift {np.median(disp):.1f}$D$\n"
                      f"regret {r['regret_pct']:.2f}%   "
                      f"recoverable {r['regret_over_loss'] or float('nan'):.2f}",
                      fontsize=9.5)
@@ -95,11 +108,12 @@ def fig_displacement(rose="a0.9_f1.0"):
             ax.set_ylabel("$y/D$")
             ax.legend(fontsize=7, loc="upper left")
         ax.grid(True, alpha=0.2)
-    fig.suptitle(f"Where re-design actually moves turbines ({wake_name}, conc. unidirectional rose, $2D$): "
-                 "arrows run from the liberal layout to the neighbor-aware layout,\npaired by "
-                 "minimum-travel assignment (the two are independent multistart optima, so turbine "
-                 "index carries no correspondence).\nAs the ring closes, the escape moves shrink.",
-                 fontsize=10.5)
+    fig.suptitle(f"Where re-design actually moves turbines ({wake_name}, conc. unidirectional rose): arrows run from the "
+                 "liberal layout to the neighbor-aware layout, paired by minimum-travel assignment\n(the two are "
+                 "independent multistart optima, so turbine index carries no correspondence). Solid outline: target "
+                 "boundary; dashed: neighbors, at the realized buffer gap.\nHow far the layout travels tracks how much "
+                 "regret is recovered — both peak at $n$=4 and collapse once packing forces the ring out to 123$D$.",
+                 fontsize=10)
     fig.tight_layout(rect=[0, 0, 1, 0.90])
     out = FIGDIR / "mech_displacement.png"
     fig.savefig(out, dpi=180, bbox_inches="tight")

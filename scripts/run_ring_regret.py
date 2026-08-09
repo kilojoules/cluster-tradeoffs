@@ -107,22 +107,29 @@ def ring_offsets(n, base_bearing, gap_m, min_neighbor_gap_m=None):
         offset, direction, _ = cs.centroid_offset_for_gap(boundary_np, b, gap_m)
         base.append((offset, np.asarray(direction)))
 
-    mult = 1.0
-    for _ in range(200):
-        shifted = [boundary_np + mult * off * dirn for off, dirn in base]
-        ok = True
-        for i in range(n):
-            for j in range(i + 1, n):
-                if cs.compute_boundary_gap(shifted[i], shifted[j]) < min_neighbor_gap_m:
-                    ok = False
-                    break
-            if not ok:
-                break
-        if ok:
-            break
-        mult *= 1.05
+    def feasible(m):
+        shifted = [boundary_np + m * off * dirn for off, dirn in base]
+        return all(cs.compute_boundary_gap(shifted[i], shifted[j]) >= min_neighbor_gap_m
+                   for i in range(n) for j in range(i + 1, n))
+
+    if feasible(1.0):
+        mult = 1.0
     else:
-        raise RuntimeError(f"ring n={n}: could not separate neighbors")
+        # bracket, then bisect for the *minimal* feasible expansion — a coarse
+        # multiplicative search overshoots and makes the realized gap depend on
+        # step size rather than geometry.
+        lo, hi = 1.0, 2.0
+        while not feasible(hi):
+            lo, hi = hi, hi * 2.0
+            if hi > 1e4:
+                raise RuntimeError(f"ring n={n}: could not separate neighbors")
+        for _ in range(40):
+            mid = 0.5 * (lo + hi)
+            if feasible(mid):
+                hi = mid
+            else:
+                lo = mid
+        mult = hi
 
     target_gaps = [cs.compute_boundary_gap(boundary_np, boundary_np + mult * off * dirn)
                    for off, dirn in base]
