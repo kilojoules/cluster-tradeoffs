@@ -117,6 +117,19 @@ FIGS = [
               "so turbine index means nothing between them; the pairing here is the assignment that "
               "minimises total travel. Pairing by index instead reports a spurious 55D of movement that "
               "is mostly relabeling. Shown for Bastankhah, whose layout series completed first."),
+    dict(file="ring_feasibility.png",
+         eyebrow="what can actually be built",
+         title="Lease geometry bounds the whole question",
+         source="on disk",
+         body="Pure geometry, no wake model. A ring of neighbors has to clear both the target and each "
+              "other, and because the farms are themselves about 150D across, the ring radius is set by "
+              "their size rather than by the buffer — at a 2D buffer the buffer contributes only about 3% "
+              "of it. The consequence is that four is the largest ring that fits anywhere in the 2–40D "
+              "range this study sweeps; a fifth needs roughly 50D of separation, at which distance regret "
+              "has already collapsed. The steps are jagged rather than smooth because the footprint is "
+              "elongated, so equal boundary gaps place farms at very unequal radii (87D to 175D at a 20D "
+              "buffer). The high-n, close-range corner of the parameter space is not conservative to "
+              "ignore — it is empty."),
     dict(file="mech_angular_spread.png",
          eyebrow="the controlled test",
          title="Angular spread with everything else held still",
