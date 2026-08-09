@@ -5,45 +5,45 @@ The style file: copernicus.bst
 Database file #1: references.bib
 Warning--entry type for "jax2018github" isn't style-file defined
 --line 191 of file references.bib
-You've used 14 entries,
+You've used 15 entries,
             2819 wiz_defined-function locations,
-            1090 strings with 11947 characters,
-and the built_in function-call counts, 13021 in all, are:
-= -- 1389
-> -- 565
+            1098 strings with 12206 characters,
+and the built_in function-call counts, 14032 in all, are:
+= -- 1499
+> -- 604
 < -- 5
-+ -- 249
-- -- 177
-* -- 865
-:= -- 1384
-add.period$ -- 14
-call.type$ -- 14
-change.case$ -- 86
-chr.to.int$ -- 14
-cite$ -- 42
-duplicate$ -- 1256
-empty$ -- 681
-format.name$ -- 220
-if$ -- 2557
++ -- 268
+- -- 189
+* -- 935
+:= -- 1486
+add.period$ -- 15
+call.type$ -- 15
+change.case$ -- 92
+chr.to.int$ -- 15
+cite$ -- 45
+duplicate$ -- 1356
+empty$ -- 735
+format.name$ -- 235
+if$ -- 2756
 int.to.chr$ -- 1
 int.to.str$ -- 1
-missing$ -- 150
-newline$ -- 51
-num.names$ -- 56
-pop$ -- 527
+missing$ -- 161
+newline$ -- 54
+num.names$ -- 60
+pop$ -- 560
 preamble$ -- 1
-purify$ -- 85
+purify$ -- 91
 quote$ -- 0
-skip$ -- 725
+skip$ -- 787
 stack$ -- 0
-substring$ -- 497
-swap$ -- 1046
+substring$ -- 544
+swap$ -- 1133
 text.length$ -- 0
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 126
+type$ -- 135
 warning$ -- 0
-while$ -- 67
+while$ -- 72
 width$ -- 0
-write$ -- 170
+write$ -- 182
 (There was 1 warning)

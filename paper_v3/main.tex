@@ -9,33 +9,42 @@
 \usepackage{natbib}
 \usepackage{hyperref}
 
-\title{Design regret in clustered wind farms: how wind rose directionality and optimization thoroughness shape the cost of ignoring neighbors}
+\title{No Regrets in clustered wind farms: how wind rose directionality and optimization thoroughness shape the cost of ignoring neighbors}
 
 \Author[1]{Julian}{Quick}
 \Author[2]{Samuel}{Kainz}
+\Author[1]{Ernestas}{Simutis}
+\Author[3]{Priyank}{Maheshwari}
 \Author[1]{Pierre-Elouan}{R\'ethor\'e}
 
 \affil[1]{Technical University of Denmark, Department of Wind and Energy Systems, Roskilde, Denmark}
-\affil[2]{Wind Energy Institute, Technical University of Munich, Germany}
+\affil[2]{Technical University of Munich, Germany}
+\affil[3]{TotalEnergies}
 
 \correspondence{Julian Quick (juqu@dtu.dk)}
 
 \runningtitle{Design regret in clustered wind farms}
-\runningauthor{Quick, Kainz, and R\'ethor\'e}
+\runningauthor{Quick, Kainz, Simutis, Maheshwari, and R\'ethor\'e}
 
 \begin{document}
 
 \maketitle
 
 \begin{abstract}
-When a wind farm is designed in isolation---ignoring the wakes of potential neighboring farms---how much energy is sacrificed?
-We define this loss as \emph{design regret}: the difference in annual energy production between a layout re-optimized with knowledge of neighbors and the original isolation-designed layout, both evaluated under the same neighbor wakes.
-Using two complementary approaches---greedy adversarial placement of individual turbines (upper bound) and regret cross-sections with an identical neighboring farm copy (realistic scenario)---we sweep the two-parameter elliptical wind rose space of Hart (2025).
-The adversarial upper bound on regret varies six-fold across wind climate: from 17\,GWh/yr (0.4\,\% of AEP) under bidirectional conditions to 101\,GWh/yr (2.5\,\%) under concentrated unidirectional conditions, with wind rose directionality as the dominant driver.
-Regret cross-sections with a realistic identical neighbor farm show substantially lower regret (0.1--0.4\,\% of AEP for multi-directional wind roses), confirming that the adversarial framing overstates risk by roughly an order of magnitude.
-A degenerate single-wind-direction stress test produces an order-of-magnitude larger regret (1.25\,\%), presented separately because the multi-directional cases are the realistic scenario.
-Critically, reliable regret estimation requires a large multistart budget: we show that regret only stabilizes by $K = 300$ restarts.
-We recommend a minimum of 300 multistart optimizations for any study computing AEP differences between design strategies.
+We study \emph{design regret} in clustered wind farms: the AEP gap between a layout optimized with knowledge of neighboring-farm wakes and one optimized in isolation, evaluated under the same neighbors.
+Our main contribution is methodological.
+Computing regret requires differencing two large, noisy AEP-optimization outcomes; this catastrophic cancellation amplifies optimizer noise into the difference.
+We show that regret estimates do not stabilize until $K = 500$ multistart restarts---one to two orders of magnitude beyond standard practice---that convergence in $K$ depends on the size of the regret signal relative to multistart noise, and that the estimate is conditional on the inner optimizer: a stronger iteration schedule raises the regret found at every restart budget, so any inter-farm coordination study computing AEP differences between strategies inherits these requirements.
+With convergence quantified by exact subsampling of stored per-start outcomes, we map design regret across the elliptical wind rose space of Hart (2025).
+We bound regret two ways: greedy adversarial individual-turbine placement (upper bound, dominated by wind rose folding) and regret cross-sections with an identical neighboring farm (realistic scenario, representative of typical lease layouts).
+Both quantities span an order of magnitude across the two engineering wake models we test: under Bastankhah, adversarial regret is 0.4--2.5\,\% of AEP and realistic 0.16--0.49\,\%; under TurboPark, realistic regret alone reaches 1.9--10.6\,\%, overtaking the adversarial bound computed with a weaker optimizer---under-optimization can masquerade as safety.
+Both quantities are upper bounds for real planning purposes: the adversarial bound assumes a malicious neighbor; the realistic bound assumes the neighbor copies your design.
+The two wake models also disagree on where vulnerability peaks: oblique to the prevailing wind under Bastankhah's fast recovery, at or near directly upwind under TurboPark---a contrast that is unambiguous in a single-direction stress test (135$^\circ$ vs.\ 90$^\circ$ inflow).
+For policy, we invert the buffer-decay curves into a wind-rose-conditional buffer lookup table.
+Under Bastankhah, capping realistic-scenario regret at $0.2\%$ of AEP requires $\sim$$8$--$9D$ ($\sim$2\,km) for typical North Sea sites.
+Under TurboPark---which recovers wakes more slowly and pushes realistic regret an order of magnitude higher---the equivalent threshold of $2\%$ of AEP requires $42$--$60D$ (10--14\,km) for the same sites, beyond common spacing recommendations.
+Finally, ringing the target with up to eight neighboring farms shows that multi-neighbor regret grows sublinearly (1.2--3$\times$ the single-neighbor value at four close neighbors) and is ultimately capped by lease-geometry packing limits, while the recoverable fraction of the damage declines as the target is encircled.
+The 12--22$\times$ wake-model bracket dominates any single number a policy rule could quote; rather than picking one, we tabulate both and recommend buffer policies treat the bracket explicitly.
 \end{abstract}
 
 
@@ -61,7 +70,7 @@ We formalize this intuition through the concept of \emph{design regret}: the AEP
 \end{equation}
 Design regret isolates the cost of the design decision itself, separate from the total AEP reduction caused by neighbor wakes.
 By sweeping the elliptical wind rose parameterization of \citet{Hart2025}---which separates directional concentration from bidirectionality---we quantify how wind rose shape governs design regret.
-The answer is dramatic: regret varies six-fold across the shape space, from 17\,GWh/yr under bidirectional conditions to 101\,GWh/yr under concentrated unidirectional conditions.
+The answer is dramatic: under Bastankhah, adversarial regret varies six-fold across the shape space; under TurboPark, even a realistic identical-neighbor scenario spans 2.0--10.6\,\% of AEP across the same shape sweep.
 Buffer distance requirements inherit this dependence.
 
 \citet{Quick2026omae} applied this framework to the Danish Energy Island cluster and found negligible design regret for all nine neighbor configurations.
@@ -70,14 +79,15 @@ Sites in the southern North Sea with strongly unidirectional southwesterly winds
 
 However, accurately computing these quantities reveals a methodological challenge that undermines all existing regret-like calculations.
 Layout optimization is highly multimodal \citep{Thomas2023, ValottaRodrigues2024}, and regret---as the \emph{difference} between two optimization outcomes---amplifies the effect of local optima.
-We show that at least 300 restarts are needed for the regret estimate to stabilize---over an order of magnitude more than typical practice.
+We show that at least 500 restarts are needed for the regret estimate to stabilize---over an order of magnitude more than typical practice.
 
 This paper makes four contributions:
 \begin{enumerate}
-    \item A convergence study demonstrating that 300+ multistart optimizations are needed for reliable regret estimation---over an order of magnitude more than typical practice.
-    \item A systematic sweep of the wind rose shape space showing that design regret varies six-fold with directionality, with concentrated unidirectional sites most vulnerable.
-    \item Buffer distance analysis quantifying how neighbor separation reduces regret, and how the decay rate depends on wind rose shape.
-    \item Regret cross-sections with a realistic identical neighbor farm, showing that design regret is an order of magnitude lower than the adversarial upper bound and peaks in the upwind direction.
+    \item A convergence study demonstrating that hundreds of multistart optimizations are needed for reliable regret estimation---over an order of magnitude more than typical practice---and that the required budget depends on both the size of the regret signal and the strength of the inner optimizer.
+    \item A systematic sweep of the wind rose shape space showing that design regret varies several-fold with directionality, with concentrated unidirectional sites most vulnerable under both wake models tested.
+    \item Buffer distance analysis quantifying how neighbor separation reduces regret, how the decay rate depends on wind rose shape, and how the absolute buffer requirement depends on the wake model (2\,km vs.\ 10--14\,km for the same real sites).
+    \item Regret cross-sections with a realistic identical neighbor farm under two wake models, showing that the adversarial--realistic gap and even the location of peak vulnerability (oblique vs.\ near-upwind) are wake-model-dependent, and that a realistic scenario computed with a stronger optimizer can exceed an adversarial bound computed with a weaker one.
+    \item A ring sweep over the number of neighboring farms, showing that multi-neighbor regret grows sublinearly, that lease-geometry packing limits cap it, and that the recoverable fraction of wake damage declines as a farm is encircled.
 \end{enumerate}
 
 
@@ -92,8 +102,14 @@ This configuration is representative of near-future North Sea developments: the 
 The liberal layout $\mathbf{x}^*_\text{lib}$ maximizes AEP assuming no external turbines.
 The conservative layout $\mathbf{x}^*_\text{cons}$ maximizes AEP with specified neighbors~$\mathbf{n}$.
 Both are evaluated with neighbors present to compute regret via Eq.~\eqref{eq:regret}.
-By construction, $R \geq 0$ when both reach global optima.
-We enforce this computationally through \emph{regret pooling}: the conservative AEP is taken as $\max(\text{best conservative AEP},\; \text{liberal AEP with neighbors})$, guaranteeing non-negative regret even with imperfect optimization.
+By construction, $R \geq 0$ when both optimizations reach a global optimum, since the conservative search has access to all of the liberal layout's design space plus the additional information about neighbors.
+With finite multistart budgets neither optimization is guaranteed to be globally optimal, and stochastic noise can occasionally produce $R < 0$.
+We therefore include the liberal layout itself as one of the candidate starts in the conservative search and define
+\begin{equation}\label{eq:pooling}
+    R = \max(\text{best conservative AEP},\; \text{AEP of liberal layout with neighbors}) - \text{AEP of liberal layout with neighbors}.
+\end{equation}
+This \emph{regret pooling} step does not bias the result upward in expectation: the conservative search inherits the liberal layout as a free starting point, so the pooled value equals the conservative AEP whenever the search finds anything at least as good as the liberal layout, and falls back to the liberal AEP otherwise---which is the correct answer when the conservative optimum has not been resolved beyond the liberal one.
+The same trick is needed for any AEP-difference study where $R \geq 0$ holds in theory but optimization is imperfect.
 
 \subsection{Wake model}
 
@@ -173,7 +189,7 @@ The results from this analysis should be interpreted as the ceiling on design re
 \subsection{Regret cross-sections: realistic neighbor scenario}\label{sec:cross-section-method}
 
 To assess design regret under more realistic conditions, we introduce the \emph{regret cross-section}.
-An identical copy of the target farm---with the same number of turbines, boundary polygon, and liberal-optimized layout ($K_\text{lib} = 300$)---is placed at each combination of 24 bearings ($15$$^\circ$ steps) and 7 buffer distances (2, 5, 10, 15, 20, 30, 40$D$), producing 168 evaluations per wind rose case (Fig.~\ref{fig:radar-schematic}).
+An identical copy of the target farm---with the same number of turbines, boundary polygon, and liberal-optimized layout ($K_\text{lib} = K_\text{cons}$; see Sect.~\ref{sec:multistart-method})---is placed at each combination of 24 bearings ($15$$^\circ$ steps) and 7 buffer distances (2, 5, 10, 15, 20, 30, 40$D$), producing 168 evaluations per wind rose case (Fig.~\ref{fig:radar-schematic}).
 
 \paragraph{Inter-farm distance definition.}
 Buffer distance is defined as the minimum Euclidean distance between the boundary polygons of the target and reference farms (not centroid-to-centroid).
@@ -185,7 +201,7 @@ This boundary-gap definition ensures that no turbines from the reference farm ov
 The reference farm is an identical translated copy of the target: same boundary polygon, same number of turbines ($N_t = 50$), and same liberal-optimized layout.
 This represents the most natural ``what-if'' scenario: a neighboring developer builds the same farm design nearby.
 
-At each position, the target farm is re-optimized with $K = 300$ restarts (matching $K_\text{lib}$) while the reference farm remains fixed.
+At each position, the target farm is re-optimized with $K_\text{cons}$ restarts (matching $K_\text{lib}$) while the reference farm remains fixed.
 The resulting polar map separates bearing and distance effects and reveals whether vulnerability is isotropic or directionally concentrated.
 
 \begin{figure}[htbp]
@@ -198,17 +214,21 @@ The resulting polar map separates bearing and distance effects and reveals wheth
     \label{fig:radar-schematic}
 \end{figure}
 
-\subsection{Multistart optimization and convergence}
+\subsection{Multistart optimization and convergence}\label{sec:multistart-method}
 
-Each layout optimization uses gradient-based stochastic gradient descent (SGD) \citep{Quick2023sgd} with a constant learning rate phase followed by a decay phase.
-The convergence study (Section~\ref{sec:convergence}) sweeps iteration counts from 100 to 10000 at $K = 500$ starts and finds that regret stabilizes by 2000 total iterations (within 5\% of the 10000-iteration value for all configurations tested).
-Production cross-section runs therefore use 2000 iterations; the greedy grid sweep uses 5000 iterations for additional margin.
+Each layout optimization uses gradient-based stochastic gradient descent (SGD) \citep{Quick2023sgd}.
+Two iteration schedules are used.
+The greedy grid sweep uses a baseline schedule (constant learning rate followed by decay, 5000 iterations).
+All cross-section and buffer-table production runs use a tuned learning-rate schedule (referred to as the \emph{FunWake} schedule below; 5000 iterations), obtained by an automated schedule search on the liberal layout problem.
+At equal iteration count, the tuned schedule consistently reaches higher-AEP optima than the baseline schedule, which matters for regret: an under-optimized inner solver systematically underestimates the conservative optimum and hence the regret (Section~\ref{sec:convergence}).
 
 Restarts include grid initialization, the liberal layout (ensuring regret pooling), and random polygon-sampled positions.
 The liberal layout is included as a conservative candidate to guarantee non-negative regret by construction.
 Following the convergence analysis of \citet{Quick2026omae}, who found $\sim$400 starts needed for 66-turbine liberal layout convergence, we perform a dedicated convergence study for the regret computation (Section~\ref{sec:convergence}).
 
-Production configurations: $K = 500$ for the greedy grid sweep and buffer analysis (upper bound); $K_\text{lib} = K_\text{cons} = 300$ for cross-sections (realistic scenario), with equal $K$ for liberal and conservative to avoid optimization asymmetry artifacts.
+Production configurations: $K = 500$ with the baseline schedule for the greedy grid sweep (upper bound); $K_\text{lib} = K_\text{cons} = 2000$ with the FunWake schedule for the elliptical-rose cross-sections, the buffer tables, and the near-distance DEI cells; and $K_\text{lib} = K_\text{cons} = 500$ with the FunWake schedule for the far-distance DEI cells and the single-direction case.
+The $K = 500$ budget is justified by a per-start subsampling analysis showing that it captures large regret signals (TurboPark, single-direction) to within a few percent; the corresponding small-signal Bastankhah cells carry the same lower-bound caveat as the rest of the Bastankhah grid (Section~\ref{sec:convergence}).
+Equal $K$ is always used for liberal and conservative optimization to avoid asymmetry artifacts.
 
 
 \section{Results}\label{sec:results}
@@ -221,9 +241,9 @@ A $5 \times 5$ reference neighbor farm is placed at a fixed bearing and distance
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{figures/convergence.png}
-    \caption{Convergence of design regret with multistart depth~$K$.
+    \caption{Convergence of design regret with multistart depth~$K$ (baseline schedule).
     Dashed gray: converged value ($K = 2000$).
-    All configurations stabilize by $K \approx 300$.}
+    All configurations stabilize by $K \approx 500$ under this optimizer configuration; see Fig.~\ref{fig:funwake-convergence} for the schedule- and signal-size-dependence of this statement.}
     \label{fig:convergence}
 \end{figure}
 
@@ -243,16 +263,36 @@ A $5 \times 5$ reference neighbor farm is placed at a fixed bearing and distance
 \end{table}
 
 At $K = 100$, the concentrated unidirectional case at $5D$ still underestimates regret by $\sim$40\,\%, because the landscape has many local optima with similar standalone AEP but different neighbor-present AEP.
-All configurations stabilize by $K = 300$.
+All configurations stabilize by $K = 500$ under this optimizer configuration.
 SGD iteration convergence is much faster: at $K = 500$, regret at 5000 iterations is within 3\,\% of the 10000-iteration value.
 
 The root cause is catastrophic cancellation: regret is a \emph{difference} between two large AEP values, so a 0.5\,\% error in either optimization can produce a 50\,\% error in regret.
 This applies to any study computing AEP differences between strategies---robust optimization, Pareto analysis, or inter-farm coordination assessments.
 
+\paragraph{Per-start subsampling analysis.}
+The production cross-section runs store the conservative AEP of every individual start, which permits an exact convergence analysis without re-running anything: for each evaluation, the expected regret at a budget of $K$ starts is computed from the order statistics of a size-$K$ subsample drawn without replacement from the 2000 stored starts.
+Figure~\ref{fig:funwake-convergence} shows the result across all 245 $(a, f, d)$ grid cells per wake model.
+Two findings sharpen the convergence picture.
+First, convergence depends on the size of the regret signal relative to start-to-start noise: under TurboPark, whose regret signal is large, $K = 500$ captures a median 96\,\% of the $K = 2000$ regret (5th percentile 89\,\%); under Bastankhah, whose realistic-scenario regret sits near the noise floor, the median capture at $K = 500$ is only 54\,\% and the expected regret is still rising at $K = 2000$.
+Second, convergence in $K$ is conditional on the inner optimizer: these curves are computed with the tuned FunWake schedule, and a weaker schedule shifts the entire curve downward rather than converging to the same value.
+Reported Bastankhah regret magnitudes should therefore be read as lower bounds, while the TurboPark magnitudes are converged to within a few percent.
+This analysis also justifies running the supplemental far-distance DEI and single-direction cells at $K = 500$: their TurboPark and single-direction regret signals are large (Section~\ref{sec:cross-sections}), placing them in the well-captured regime, while their Bastankhah values carry the same lower-bound caveat as the rest of the Bastankhah grid.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{figures/funwake_convergence.png}
+    \caption{Multistart convergence computed exactly from stored per-start AEPs (FunWake schedule).
+    Left: expected peak-bearing regret vs.\ start budget $K$ for representative high- and low-regret cells (exact subsample expectation; no bootstrap noise).
+    Right: fraction of the $K = 2000$ regret captured at $K = 500$ across all 245 buffer-table cells per wake model.
+    TurboPark (red) is converged to within a few percent at $K = 500$; Bastankhah (blue), whose regret signal sits near the multistart noise floor, is not converged even at $K = 2000$.}
+    \label{fig:funwake-convergence}
+\end{figure}
+
 \subsection{Wind rose shape controls design regret}\label{sec:shape}
 
-Figure~\ref{fig:heatmap} shows design regret across the $(a, f)$ space at $K = 500$.
-Regret ranges from 17.2\,GWh (0.4\,\% of AEP) at $a = 0.5$, $f = 0.0$ to 100.6\,GWh (2.5\,\%) at $a = 0.9$, $f = 1.0$---a six-fold range.
+Figure~\ref{fig:heatmap} shows design regret from the greedy adversarial sweep across the $(a, f)$ space at $K = 500$ (baseline schedule; the cross-section and buffer-table analyses in Sections~\ref{sec:buffer-table}--\ref{sec:cross-sections} use the converged FunWake configuration).
+Under Bastankhah, regret ranges from 17.2\,GWh (0.4\,\% of AEP) at $a = 0.5$, $f = 0.0$ to 100.6\,GWh (2.5\,\%) at $a = 0.9$, $f = 1.0$---a six-fold range.
+Under TurboPark, the same sweep yields 2.6\,\% to 9.0\,\% of AEP across $(a,f)$, with the same qualitative ordering (folding dominant, peak at $a = 0.9$, $f = 1$) but 3.5--6.5$\times$ higher magnitudes.
 
 \begin{figure}[htbp]
     \centering
@@ -283,6 +323,56 @@ Under bidirectional conditions ($f = 0$), wakes arrive from opposing directions 
 For North Sea planning, this means that sites with strongly unidirectional southwesterly winds (characteristic of the German Bight and southern North Sea) face higher design regret than sites with more bidirectional conditions (such as Danish waters).
 The DEI wind rose ($a \approx 0.64$, $f \approx 0.38$) falls in the moderate-regret region, consistent with the negligible tradeoffs found by \citet{Quick2026omae}.
 
+\subsection{Wind-rose-conditional buffer table}\label{sec:buffer-table}
+
+For policy use, we invert the cross-section buffer-decay curves.
+At each $(a, f)$ on the elliptical-rose grid we ran the cross-section at seven buffer distances $\{2, 5, 10, 15, 20, 30, 40\}D$ with $K_\text{lib} = K_\text{cons} = 2000$ and the FunWake schedule, took the peak-bearing regret $R(d; a, f)$, and inverted to find the smallest $d^*$ at which $R \leq \tau$.
+Because the two wake models produce regret magnitudes an order of magnitude apart, each is inverted at thresholds matched to its own scale: $\tau \in \{0.1, 0.2, 0.3\}\%$ AEP for Bastankhah and $\tau \in \{1, 2, 5\}\%$ AEP for TurboPark.
+Table~\ref{tab:buffer-table} reports Bastankhah $d^*$ at $\tau = 0.2\%$; Figure~\ref{fig:buffer-table-contour} shows the corresponding contour with the five real North Sea sites overlaid, and Figure~\ref{fig:buffer-table-decay} shows the underlying decay curves for both wake models.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Required buffer distance $d^*$ (in rotor diameters) such that peak design regret $\leq 0.2\%$ AEP, as a function of elliptical-rose parameters $(a, f)$.
+    Bastankhah ($k = 0.04$), $K = 2000$, FunWake schedule; entries marked $>40$ denote regret that does not cross the threshold within the swept buffer range.
+    Under TurboPark, even a $10\times$ higher threshold requires buffers beyond $40D$ over most of the shape space (Table~\ref{tab:buffer-table-tp}).}
+    \label{tab:buffer-table}
+    \input{tables/buffer_table_fw.tex}
+\end{table}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figures/buffer_table_contour_fw.png}
+    \caption{\textbf{Bastankhah.} Required buffer $d^*(a, f)$ at $\tau = 0.2\%$ AEP ($K = 2000$, FunWake schedule).
+    Markers: fitted real-site placements (Horns Rev 1, Lillgrund, Borssele, Princess Amalia, DEI).
+    The five fitted real-site placements require $d^* \approx 8$--$9D$ ($\sim$2\,km) at this threshold.}
+    \label{fig:buffer-table-contour}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figures/buffer_table_tp_contour_fw.png}
+    \caption{\textbf{TurboPark.} Required buffer $d^*(a, f)$ at $\tau = 2.0\%$ AEP under TurboPark ($A = 0.04$, TI = 0.06; $K = 2000$, FunWake schedule).
+    Note the threshold is $10\times$ higher than Fig.~\ref{fig:buffer-table-contour}, because TurboPark's slower wake recovery raises realistic-scenario regret by one to two orders of magnitude.
+    The threshold is unmet within the swept range ($d^* > 40D$) over most of the shape space, including the region containing all five fitted real sites: interpolated requirements run from $\sim$42$D$ (Princess Amalia, most bidirectional) to $\sim$60$D$ (Lillgrund, most unidirectional), i.e.\ 10--14\,km.}
+    \label{fig:buffer-table-tp-contour}
+\end{figure}
+
+\begin{table}[htbp]
+    \centering
+    \caption{\textbf{TurboPark} buffer table $d^*(a, f; \tau = 2\%)$ in rotor diameters. $K = 2000$, FunWake schedule, TurboPark $A = 0.04$, TI = 0.06.
+    $>40$ denotes regret that does not cross the threshold within the swept buffer range.}
+    \label{tab:buffer-table-tp}
+    \input{tables/buffer_table_tp_fw.tex}
+\end{table}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{figures/buffer_table_decay_fw.png}
+    \caption{Buffer-decay curves $R(d)$ averaged over $a$ at each folding value $f$, for Bastankhah (left) and TurboPark (right); $K = 2000$, FunWake schedule.
+    Reference $\tau$ thresholds (dotted) are matched to each model's regret scale (0.1--0.3\% for Bastankhah, 1--5\% for TurboPark).}
+    \label{fig:buffer-table-decay}
+\end{figure}
+
 \subsection{Buffer distance modulates regret}\label{sec:buffer}
 
 Figure~\ref{fig:buffer} shows regret vs.\ buffer distance at $K = 500$ for three wind roses.
@@ -298,8 +388,9 @@ Figure~\ref{fig:buffer} shows regret vs.\ buffer distance at $K = 500$ for three
 For concentrated unidirectional wind ($a = 0.9$, $f = 1.0$), regret drops from 2.5\,\% at $2D$ to 0.4\,\% at $40D$ (9.6\,km).
 The bidirectional case ($a = 0.5$, $f = 0.0$) shows gentle decay from 0.4\,\% to 0.2\,\%.
 
-The NYSERDA 4\,nmi ($\sim$$31D$) recommendation reduces regret to $<$1\,\% for all wind roses tested, but is unnecessarily conservative for bidirectional sites.
-Wind-rose-dependent buffer standards could allow denser development at low-risk sites (bidirectional, e.g., DEI) while maintaining protection at high-risk sites (unidirectional, e.g., German Bight).
+Under the Bastankhah model, the NYSERDA 4\,nmi ($\sim$$31D$) recommendation reduces regret to $<$1\,\% for all wind roses tested, but is unnecessarily conservative for bidirectional sites.
+Under TurboPark the same recommendation is insufficient rather than conservative: the converged buffer table (Table~\ref{tab:buffer-table-tp}) places the $\tau = 2\%$ requirement beyond $40D$ for all five fitted real sites.
+Wind-rose-dependent buffer standards could allow denser development at low-risk sites (bidirectional, e.g., DEI) while maintaining protection at high-risk sites (unidirectional, e.g., German Bight)---but the adequacy of any fixed standard is wake-model-dependent.
 This is directly relevant to the emerging cross-border coordination frameworks for the North Sea \citep{Fliegner2025}.
 
 \subsection{Directional vulnerability: regret cross-sections}\label{sec:cross-sections}
@@ -307,49 +398,29 @@ This is directly relevant to the emerging cross-border coordination frameworks f
 The greedy grid search (Sections~\ref{sec:shape}--\ref{sec:buffer}) establishes an adversarial upper bound by placing individual unconstrained turbines.
 To assess regret under more realistic conditions, we now turn to the regret cross-sections, in which an identical copy of the target farm is placed at controlled boundary-gap distances around the target (Section~\ref{sec:cross-section-method}).
 
-\paragraph{Single-direction stress test.}
-We begin with the simplest illustrative case: a degenerate wind rose in which all energy arrives from a single sector (90$^\circ$, i.e.\ wind from the east).
-Figure~\ref{fig:unidir-aep-loss} presents this case on its own color scale because peak regret (1.25\,\% of AEP) is roughly an order of magnitude above any multi-directional value we encounter below.
-The right panel shows design regret; the left panel shows raw AEP loss (liberal layout evaluated with the neighbor, no re-optimization), which separates the neighbor's physical damage from the portion a neighbor-aware layout can avoid.
-The radar serves as a methodology check: regret is precisely zero for all downwind bearings (225--315$^\circ$), as it must be when the neighbor casts no wake over the target.
-Peak regret occurs at bearings flanking the inflow (75$^\circ$, 105$^\circ$); the dip directly upwind (90$^\circ$) reflects that the liberal layout is already pre-adapted to self-wake from that direction, whereas a slightly off-axis neighbor introduces corridor asymmetry that lateral re-optimization can partially escape.
-
-A second, more surprising feature: the southeast quadrant retains non-trivial regret out to $40D$ (0.37\,\% at 135$^\circ$/$40D$).
-At this configuration the neighbor induces 0.44\,\% AEP loss, of which regret captures 0.37\,\%---so re-optimization avoids $\sim$84\,\% of the damage.
-Figure~\ref{fig:unidir-flow} shows the flow field: with wind from the east, the SE neighbor's wakes propagate westward and graze the target's southern row even at $40D$.
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\textwidth]{figures/unidir_aep_loss_vs_regret.png}
-    \caption{Single-direction stress test (wind exclusively from 90$^\circ$): AEP loss vs.\ design regret.
-    Left: liberal-layout AEP loss due to the neighbor (no target re-optimization).
-    Right: design regret (re-optimization benefit).
-    Peak regret reaches 1.25\,\% of AEP — roughly ten times larger than any multi-directional case in Fig.~\ref{fig:cross-section}, hence own color scale.
-    Downwind bearings (225--315$^\circ$) have zero regret, validating the methodology.}
-    \label{fig:unidir-aep-loss}
-\end{figure}
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=0.75\textwidth]{figures/unidir_flow_135deg_40D.png}
-    \caption{Flow field for 135$^\circ$/$40D$ neighbor configuration, single wind direction (9\,m/s from east).
-    White circles: target liberal layout.
-    Red circles: identical-copy neighbor farm at bearing 135$^\circ$, $40D$ boundary-gap.
-    Neighbor wakes propagate westward and intrude on the target's southern turbines, producing the non-trivial SE-quadrant regret observed in Fig.~\ref{fig:unidir-aep-loss}.}
-    \label{fig:unidir-flow}
-\end{figure}
-
 \paragraph{Realistic multi-directional cases.}
-Figure~\ref{fig:cross-section} then presents cross-sections for six multi-directional wind roses at $K_\text{lib} = K_\text{cons} = 300$: the DEI real wind rose and five elliptical parameterizations (Table~\ref{tab:cross-section}).
-For all of these, peak regret from a realistic identical neighbor farm is modest: 0.09--0.38\,\% of AEP, with all peaks occurring at the closest buffer distance ($2D$).
-This is substantially lower than both the single-direction stress test above and the greedy adversarial upper bound (0.4--2.5\,\% of AEP from Section~\ref{sec:shape}), confirming that both extreme inflow and unconstrained individual turbine placement overstate the risk from a realistic neighboring farm by roughly an order of magnitude.
-Regret decays with buffer distance for all cases, reaching negligible levels ($<$0.1\,\%) by 20--40$D$ depending on the wind rose.
-The directional pattern is physically intuitive: peak regret aligns with the prevailing upwind direction in most cases, with some angular offset due to the irregular polygon geometry.
+Figures~\ref{fig:cross-section} and~\ref{fig:cross-section-tp} present cross-sections for six multi-directional wind roses under both wake models: the DEI real wind rose and five elliptical parameterizations (Table~\ref{tab:cross-section}).
+Under Bastankhah, peak regret from a realistic identical neighbor farm is modest: 0.16--0.49\,\% of AEP, with all peaks at the closest buffer distance ($2D$).
+Under TurboPark the same scenario produces 1.9--10.6\,\% of AEP---an order of magnitude larger, and for the concentrated unidirectional rose ($a = 0.9$, $f = 1.0$; 10.6\,\%) \emph{exceeding} the greedy adversarial bound computed with the baseline optimizer (9.0\,\%, Section~\ref{sec:shape}).
+This is a direct demonstration that ``upper bounds'' from adversarial placement are bounds only relative to the optimizer configuration used to compute them: a stronger inner optimizer applied to a merely realistic scenario can overtake a weaker optimizer's adversarial ceiling.
+Under Bastankhah the greedy bound (0.4--2.5\,\%) does exceed the realistic peaks (0.16--0.49\,\%) by roughly $5\times$.
+Regret decays with buffer distance for all cases; Figures~\ref{fig:cross-section-contour} and~\ref{fig:cross-section-contour-tp} recast the same data as peak regret over the $(a, f)$ shape space at fixed buffer distances.
+The directional pattern also differs between models: under TurboPark, peak regret sits at or within 15$^\circ$ of the prevailing upwind direction for four of the six cases; under Bastankhah, several peaks sit 45--60$^\circ$ oblique to it (e.g.\ 330$^\circ$ for DEI and for $a = 0.9$, $f = 1.0$), consistent with the liberal layout being partially pre-adapted to the dominant direction and most vulnerable on its flanks.
+The single-direction stress test below makes this contrast unambiguous.
+
+Real clusters rarely stop at one neighbor; Section~\ref{sec:ring} examines how regret scales with the \emph{number} of neighboring farms.
+
+\paragraph{Validation and stress test: single-direction case.}
+As a methodology check we also ran a degenerate single-direction case (all energy from 90$^\circ$).
+Regret is precisely zero for all downwind bearings, as it must be when the neighbor casts no wake over the target.
+Under Bastankhah, peak regret reaches 1.26\,\% of AEP at the closest buffer, at a bearing oblique to the inflow (135$^\circ$)---the same flank-vulnerability pattern as the multi-directional cases.
+Under TurboPark the peak is 38\,\% of AEP and sits directly upwind (90$^\circ$): with slowly-recovering wakes, no lateral rearrangement rescues the layout from a neighbor parked in the single energy corridor, so the oblique-peak (``ambush'') structure is a Bastankhah-specific consequence of fast wake recovery rather than a universal feature.
+The qualitative pattern and the flow-field interpretation are reported in Appendix~\ref{app:unidir}, with a representative flow map (135$^\circ$/$40D$) showing how a southeastern neighbor's wakes drift westward and graze the target's southern row.
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{figures/cross_section_fixed.png}
-    \caption{Regret cross-sections for six multi-directional wind roses ($K_\text{lib} = K_\text{cons} = 300$, boundary-gap distances).
+    \includegraphics[width=\textwidth]{figures/cross_section_fixed_fw.png}
+    \caption{\textbf{Bastankhah.} Regret cross-sections for six multi-directional wind roses ($K = 2000$ for the elliptical roses, $K = 500$ for DEI beyond $15D$; FunWake schedule; boundary-gap distances).
     Each panel shows design regret (\% of AEP) as a function of neighbor bearing and buffer distance for an identical copy of the target farm.
     Stars mark peak regret.
     Inset wind roses show the sector frequency distribution.
@@ -357,31 +428,56 @@ The directional pattern is physically intuitive: peak regret aligns with the pre
     \label{fig:cross-section}
 \end{figure}
 
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{figures/cross_section_fixed_tp_fw.png}
+    \caption{\textbf{TurboPark.} Same cross-sections as Fig.~\ref{fig:cross-section} under the TurboPark wake model.
+    Peak regret is an order of magnitude larger (note the color scale) and sits at or near the prevailing upwind direction in most cases, in contrast to the oblique peaks under Bastankhah.}
+    \label{fig:cross-section-tp}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{figures/regret_contour_at_buffer_fw.png}
+    \caption{\textbf{Bastankhah.} Alternative view of the cross-section data (\emph{constrained, identical-copy neighbor farm}---not the unconstrained greedy upper bound): peak regret over the elliptical-rose shape space $(a, f)$ at four fixed minimum buffer distances ($K = 2000$, FunWake schedule).
+    Real-site fits overlaid as labelled markers.
+    Hot corner (high concentration $a$ + high folding $f$, i.e.\ concentrated unidirectional) shrinks with buffer; operational North Sea sites sit in the cool moderate-shape region for all buffer choices.}
+    \label{fig:cross-section-contour}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{figures/regret_contour_at_buffer_tp_fw.png}
+    \caption{\textbf{TurboPark.} Same view as Fig.~\ref{fig:cross-section-contour} but under the TurboPark wake model ($K = 2000$, FunWake schedule).
+    Peak regret runs an order of magnitude higher across the shape space, the hot corner persists at all buffers shown, and the real sites no longer sit in a uniformly cool region.
+    The wake-model bracket on realistic regret dominates any single number.}
+    \label{fig:cross-section-contour-tp}
+\end{figure}
+
 \begin{table}[htbp]
     \centering
-    \caption{Peak regret from cross-sections ($K_\text{lib} = K_\text{cons} = 300$, boundary-gap distance).
-    The single-direction case is reported separately because its regret is roughly an order of magnitude larger than any multi-directional case.}
+    \caption{Peak regret from cross-sections under both wake models (FunWake schedule; boundary-gap distance).
+    Elliptical roses at $K = 2000$; DEI mixes $K = 2000$ (near distances) and $K = 500$ (far distances); single-direction case at $K = 500$.}
     \label{tab:cross-section}
-    \begin{tabular}{lrrrr}
+    \begin{tabular}{lrrrl@{\hskip 8mm}rrrl}
         \toprule
-        Case & Max (GWh) & Max (\%) & Bearing & Buffer \\
+        & \multicolumn{4}{c}{Bastankhah} & \multicolumn{4}{c}{TurboPark} \\
+        \cmidrule(r){2-5}\cmidrule(l){6-9}
+        Case & GWh & \% & Bearing & Buffer & GWh & \% & Bearing & Buffer \\
         \midrule
-        \multicolumn{5}{l}{\emph{Single-direction (stress test)}} \\
-        Single direction (from E) & 50.5 & 1.25 & 105$^\circ$ & $2D$ \\
-        \midrule
-        \multicolumn{5}{l}{\emph{Multi-directional (realistic)}} \\
-        DEI real wind rose        & 12.4 & 0.22 & 255$^\circ$ & $2D$ \\
-        $a = 0.9$, $f = 1.0$     & 13.5 & 0.34 & 315$^\circ$ & $2D$ \\
-        $a = 0.5$, $f = 1.0$     &  9.0 & 0.23 & 240$^\circ$ & $2D$ \\
-        $a = 0.7$, $f = 0.5$     &  7.8 & 0.20 & 300$^\circ$ & $2D$ \\
-        $a = 0.9$, $f = 0.0$     & 14.9 & 0.38 & 270$^\circ$ & $2D$ \\
-        $a = 0.5$, $f = 0.0$     &  3.6 & 0.09 &  90$^\circ$ & $2D$ \\
+        DEI real wind rose    &  8.9 & 0.16 & 330$^\circ$ & $2D$ &  108 &  1.9 & 270$^\circ$ & $2D$ \\
+        $a = 0.9$, $f = 1.0$ & 19.8 & 0.49 & 330$^\circ$ & $2D$ &  426 & 10.6 & 285$^\circ$ & $2D$ \\
+        $a = 0.5$, $f = 1.0$ & 15.3 & 0.38 & 270$^\circ$ & $2D$ &  194 &  4.9 & 315$^\circ$ & $2D$ \\
+        $a = 0.7$, $f = 0.5$ & 15.1 & 0.38 & 225$^\circ$ & $2D$ &  218 &  5.4 & 270$^\circ$ & $2D$ \\
+        $a = 0.9$, $f = 0.0$ &  9.8 & 0.24 &  45$^\circ$ & $2D$ &  193 &  4.8 & 270$^\circ$ & $2D$ \\
+        $a = 0.5$, $f = 0.0$ &  7.4 & 0.19 & 330$^\circ$ & $2D$ &   80 &  2.0 & 135$^\circ$ & $5D$ \\
+        Single direction (90$^\circ$) & 51.0 & 1.26 & 135$^\circ$ & $2D$ & 1549 & 38.2 & 90$^\circ$ & $2D$ \\
         \bottomrule
     \end{tabular}
 \end{table}
 
 \paragraph{$a$-ablation and the geometry of the elliptical rose.}
-To trace how regret varies with rose concentration, Figure~\ref{fig:bearing-sweep} sweeps $a$ from 0.01 to 0.9 at fixed full folding ($f = 1$), with the DEI real rose overlaid for reference.
+To trace how regret varies with rose concentration, Figure~\ref{fig:bearing-sweep} sweeps $a$ from 0.01 to 0.9 at fixed full folding ($f = 1$), with the DEI real rose overlaid for reference (baseline schedule, $K = 500$; values in this paragraph are from that configuration and sit somewhat below the converged FunWake values in Table~\ref{tab:cross-section}).
 The parameterization has a non-obvious structure: $a = 1/\sqrt{\pi} \approx 0.564$ gives a uniform rose; $a > 0.564$ elongates the ellipse along the prevailing direction, concentrating energy there (at $a = 0.9$, $f = 1$, 20.6\,\% of energy arrives from 270$^\circ$); $a < 0.564$ elongates it perpendicular to the prevailing direction, producing a bimodal rose with peaks at $\theta_\text{prev} \pm 90^\circ$ (at $a = 0.01$, $f = 1$, $\sim$50\,\% each at 0$^\circ$ and 180$^\circ$).
 Small $a$ therefore does not approximate the single-sector stress test; it represents a distinct perpendicular-bimodal regime.
 Regret reflects this: tiny $a$ (0.01--0.05) reaches 1.5--1.8\,\% at $2D$ because the target faces two concentrated inflow axes; moderate $a$ (0.3--0.5, near-uniform) sits at 0.1--0.3\,\%; and $a = 0.9$ (concentrated westerly) yields $\sim$0.3\,\%.
@@ -391,16 +487,42 @@ The perpendicular-bimodal and single-sector corners of the rose space both produ
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{figures/bearing_sweep.png}
-    \caption{Regret vs.\ neighbor bearing as the wind rose transitions from bidirectional to unidirectional.
-    Viridis curves: $f$-sweep at fixed $a = 0.9$ (prevailing direction 270$^\circ$).
-    Red dashed: pure single-direction at 270$^\circ$.
-    Purple dash-dot: DEI real wind rose.
-    Black: single-direction at 90$^\circ$ (east-inflow stress test).
+    \caption{Regret vs.\ neighbor bearing as the rose concentration $a$ varies at full folding ($f = 1$, prevailing direction 270$^\circ$; baseline schedule, $K = 500$).
+    Colored curves: $a$-sweep from perpendicular-bimodal ($a \ll 0.564$) through uniform ($a \approx 0.564$) to concentrated unidirectional ($a = 0.9$), with miniature wind-rose icons in the legend.
+    The DEI real wind rose is overlaid for reference.
     Left: $2D$ buffer; right: $10D$.}
     \label{fig:bearing-sweep}
 \end{figure}
 
 
+
+\subsection{Regret with multiple neighboring farms}\label{sec:ring}
+
+Most operating clusters expose a farm to several neighbors at once.
+To isolate how regret scales with the number of neighbors $n$---without the path-dependence of a greedy placement sequence---we place $n$ identical copies of the liberal layout at evenly spaced bearings starting from the prevailing upwind direction, each at the same nominal boundary gap, for $n = 1$--$8$ (FunWake schedule, $K = 500$, three wind roses, both wake models, nominal gaps $2D$ and $10D$).
+Copies must also respect a $2D$ boundary gap to \emph{each other}; when a ring cannot satisfy this, all offsets are scaled up by a common factor until it can, and the realized gaps are recorded.
+Figure~\ref{fig:ring} shows regret, AEP loss, and their ratio (the recoverable fraction of neighbor-induced damage) versus $n$.
+
+Three findings emerge.
+First, while the farms can physically pack at the nominal gap ($n \leq 4$ for DEI-sized farms), regret \emph{grows} with $n$ but strongly sublinearly: under TurboPark at $2D$, four adversarially-ringed farms produce 1.2$\times$ (concentrated unidirectional), 1.7$\times$ (DEI), and 3.0$\times$ (moderate bidirectional) the single-farm regret---never $4\times$.
+The growth factor is largest for bidirectional roses, whose multiple energy-carrying directions each admit a damaging neighbor; under multi-neighbor conditions the bidirectional advantage seen in the single-neighbor analyses partially erodes.
+Second, the packing constraint itself caps multi-neighbor regret: five or more DEI-sized farms cannot all sit close to the target, the feasible ring jumps outward (realized gaps of $44D$ and beyond), and regret falls steeply (concentrated unidirectional TurboPark: 12.2\,\% at $n = 4$ to 3.5\,\% at $n = 8$).
+``More neighbors'' therefore \emph{does} eventually mean less regret, but through lease-geometry feasibility rather than optimization effects alone.
+Third, the recoverable fraction declines with encirclement: under TurboPark it falls from $\approx$0.6 for a single upwind farm to $\approx$0.38 at $n = 8$ for the concentrated unidirectional rose, and comparable declines appear for the other roses---surrounded by wake corridors on all sides, the conservative re-optimization has progressively fewer escape routes, so a growing share of the damage becomes irreducible.
+A greedy adversarial variant of this experiment (Appendix~\ref{app:nfarm}) corroborates the sublinear growth with a weaker optimizer configuration.
+
+For policy, worst-case single-neighbor regret multiplied by a small factor ($\approx$3 at the bidirectional extreme, $\approx$1.2 for concentrated unidirectional roses) bounds the dense-cluster case, and the bound tightens further once realistic lease geometry precludes close packing of many neighbors.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{figures/ring_regret_fw.png}
+    \caption{Ring sweep: $n$ identical-copy neighbors evenly spaced around the target, starting from the prevailing upwind bearing (FunWake schedule, $K = 500$).
+    Columns: pooled regret, AEP loss of the liberal layout, and their ratio (recoverable fraction).
+    Rows: Bastankhah (top), TurboPark (bottom).
+    Filled markers: all farms at the nominal boundary gap.
+    Open markers (shaded region): the $2D$ inter-neighbor packing constraint forces the ring outward, so realized gaps exceed the nominal value.}
+    \label{fig:ring}
+\end{figure}
 
 \section{Discussion}\label{sec:discussion}
 
@@ -429,21 +551,23 @@ No operational North Sea site in our sample reaches the high-regret corner ($a >
 \end{table}
 
 The sites cluster in the $(a, f)$ space because North Sea wind climates share a common driver: Atlantic weather systems producing dominant southwesterly winds.
-The spread in $f$ (0.18--0.54) reflects varying degrees of bidirectionality, with Princess Amalia showing the most bidirectional character ($f = 0.18$, lowest regret risk) and Lillgrund the most unidirectional ($f = 0.54$, highest regret risk among the five).
+The spread in $f$ (0.18--0.54) reflects varying degrees of bidirectionality, with Lillgrund the most unidirectional ($f = 0.54$, highest regret risk among the five).
+The Princess Amalia rose is poorly captured by the elliptical model ($R^2 = 0.49$), reflecting a residual third mode that the two-parameter ellipse cannot represent; the fitted values should be read as an approximate placement in the shape space rather than a faithful reproduction of the rose.
+A mixture-of-ellipses extension \citep{Hart2025} would be needed for full fidelity at sites with three or more directional modes; Appendix~\ref{app:mixture} explores regret under such mixture roses and finds it stays within the single-rose envelope.
 
 \subsection{Implications for North Sea cluster development}
 
 The six-fold variation in design regret across wind rose shape has direct implications for the North Sea's emerging cluster framework.
 
 \paragraph{Economic magnitude.}
-For a representative 750\,MW farm (50$\times$15\,MW), design regret of 2.5\,\% corresponds to $\sim$100\,GWh/yr.
-At a contract-for-difference strike price of 70\,EUR/MWh, this amounts to $\sim$7\,M EUR/yr, or $\sim$175\,M EUR over a 25-year operational lifetime.
-Even at the moderate regret levels observed for real North Sea sites ($\sim$1\,\%), the lifetime cost exceeds 70\,M EUR---comparable to the cost of a single turbine foundation.
-By contrast, the marginal cost of running a neighbor-aware layout optimization is negligible relative to project CAPEX.
+For a representative 750\,MW farm (50$\times$15\,MW), the realistic-scenario regret at a typical North Sea rose (DEI) spans the wake-model bracket 0.16\,\% (Bastankhah) to 1.9\,\% (TurboPark) of AEP at close spacing, i.e.\ $\sim$9--108\,GWh/yr.
+At a contract-for-difference strike price of 70\,EUR/MWh, this is $\sim$0.6--7.6\,M EUR/yr, or $\sim$16--190\,M EUR over a 25-year operational lifetime.
+Even the low end of this bracket is order-of-magnitude comparable to the cost of running a neighbor-aware layout optimization study, which is negligible relative to project CAPEX; the high end, and the concentrated-unidirectional worst case (10.6\,\% under TurboPark), represent project-material losses.
+The headline economic case is therefore: the cost of doing the analysis is small enough that even the most optimistic wake model justifies it, and under slower-recovery wake physics the stakes are tens to hundreds of millions of euros per farm.
 
 \paragraph{German Bight and southern North Sea.}
 Sites with strongly unidirectional southwesterly winds sit in the high-regret region ($f \gtrsim 0.75$).
-Here, the value of coordinated design is highest, and buffer distances of $30$--$40D$ (7--10\,km) may be needed to reduce regret below 1\,\%.
+Here, the value of coordinated design is highest: buffer distances of $30$--$40D$ (7--10\,km) are needed to bring the greedy adversarial bound below 1\,\% under Bastankhah, and under TurboPark even $40D$ leaves several percent of AEP at stake in the realistic identical-copy scenario (Table~\ref{tab:buffer-table-tp}).
 The projected 30\,\% capacity factor reduction from cluster wakes \citep{Fliegner2025} is partially a design problem, not just a physics problem: some of this loss could be mitigated by neighbor-aware layout optimization.
 
 \paragraph{Danish waters.}
@@ -454,32 +578,36 @@ However, this resilience is a property of the wind climate, not the farm---other
 \paragraph{Cross-border coordination.}
 The value of inter-farm coordination is itself wind-rose-dependent.
 Our results suggest that coordination frameworks like the ``good neighbour'' principle in the UK EN-3 guidance should be weighted by wind rose directionality.
-Fixed buffer distances---such as the NYSERDA 4\,nmi recommendation---are adequate for all sites tested but inefficient: bidirectional sites need only $\sim$$10D$ to achieve the same residual regret.
-Wind-rose-conditional buffers could allow denser development at low-risk sites without compromising high-risk ones.
+Fixed buffer distances---such as the NYSERDA 4\,nmi recommendation---are simultaneously inefficient for bidirectional sites (which need only $\sim$$10D$ under Bastankhah) and insufficient for all sites under TurboPark (Table~\ref{tab:buffer-table-tp}).
+Wind-rose-conditional buffers could allow denser development at low-risk sites without compromising high-risk ones, but setting the absolute scale requires committing to a wake model.
 
 \subsection{The convergence problem}
 
 Our most broadly applicable finding is methodological.
-Small multistart budgets---even $K = 100$---can miss substantial regret, and only at $K \geq 300$ does the estimate stabilize.
+Small multistart budgets---even $K = 100$---can miss substantial regret, and the required budget depends on the size of the regret signal relative to multistart noise: large signals (TurboPark) are captured to within a few percent by $K = 500$, while near-noise-floor signals (Bastankhah realistic scenarios) are not converged even at $K = 2000$ (Fig.~\ref{fig:funwake-convergence}).
 The cause is catastrophic cancellation: regret is a difference between two large, noisy AEP values.
 A 0.5\,\% miss in either optimization can produce a 50\,\% error in the difference.
+The convergence budget is moreover conditional on the inner optimizer: a stronger iteration schedule raises the regret estimate at every $K$, so ``converged in $K$'' does not imply ``converged'' in any absolute sense.
 
 This affects any study computing AEP differences between strategies.
-We recommend $K \geq 300$ for 50-turbine farms and proportionally more for larger farms.
-The computational cost at $K = 500$ was approximately 2\,hours per wind rose on a single AMD MI250X GCD, or 70\,GPU-hours for the full 35-case sweep.
+We recommend $K \geq 500$ for 50-turbine farms, storing per-start AEPs so that convergence can be verified by subsampling after the fact, and reporting the capture fraction alongside the regret estimate.
+The computational cost at $K = 500$ was approximately 2\,hours per wind rose on a single AMD MI250X GCD, or 70\,GPU-hours for the full 35-case sweep; the $K = 2000$ FunWake production grid cost roughly $22$ (Bastankhah) to $37$ (TurboPark) GPU-hours per $(a, f, d)$ cell.
 
 \subsection{Limitations}
 
 \paragraph{Wake model.}
-We use \citet{Bastankhah2014} with $k = 0.04$ and root-sum-of-squares superposition.
-More sophisticated models (e.g., TurbOPark) may change absolute magnitudes.
-The qualitative findings---folding dominance, directional vulnerability patterns---depend on wake corridor geometry, not magnitude, and are expected to be robust.
+Our primary sweep uses \citet{Bastankhah2014} with $k = 0.04$ and root-sum-of-squares superposition, and every cross-section and buffer-table analysis is replicated in full under TurboPark \citep{Nygaard2022} with TI = 0.06.
+The Bastankhah realistic-scenario magnitudes (0.16--0.49\,\% AEP) sit at or below the absolute uncertainty of typical engineering wake models, so they should be read as bounds on \emph{the optimization-recoverable component of inter-farm losses}, not as predictions of measured AEP differences.
+Under TurboPark the same scenarios produce 1.9--10.6\,\% of AEP (Table~\ref{tab:cross-section}, Appendix~\ref{app:robustness}): the two models bracket realistic-scenario regret over an order-of-magnitude range.
+The qualitative findings---folding dominance, monotone buffer decay, the multistart convergence requirement---are shared by both models, but the directional vulnerability pattern is not: the oblique-peak structure appears only under Bastankhah's fast wake recovery (Section~\ref{sec:cross-sections}).
+Neither model is closer to ground truth---they are both engineering parameterisations with different recovery assumptions---so the realistic-regret magnitude carries genuine wake-model uncertainty.
+Reported numbers should be read as engineering estimates within this bracket rather than universal values.
 
 \paragraph{Adversarial vs.\ realistic neighbors.}
 The greedy grid search places unconstrained individual turbines, while the cross-section uses a fixed reference farm copy.
 Neither represents a self-interested neighbor that optimizes its own AEP.
 A self-interested neighbor might concentrate turbines in high-wind upwind positions, potentially producing different regret patterns.
-This comparison is left to future work with the corrected boundary-gap methodology.
+This comparison is left to future work.
 
 \paragraph{Constant wind speed.}
 Real North Sea sites have speed--direction correlations.
@@ -489,6 +617,11 @@ If high-speed winds are concentrated in the dominant direction (common for storm
 Results may depend on the DEI polygon shape.
 Different boundaries could affect the layout optimization landscape and the potential for lateral escape from wake corridors.
 
+\paragraph{Target farm size.}
+All main-text results fix $N_t = 50$ turbines.
+Larger farms have more internal degrees of freedom for re-optimization but also more internal wake to budget against.
+Appendix~\ref{app:n_target} reports a sweep over $N_t \in \{25, 75, 100\}$ at $\{2, 10, 20, 40\}D$ buffer for two contrasting wind roses; variation across $N_t$ is at the scale of multistart noise.
+
 \paragraph{Cross-section resolution.}
 The cross-section analysis uses 24 bearings and 7 distances, which may miss fine angular structure in the regret field.
 
@@ -496,23 +629,26 @@ The cross-section analysis uses 24 bearings and 7 distances, which may miss fine
 \section{Conclusions}
 
 \begin{enumerate}
-    \item \textbf{Reliable regret estimation requires many restarts.}
-    Regret stabilizes only by $K = 300$ and does not change through $K = 2000$.
-    Any study computing AEP differences between strategies should use $K \geq 300$.
+    \item \textbf{Reliable regret estimation requires many restarts and a strong inner optimizer.}
+    With the tuned FunWake schedule, $K = 500$ captures a median 96\,\% of the $K = 2000$ regret when the signal is large (TurboPark) but only 54\,\% when it sits near the multistart noise floor (Bastankhah), and a weaker iteration schedule shifts the entire convergence curve downward.
+    Any study computing AEP differences between strategies should use $K \geq 500$, store per-start AEPs, and verify convergence by subsampling.
 
-    \item \textbf{Design regret varies six-fold across the wind rose shape space.}
-    At $K = 500$, regret ranges from 17\,GWh/yr (0.4\,\%) under bidirectional conditions to 101\,GWh/yr (2.5\,\%) under concentrated unidirectional conditions.
-    Folding ($f$, bidirectional vs.\ unidirectional) is the primary driver.
+    \item \textbf{Design regret varies several-fold across the wind rose shape space, with folding ($f$) as the primary driver.}
+    Realistic identical-copy neighbors at close spacing produce 0.19--0.49\,\% of AEP under Bastankhah and 2.0--10.6\,\% under TurboPark across the shape sweep; the concentrated unidirectional corner is the most vulnerable in both models.
 
-    \item \textbf{Buffer distance requirements are wind-rose-dependent.}
-    Concentrated unidirectional sites retain 0.4\,\% residual regret at $40D$ (9.6\,km).
-    Bidirectional sites achieve comparable levels at $10D$ (2.4\,km).
-    Wind-rose-conditional buffer standards could allow denser North Sea development at low-risk sites.
+    \item \textbf{Buffer distance requirements are wind-rose- and wake-model-dependent.}
+    Under Bastankhah, the fitted real North Sea sites require $\sim$$8$--$9D$ ($\sim$2\,km) to hold regret below 0.2\,\% of AEP.
+    Under TurboPark, holding regret below 2\,\% requires 42--60$D$ (10--14\,km) at the same sites---beyond the NYSERDA 4\,nmi recommendation.
+    Wind-rose-conditional buffer standards could allow denser North Sea development at low-risk sites, but their absolute scale requires committing to a wake model.
 
-    \item \textbf{Realistic neighbor regret is an order of magnitude below the adversarial upper bound.}
-    An identical neighboring farm placed at boundary-gap distances produces 0.1--0.4\,\% regret for multi-directional wind roses (vs.\ 0.4--2.5\,\% from adversarial individual turbines).
-    A degenerate single-direction stress test yields 1.25\,\%, peaking at bearings flanking the inflow direction.
-    The directional pattern is physically intuitive and decays with buffer distance.
+    \item \textbf{Adversarial upper bounds are only as good as the optimizer that computes them.}
+    Under Bastankhah, the greedy individual-turbine bound (0.4--2.5\,\%) exceeds realistic identical-copy regret by roughly $5\times$.
+    Under TurboPark, the realistic scenario computed with the stronger FunWake schedule (up to 10.6\,\%) overtakes the adversarial bound computed with the baseline optimizer (9.0\,\%)---under-optimization can masquerade as safety.
+    Methodology validation with a degenerate single-direction case (Appendix~\ref{app:unidir}) confirms zero regret for downwind bearings, as required by physics.
+
+    \item \textbf{Multi-neighbor regret is capped by sublinear growth and lease geometry.}
+    Ringing the target with up to four close neighbors raises regret only 1.2--3$\times$ above the single-neighbor value, with the largest growth for bidirectional roses; five or more DEI-sized farms cannot pack closely at all, and regret falls once the ring is forced outward.
+    The recoverable fraction of neighbor-induced damage declines with encirclement (from $\approx$0.6 to $\approx$0.38 under TurboPark), so single-neighbor analyses bound the dense-cluster case with a small, quantifiable margin.
 \end{enumerate}
 
 The Danish Energy Island, with its partially bidirectional wind rose ($f \approx 0.38$), sits in the low-to-moderate regret region.
@@ -527,7 +663,7 @@ The elliptical wind rose parameterization uses the edrose package \citep{Hart202
 
 \authorcontribution{
 JQ designed the study, developed the simulation framework, performed all computations, and wrote the manuscript.
-SK contributed to methodology and manuscript revision.
+SK, ES, and PM contributed to methodology and manuscript revision.
 PER supervised the research and contributed to methodology and manuscript revision.
 }
 
@@ -536,8 +672,152 @@ The authors declare no competing interests.
 }
 
 \begin{acknowledgements}
-Computational resources were provided by the LUMI supercomputer, hosted by CSC -- IT Center for Science (Finland) and the LUMI consortium.
+Computational resources were provided by the LUMI supercomputer, hosted by CSC -- IT Center for Science (Finland) and the LUMI consortium, and by the DTU Computing Center (gbar).
 \end{acknowledgements}
+
+\appendix
+\section{Single-direction methodology validation}\label{app:unidir}
+
+As a sanity check on the cross-section methodology, we ran a degenerate wind rose with all energy in a single sector (90$^\circ$, wind from the east).
+Figure~\ref{fig:unidir-aep-loss} shows AEP loss (left, no re-optimization) and design regret (right) for this case (baseline schedule, $K = 500$).
+Regret is precisely zero for all downwind bearings (225--315$^\circ$), confirming that re-optimization cannot extract benefit from a neighbor that casts no wake over the target.
+Peak regret reaches 1.25\,\% of AEP at bearings flanking the inflow; the dip directly upwind reflects that the liberal layout is already pre-adapted to self-wake from that direction.
+The converged FunWake configuration reproduces this pattern under Bastankhah (peak 1.26\,\% at 135$^\circ$), while under TurboPark the flank structure disappears and the peak sits directly upwind at 38\,\% of AEP (Section~\ref{sec:cross-sections}).
+The southeast quadrant retains non-trivial regret out to $40D$ (0.37\,\% at 135$^\circ$/$40D$); Figure~\ref{fig:unidir-flow} shows the flow field for this configuration, with the SE neighbor's wakes drifting westward and grazing the target's southern row.
+At 135$^\circ$/$40D$ the neighbor induces 0.44\,\% AEP loss, of which regret captures 0.37\,\% (re-optimization avoids $\sim$84\,\% of the damage).
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{figures/unidir_aep_loss_vs_regret.png}
+    \caption{Single-direction validation case (wind exclusively from 90$^\circ$): AEP loss (left) vs.\ design regret (right).
+    Downwind bearings have zero regret as required by physics.}
+    \label{fig:unidir-aep-loss}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.75\textwidth]{figures/unidir_flow_135deg_40D.png}
+    \caption{Flow field for 135$^\circ$/$40D$ neighbor configuration, single wind direction (9\,m/s from east).
+    White circles: target liberal layout; red circles: identical-copy neighbor at bearing 135$^\circ$, $40D$ boundary-gap.}
+    \label{fig:unidir-flow}
+\end{figure}
+
+\section{Mixture wind roses (realistic multi-modal climates)}\label{app:mixture}
+
+A single elliptical rose is a two-parameter caricature; real sites often have multiple directional modes (e.g.\ a dominant westerly plus a weaker easterly).
+We extend the analysis using \citet{Hart2025}'s mixture parameterisation, which superimposes two ellipses at independent prevailing directions with a mixing weight.
+Eight representative configurations (Fig.~\ref{fig:mixture-explore}) span orthogonal bimodal, asymmetric tri-modal, broad/narrow two-modes, North-Sea-like (SW+NE); this sweep uses the baseline schedule at $K = 500$.
+Peak regret across all mixture configurations stays within the single-rose envelope: at $d = 2D$ the worst mixture (asymmetric three-quarter, $0.41\%$) sits below the worst single rose ($a = 0.9, f = 1.0$; $0.47\%$ in the same configuration), and decays similarly with buffer.
+The regret-maximising rose is not a multi-mode superposition---a single concentrated unidirectional rose is at least as bad.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{figures/mixture_explore.png}
+    \caption{Peak regret for eight mixture-of-ellipses wind roses at $d = 2D$ (red) and $d = 20D$ (blue). All values stay within the single-rose envelope.}
+    \label{fig:mixture-explore}
+\end{figure}
+
+\section{Target farm size sensitivity}\label{app:n_target}
+
+We re-ran the cross-section at $N_t \in \{25, 50, 75, 100\}$ for the DEI rose and $(a, f) = (0.9, 1.0)$, at buffer distances $\{2, 10, 20, 40\}D$ with $K_\text{lib} = K_\text{cons} = 500$ (baseline schedule).
+The neighbor remains an identical translated copy of the target.
+Figure~\ref{fig:n-target-sensitivity} shows peak regret vs.\ buffer distance for each $N_t$.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.95\textwidth]{figures/n_target_sensitivity.png}
+    \caption{Peak regret vs.\ buffer distance at four target-farm sizes $N_t \in \{25, 50, 75, 100\}$.
+    Neighbor is identical-copy throughout.
+    Variation across $N_t$ is at the same scale as multistart noise; no monotone trend in $N_t$ is visible.}
+    \label{fig:n-target-sensitivity}
+\end{figure}
+
+\paragraph{Caveat: identical-copy is the wrong axis to upper-bound regret.}
+The above sweep keeps the neighbor as an identical copy of the target.
+This conflates target size with neighbor size, density, layout-correlation, and aspect ratio.
+A more rigorous upper-bound study would sweep the neighbor's construction (identical-copy, scaled-copy, independently-liberal-optimised in same / rotated / elongated polygon) at a range of size ratios $N_n / N_t$.
+We defer this two-dimensional sweep to follow-up work.
+
+\section{Greedy N-farm regret search}\label{app:nfarm}
+
+This is the greedy adversarial companion to the ring sweep of Section~\ref{sec:ring}: instead of evenly-spaced rings, farms are placed sequentially wherever they maximise regret.
+For two wind roses, $(a, f) = (0.9, 1.0)$ and $(0.5, 0.0)$, we greedily placed up to $N = 4$ identical-copy farms maximising regret on the target (Bastankhah, baseline schedule, $K = 300$).
+Each step scans a $24 \times 6$ grid of (bearing, buffer-distance) candidates, filters by inter-farm boundary-gap $\geq 2D$, screens by AEP loss, and runs full conservative re-optimisation for the top 8 screened candidates.
+Table~\ref{tab:nfarm} reports the regret of the $n$-farm configuration after each greedy step.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Regret (\% of AEP) of the greedy $n$-farm configuration vs.\ number of placed farms (Bastankhah, $K = 300$).}
+    \label{tab:nfarm}
+    \begin{tabular}{lcccc}
+        \toprule
+        Wind rose & $n = 1$ & $n = 2$ & $n = 3$ & $n = 4$ \\
+        \midrule
+        $a = 0.9$, $f = 1.0$ & 0.42 & 0.53 & 0.56 & 0.56 \\
+        $a = 0.5$, $f = 0.0$ & 0.68 & 1.12 & 1.02 & 1.03 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+In both cases, regret saturates well below $N \times$(single-neighbor regret): four adversarially-placed farms produce only 1.3--1.5$\times$ the single-farm regret (the two-farm configuration of the bidirectional rose peaks at 1.65$\times$), and for the bidirectional rose the third farm actually \emph{reduces} regret relative to two.
+This confirms that adding farms on multiple sides reduces re-optimisation freedom rather than compounding the recoverable damage.
+Note that these absolute magnitudes are not directly comparable to the FunWake cross-section values in Table~\ref{tab:cross-section}: here \emph{both} the liberal and conservative optimizations use the weaker baseline configuration, and a weaker liberal layout leaves more recoverable damage on the table, which can raise regret even as a weaker conservative search lowers it.
+Only the saturation trend with $N$, which is internal to this experiment, should be read from this table.
+
+\section{Wake-model robustness}\label{app:robustness}
+
+The full cross-section and buffer-table analyses are replicated under the TurboPark deficit model \citep{Nygaard2022} with ambient TI = 0.06, all other settings identical to the Bastankhah production runs.
+Table~\ref{tab:robustness} compares peak regret on the DEI rose at the converged FunWake configuration.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Wake-model sensitivity of cross-section peak regret on the DEI rose (FunWake schedule).}
+    \label{tab:robustness}
+    \begin{tabular}{lccc}
+        \toprule
+        Buffer & Bastankhah ($k = 0.04$) & TurboPark ($A = 0.04$, TI = 0.06) & Ratio \\
+        \midrule
+        $2D$  & 0.16\,\% & 1.94\,\% & 12.1$\times$ \\
+        $20D$ & 0.05\,\% & 1.03\,\% & 21.7$\times$ \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+The qualitative agreements---monotone decay with buffer distance, peaks at the closest buffer---are preserved, while absolute magnitudes disagree by an order of magnitude because TurboPark's wakes recover more slowly than Bastankhah's, so a neighbour at the same boundary gap couples more strongly to the target.
+Neither model is closer to ground truth; both are engineering parameterisations validated against partially-overlapping operational datasets, with different choices about wake recovery, blockage, and turbulence interaction.
+The two values should therefore be read as bracketing the realistic-regret magnitude under engineering wake-model uncertainty, not as competing best estimates.
+The methodological findings (catastrophic-cancellation multistart requirement, wind-rose-shape dominance, monotone buffer decay) are independent of this magnitude bracket.
+
+\paragraph{Loss-to-regret ratio.}
+The disparity in peak regret between the two wake models is best understood by comparing regret against the underlying AEP loss (liberal layout evaluated under the neighbour, no re-optimisation; Table~\ref{tab:loss-vs-regret}):
+
+\begin{table}[htbp]
+    \centering
+    \caption{Peak-bearing AEP loss vs.\ design regret on DEI under both wake models (FunWake schedule).
+    The ratio regret$/$loss is the fraction of neighbour-induced damage that target re-optimisation can recover.}
+    \label{tab:loss-vs-regret}
+    \begin{tabular}{lcccc}
+        \toprule
+        Model & Buffer & AEP loss (\% AEP) & Regret (\% AEP) & Regret$/$loss \\
+        \midrule
+        Bastankhah ($k = 0.04$)            & $2D$  & 0.39 & 0.16 & 0.41 \\
+        Bastankhah ($k = 0.04$)            & $20D$ & 0.18 & 0.05 & 0.27 \\
+        TurboPark ($A = 0.04$, TI = 0.06)  & $2D$  & 4.67 & 1.94 & 0.42 \\
+        TurboPark ($A = 0.04$, TI = 0.06)  & $20D$ & 3.07 & 1.03 & 0.34 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Three observations follow.
+First, regret is consistently $27$--$42\%$ of AEP loss: target re-optimisation recovers only a fraction of neighbour-induced damage, because wake corridors cannot be fully escaped by layout shifts.
+Second, at the converged optimization the recoverable fraction at close spacing is essentially wake-model-independent ($0.41$ vs.\ $0.42$ at $2D$).
+An earlier version of this analysis at a weaker optimizer configuration found a substantially lower TurboPark ratio ($0.20$--$0.26$), suggesting TurboPark damage was more ``irreducible''; the converged results show that apparent irreducibility was an under-optimization artifact---the recoverable fraction is itself sensitive to optimization thoroughness, reinforcing the central methodological point of this paper.
+Third, one still cannot translate buffer requirements between wake models by a single multiplier: the regret ratio varies with buffer distance ($12\times$ at $2D$, $22\times$ at $20D$), so the regret-recoverable fraction must be computed model-by-model and distance-by-distance.
+
+\paragraph{Blockage sensitivity.}
+We additionally repeated the DEI cross-section with the SelfSimilarity2020 induction/blockage model added on top of Bastankhah (baseline schedule, $K = 500$).
+Peak regret rises modestly (0.09\,\% $\to$ 0.11\,\% at $2D$; 0.05\,\% $\to$ 0.10\,\% at $20D$ in that configuration): the upstream slowdown induced by a neighboring farm shifts the deficit field in a way that gives the conservative re-optimization slightly more room to extract benefit.
+The effect is at the same order as the optimization noise floor and does not change qualitative findings.
 
 \bibliographystyle{copernicus}
 \bibliography{references}

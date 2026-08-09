@@ -1,4 +1,4 @@
-\begin{thebibliography}{14}
+\begin{thebibliography}{15}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{{\tt #1}}
 \providecommand{\urlprefix}{URL }
@@ -46,6 +46,13 @@ Fliegner, F.~J. et~al.: Cross-border cooperation to mitigate wake losses in
 \bibitem[{Hart(2025)}]{Hart2025}
 Hart, E.: Elliptical parameterisation of the wind direction rose, Wind Energy
   Science, 10, 1821--1835, \doi{10.5194/wes-10-1821-2025}, 2025.
+
+\bibitem[{Nygaard et~al.(2022)Nygaard, Poulsen, Svensson, and
+  Pedersen}]{Nygaard2022}
+Nygaard, N.~G., Poulsen, L., Svensson, E., and Pedersen, J.~G.: Large-scale
+  benchmarking of wake models for offshore wind farms, Journal of Physics:
+  Conference Series, 2265, 022\,008, \doi{10.1088/1742-6596/2265/2/022008},
+  2022.
 
 \bibitem[{{NYSERDA}(2024)}]{NYSERDA2024}
 {NYSERDA}: Analysis of Potential Turbine Layouts and Spacing Between Wind
