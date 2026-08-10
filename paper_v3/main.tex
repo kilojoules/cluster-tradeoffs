@@ -38,12 +38,13 @@ We show that regret estimates do not stabilize until $K = 500$ multistart restar
 With convergence quantified by exact subsampling of stored per-start outcomes, we map design regret across the elliptical wind rose space of Hart (2025).
 We bound regret two ways: greedy adversarial individual-turbine placement (upper bound, dominated by wind rose folding) and regret cross-sections with an identical neighboring farm (realistic scenario, representative of typical lease layouts).
 Both quantities span an order of magnitude across the two engineering wake models we test: under Bastankhah, adversarial regret is 0.4--2.5\,\% of AEP and realistic 0.16--0.49\,\%; under TurboPark, realistic regret alone reaches 1.9--10.6\,\%, overtaking the adversarial bound computed with a weaker optimizer---under-optimization can masquerade as safety.
-Both quantities are upper bounds for real planning purposes: the adversarial bound assumes a malicious neighbor; the realistic bound assumes the neighbor copies your design.
+The adversarial figure is a deliberate ceiling---it assumes a neighbor placing turbines purely to damage you---while the identical-copy figure is a specific, plausible scenario rather than a proven bound: a self-interested neighbor optimizing its own production is not covered by either, and we flag it as the main open case.
 The two wake models also disagree on where vulnerability peaks: oblique to the prevailing wind under Bastankhah's fast recovery, at or near directly upwind under TurboPark---a contrast that is unambiguous in a single-direction stress test (135$^\circ$ vs.\ 90$^\circ$ inflow).
 For policy, we invert the buffer-decay curves into a wind-rose-conditional buffer lookup table.
 Under Bastankhah, capping realistic-scenario regret at $0.2\%$ of AEP requires $\sim$$8$--$9D$ ($\sim$2\,km) for typical North Sea sites.
 Under TurboPark---which recovers wakes more slowly and pushes realistic regret an order of magnitude higher---the equivalent threshold of $2\%$ of AEP requires $42$--$60D$ (10--14\,km) for the same sites, beyond common spacing recommendations.
-Finally, ringing the target with up to eight neighboring farms shows that multi-neighbor regret grows sublinearly (1.2--3$\times$ the single-neighbor value at four close neighbors) and is ultimately capped by lease-geometry packing limits, while the recoverable fraction of the damage declines as the target is encircled.
+Finally, ringing the target with up to eight neighboring farms shows that regret is non-monotonic in the number of neighbors: it decomposes into AEP loss times the fraction a redesign can recover, and adding farms raises the first while lowering the second.
+Lease geometry caps the problem---farms $\sim$$150D$ across admit at most four close neighbors, so the many-close-neighbors case is unbuildable rather than unstudied---and a controlled experiment holding neighbor capacity fixed shows that what closes off redesign is concentrated wake mass in the energy-carrying directions rather than angular symmetry.
 The 12--22$\times$ wake-model bracket dominates any single number a policy rule could quote; rather than picking one, we tabulate both and recommend buffer policies treat the bracket explicitly.
 \end{abstract}
 
@@ -81,13 +82,13 @@ However, accurately computing these quantities reveals a methodological challeng
 Layout optimization is highly multimodal \citep{Thomas2023, ValottaRodrigues2024}, and regret---as the \emph{difference} between two optimization outcomes---amplifies the effect of local optima.
 We show that at least 500 restarts are needed for the regret estimate to stabilize---over an order of magnitude more than typical practice.
 
-This paper makes four contributions:
+This paper makes five contributions:
 \begin{enumerate}
     \item A convergence study demonstrating that hundreds of multistart optimizations are needed for reliable regret estimation---over an order of magnitude more than typical practice---and that the required budget depends on both the size of the regret signal and the strength of the inner optimizer.
     \item A systematic sweep of the wind rose shape space showing that design regret varies several-fold with directionality, with concentrated unidirectional sites most vulnerable under both wake models tested.
     \item Buffer distance analysis quantifying how neighbor separation reduces regret, how the decay rate depends on wind rose shape, and how the absolute buffer requirement depends on the wake model (2\,km vs.\ 10--14\,km for the same real sites).
     \item Regret cross-sections with a realistic identical neighbor farm under two wake models, showing that the adversarial--realistic gap and even the location of peak vulnerability (oblique vs.\ near-upwind) are wake-model-dependent, and that a realistic scenario computed with a stronger optimizer can exceed an adversarial bound computed with a weaker one.
-    \item A ring sweep over the number of neighboring farms, showing that multi-neighbor regret grows sublinearly, that lease-geometry packing limits cap it, and that the recoverable fraction of wake damage declines as a farm is encircled.
+    \item A ring sweep over the number of neighboring farms, showing that regret is non-monotonic in neighbor count, that lease geometry makes the many-close-neighbors case unbuildable, and---via a controlled experiment holding neighbor capacity and distance fixed---that concentrated wake mass rather than angular symmetry governs how much damage a redesign can recover.
 \end{enumerate}
 
 
@@ -290,7 +291,7 @@ This analysis also justifies running the supplemental far-distance DEI and singl
 
 \subsection{Wind rose shape controls design regret}\label{sec:shape}
 
-Figure~\ref{fig:heatmap} shows design regret from the greedy adversarial sweep across the $(a, f)$ space at $K = 500$ (baseline schedule; the cross-section and buffer-table analyses in Sections~\ref{sec:buffer-table}--\ref{sec:cross-sections} use the converged FunWake configuration).
+Figure~\ref{fig:heatmap} shows design regret from the greedy adversarial sweep across the $(a, f)$ space at $K = 500$ (baseline schedule, as is the buffer-decay analysis of Section~\ref{sec:buffer}; the buffer tables of Section~\ref{sec:buffer-table} and the cross-sections of Sections~\ref{sec:cross-sections}--\ref{sec:feasibility} use the converged FunWake configuration).
 Under Bastankhah, regret ranges from 17.2\,GWh (0.4\,\% of AEP) at $a = 0.5$, $f = 0.0$ to 100.6\,GWh (2.5\,\%) at $a = 0.9$, $f = 1.0$---a six-fold range.
 Under TurboPark, the same sweep yields 2.6\,\% to 9.0\,\% of AEP across $(a,f)$, with the same qualitative ordering (folding dominant, peak at $a = 0.9$, $f = 1$) but 3.5--6.5$\times$ higher magnitudes.
 
@@ -395,7 +396,7 @@ This is directly relevant to the emerging cross-border coordination frameworks f
 
 \subsection{Directional vulnerability: regret cross-sections}\label{sec:cross-sections}
 
-The greedy grid search (Sections~\ref{sec:shape}--\ref{sec:buffer}) establishes an adversarial upper bound by placing individual unconstrained turbines.
+The greedy grid search (Sections~\ref{sec:shape} and~\ref{sec:buffer}) establishes an adversarial upper bound by placing individual unconstrained turbines.
 To assess regret under more realistic conditions, we now turn to the regret cross-sections, in which an identical copy of the target farm is placed at controlled boundary-gap distances around the target (Section~\ref{sec:cross-section-method}).
 
 \paragraph{Realistic multi-directional cases.}
@@ -500,16 +501,39 @@ The perpendicular-bimodal and single-sector corners of the rose space both produ
 
 Most operating clusters expose a farm to several neighbors at once.
 To isolate how regret scales with the number of neighbors $n$---without the path-dependence of a greedy placement sequence---we place $n$ identical copies of the liberal layout at evenly spaced bearings starting from the prevailing upwind direction, each at the same nominal boundary gap, for $n = 1$--$8$ (FunWake schedule, $K = 500$, three wind roses, both wake models, nominal gaps $2D$ and $10D$).
-Copies must also respect a $2D$ boundary gap to \emph{each other}; when a ring cannot satisfy this, all offsets are scaled up by a common factor until it can, and the realized gaps are recorded.
+Copies must also respect a $2D$ boundary gap to \emph{each other}; when a ring cannot satisfy this, all offsets are scaled up by the smallest common factor that does (found by bisection), and the realized gaps are recorded.
+This inter-neighbor minimum is a modelling choice rather than a physical constant, so Appendix~\ref{app:gapsweep} sweeps it over a forty-fold range and confirms that no conclusion below depends on it.
 Figure~\ref{fig:ring} shows regret, AEP loss, and their ratio (the recoverable fraction of neighbor-induced damage) versus $n$.
 
+It is useful to read these results through the identity
+\begin{equation}\label{eq:decomp}
+    R = \underbrace{\bigl[\text{AEP}(\mathbf{x}^*_\text{lib}) - \text{AEP}(\mathbf{x}^*_\text{lib}, \mathbf{n})\bigr]}_{\text{AEP loss } L} \times \underbrace{R/L}_{\text{recoverable fraction}},
+\end{equation}
+which separates how much damage the neighbors do from how much of it a redesigned layout can avoid.
+Design regret is not a measure of damage; it is the value of foresight, and foresight is worth nothing against damage that cannot be dodged.
+
 Three findings emerge.
-First, while the farms can physically pack at the nominal gap ($n \leq 4$ for DEI-sized farms), regret \emph{grows} with $n$ but strongly sublinearly: under TurboPark at $2D$, four adversarially-ringed farms produce 1.2$\times$ (concentrated unidirectional), 1.7$\times$ (DEI), and 3.0$\times$ (moderate bidirectional) the single-farm regret---never $4\times$.
+First, while the farms can physically pack at the nominal gap ($n \leq 4$ for DEI-sized farms), regret \emph{grows} with $n$ but strongly sublinearly: under TurboPark at $2D$, four ringed farms produce 1.2$\times$ (concentrated unidirectional), 1.7$\times$ (DEI), and 3.0$\times$ (moderate bidirectional) the single-farm regret---never $4\times$.
 The growth factor is largest for bidirectional roses, whose multiple energy-carrying directions each admit a damaging neighbor; under multi-neighbor conditions the bidirectional advantage seen in the single-neighbor analyses partially erodes.
-Second, the packing constraint itself caps multi-neighbor regret: five or more DEI-sized farms cannot all sit close to the target, the feasible ring jumps outward (realized gaps of $44D$ and beyond), and regret falls steeply (concentrated unidirectional TurboPark: 12.2\,\% at $n = 4$ to 3.5\,\% at $n = 8$).
-``More neighbors'' therefore \emph{does} eventually mean less regret, but through lease-geometry feasibility rather than optimization effects alone.
-Third, the recoverable fraction declines with encirclement: under TurboPark it falls from $\approx$0.6 for a single upwind farm to $\approx$0.38 at $n = 8$ for the concentrated unidirectional rose, and comparable declines appear for the other roses---surrounded by wake corridors on all sides, the conservative re-optimization has progressively fewer escape routes, so a growing share of the damage becomes irreducible.
+Second, the two factors in Eq.~\eqref{eq:decomp} move in opposite directions as neighbors accumulate: loss rises to $n = 4$ while the recoverable fraction falls throughout (TurboPark, concentrated unidirectional: $\approx$0.6 for a single upwind farm to 0.38 at $n = 8$).
+This is why regret grows so much more slowly than the damage does, and it is a property of the decomposition rather than of the sampling.
+Third, the sharp \emph{decline} beyond $n = 4$ is a separate, geometric effect and should not be read as a continuation of the same mechanism: five or more DEI-sized farms cannot all sit close to the target, so the feasible ring jumps outward (realized gaps of $40D$ and beyond) and regret falls steeply with distance (12.2\,\% at $n = 4$ to 3.5\,\% at $n = 8$).
+The turnover in $n$ is therefore real for a planner---who is likewise bound by lease geometry---but it is a consequence of what can be built rather than of the wake physics alone.
+Section~\ref{sec:feasibility} shows this packing limit follows from farm size and is robust to our spacing rule.
 A greedy adversarial variant of this experiment (Appendix~\ref{app:nfarm}) corroborates the sublinear growth with a weaker optimizer configuration.
+
+\paragraph{What closes the escape routes.}
+The natural reading of the falling recoverable fraction is that \emph{symmetry} is responsible: a target attacked from every side has nowhere to move.
+That reading is wrong, and a controlled experiment separates the two candidate explanations.
+Holding the total neighboring capacity, the total neighboring area and the buffer gap all fixed, we divide that capacity into $n$ smaller farms spread around the target (each the target polygon scaled by $1/\sqrt{n}$ carrying $\sim N_t/n$ turbines on a regular grid), which keeps every ring at the nominal $2D$ gap through $n = 5$.
+This spreads the threat around the compass while adding nothing to it.
+The recoverable fraction \emph{rises} with $n$ rather than falling: under TurboPark from 0.51 at $n = 1$ to 0.69 at $n = 4$ (concentrated unidirectional) and from 0.19 to a maximum of 0.32 at $n = 3$ (moderate bidirectional, 0.27 at $n = 4$), the opposite of the trend in the identical-copy ring.
+Meanwhile the AEP loss follows the wind: spreading raises it under a bidirectional rose (3.9\,\% at $n = 1$ to 6.6\,\% at $n = 4$) and lowers it under a unidirectional one (12.6\,\% to 7.5\,\%), because wake is being moved into or out of the directions that carry energy.
+Because these neighbors are grid layouts rather than liberal-optimized copies, their absolute magnitudes are not directly comparable with the identical-copy ring---an optimized neighbor is the more damaging one, costing 17.7\,\% against 12.6\,\% at $n = 1$---so only the within-experiment trend should be read across the two constructions.
+
+The governing quantity is therefore not angular symmetry but the \emph{concentration of wake mass in the directions that carry energy}.
+Adding full-size farms piles mass into those directions and closes escape routes; dividing a fixed capacity narrows every individual wake corridor and opens them; concentrating the wind onto a single axis leaves one corridor that a redesigned layout can slide out of.
+All three interventions, and the single-neighbor wind-rose result of Section~\ref{sec:shape}, follow from this one statement.
 
 For policy, worst-case single-neighbor regret multiplied by a small factor ($\approx$3 at the bidirectional extreme, $\approx$1.2 for concentrated unidirectional roses) bounds the dense-cluster case, and the bound tightens further once realistic lease geometry precludes close packing of many neighbors.
 
@@ -522,6 +546,43 @@ For policy, worst-case single-neighbor regret multiplied by a small factor ($\ap
     Filled markers: all farms at the nominal boundary gap.
     Open markers (shaded region): the $2D$ inter-neighbor packing constraint forces the ring outward, so realized gaps exceed the nominal value.}
     \label{fig:ring}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{figures/mech_two_paths.png}
+    \caption{Three interventions on the same quantity, all under TurboPark (Bastankhah shown for completeness; its curves sit near the multistart noise floor).
+    (1) Concentrating the wind onto one axis, (2) adding full-size neighboring farms, (3) dividing a fixed total neighbor capacity into more, smaller farms at fixed buffer gap.
+    Symmetry alone does not predict the recoverable fraction: intervention (3) spreads the threat around the compass yet raises it.
+    Concentration of wake mass in the energy-carrying directions does.}
+    \label{fig:mechanism}
+\end{figure}
+
+\subsection{Lease geometry bounds the multi-neighbor problem}\label{sec:feasibility}
+
+The packing limit encountered above is not an artifact of our spacing rule but a property of farm size, and it can be established without any wake computation.
+A ring of $n$ neighbors must clear both the target and each other.
+Because a 50-turbine farm in the DEI polygon is itself $\sim$$150D$ across (mean radius $71D$), the ring radius is dominated by the farms' own footprint rather than by the buffer: at a $2D$ buffer the buffer contributes only $\sim$3\,\% of it.
+Figure~\ref{fig:feasibility} sweeps the requested buffer and reports the largest ring for which every smaller ring also fits.
+At the $2D$ inter-neighbor minimum used throughout, four is the largest ring that fits anywhere in the $2$--$40D$ range this study sweeps; a fifth first fits at $42D$ ($10$\,km), a sixth at $68D$ ($16$\,km), and a seventh at $98D$ ($24$\,km).
+A simple model, $n \approx \pi / \arctan(R_\text{farm}/R_\text{ring})$ with $R_\text{ring} = R_\text{farm} + d$, captures the scaling and is exact at $n = 4$, though it overestimates capacity by 0.6--0.9 farms at the larger rings because it treats the footprint as a disc.
+
+The consequence for cluster planning is that the alarming corner of the parameter space---many neighbors, all close---is not merely unstudied, it is geometrically unbuildable with same-sized farms.
+By the time six neighbors fit, they sit $16$\,km away in boundary gap---$35$--$53$\,km centroid to centroid---where regret has already collapsed.
+Dense encirclement at close range is realistic only when the neighbors are substantially smaller than the target, which is precisely the divided-capacity configuration examined above.
+
+Two caveats attach to this construction.
+The steps in Figure~\ref{fig:feasibility} are not monotone in the buffer: for an elongated footprint, equal \emph{boundary} gaps place farms at very unequal centroid radii ($85D$ to $177D$ at a $20D$ buffer), so neighbor-pair clearances rise and fall as the ring grows, and a given $n$ can fit at one buffer, fail at a larger one, and fit again beyond that.
+For the same reason our rings are evenly spaced in bearing but not in centroid distance.
+Both are consequences of using a realistic irregular concession polygon rather than a disc.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{figures/ring_feasibility.png}
+    \caption{Geometric feasibility of multi-neighbor rings---no wake model involved.
+    Left: largest ring size for which every smaller ring also fits, versus requested buffer, for several inter-neighbor minimum gaps; grey curve is the analytic estimate, grey band the buffers swept in this study.
+    Right: the arrangements at $2D$ and $80D$, showing that equal boundary gaps place farms at unequal radii.}
+    \label{fig:feasibility}
 \end{figure}
 
 \section{Discussion}\label{sec:discussion}
@@ -646,9 +707,16 @@ The cross-section analysis uses 24 bearings and 7 distances, which may miss fine
     Under TurboPark, the realistic scenario computed with the stronger FunWake schedule (up to 10.6\,\%) overtakes the adversarial bound computed with the baseline optimizer (9.0\,\%)---under-optimization can masquerade as safety.
     Methodology validation with a degenerate single-direction case (Appendix~\ref{app:unidir}) confirms zero regret for downwind bearings, as required by physics.
 
-    \item \textbf{Multi-neighbor regret is capped by sublinear growth and lease geometry.}
-    Ringing the target with up to four close neighbors raises regret only 1.2--3$\times$ above the single-neighbor value, with the largest growth for bidirectional roses; five or more DEI-sized farms cannot pack closely at all, and regret falls once the ring is forced outward.
-    The recoverable fraction of neighbor-induced damage declines with encirclement (from $\approx$0.6 to $\approx$0.38 under TurboPark), so single-neighbor analyses bound the dense-cluster case with a small, quantifiable margin.
+    \item \textbf{Multi-neighbor regret is non-monotonic, and bounded by lease geometry.}
+    Regret decomposes into AEP loss times the fraction of it a redesign can recover.
+    Adding neighbors raises the first and lowers the second, so regret peaks at intermediate ring sizes rather than growing: four close neighbors give only 1.2--3$\times$ the single-neighbor value, and beyond four, same-sized farms cannot pack close at all.
+    Because a 50-turbine farm is itself $\sim$$150D$ across, no more than four can ring a target anywhere in the $2$--$40D$ buffer range; a fifth first fits at $42D$ (10\,km), by which distance regret has collapsed.
+    The many-close-neighbors corner of the parameter space is geometrically unbuildable rather than merely unstudied.
+
+    \item \textbf{What closes off redesign is concentrated wake mass, not symmetry.}
+    Encircling a target lowers the recoverable fraction ($\approx$0.6 to 0.38 under TurboPark), which invites a symmetry explanation.
+    But dividing a \emph{fixed} neighbor capacity into more, smaller farms at the same buffer spreads the threat around the compass and \emph{raises} the recoverable fraction (0.51 to 0.69), because each individual wake corridor narrows.
+    Concentration of wake mass in the directions that carry energy, not angular symmetry, governs how much of the damage a neighbor-aware layout can avoid---and it accounts for the wind-rose result as well.
 \end{enumerate}
 
 The Danish Energy Island, with its partially bidirectional wind rose ($f \approx 0.38$), sits in the low-to-moderate regret region.
@@ -760,9 +828,31 @@ Table~\ref{tab:nfarm} reports the regret of the $n$-farm configuration after eac
 \end{table}
 
 In both cases, regret saturates well below $N \times$(single-neighbor regret): four adversarially-placed farms produce only 1.3--1.5$\times$ the single-farm regret (the two-farm configuration of the bidirectional rose peaks at 1.65$\times$), and for the bidirectional rose the third farm actually \emph{reduces} regret relative to two.
-This confirms that adding farms on multiple sides reduces re-optimisation freedom rather than compounding the recoverable damage.
+This matches the sublinear growth of the evenly-spaced ring; for why additional farms add so little recoverable damage, see the wake-mass argument of Section~\ref{sec:ring}.
 Note that these absolute magnitudes are not directly comparable to the FunWake cross-section values in Table~\ref{tab:cross-section}: here \emph{both} the liberal and conservative optimizations use the weaker baseline configuration, and a weaker liberal layout leaves more recoverable damage on the table, which can raise regret even as a weaker conservative search lowers it.
 Only the saturation trend with $N$, which is internal to this experiment, should be read from this table.
+
+\section{Sensitivity to the inter-neighbor spacing rule}\label{app:gapsweep}
+
+The ring construction of Section~\ref{sec:ring} requires a minimum boundary gap between neighboring farms, set to $2D$ throughout.
+That constant decides when a ring is forced outward and therefore shapes the whole $n > 4$ region, so we swept it over $\{0.5, 2, 10, 20\}D$---a forty-fold range---under TurboPark at a requested $2D$ buffer, for both extreme wind roses (Fig.~\ref{fig:gapsweep}).
+
+The rule changes the geometry it produces substantially: at $n = 4$ the realized target gap runs from $2.0D$ (at $0.5$ and $2D$) to $4.7D$ ($10D$) and $9.2D$ ($20D$), a $4.6\times$ range.
+Regret magnitudes respond modestly, falling by about a tenth across that span (12.2\,\% to 10.8\,\% at $n = 4$, concentrated unidirectional).
+The recoverable fraction---the quantity in which the mechanism of Section~\ref{sec:ring} is stated---moves by at most $0.044$ and usually far less.
+Regret peaks at $n = 4$ in five of the six curves; the exception is the concentrated unidirectional rose at the $20D$ setting, where $n = 2$--$4$ lie within $0.3$ percentage points of each other and the ordering within that plateau is not resolved.
+For $n \leq 3$ the neighbors are naturally $50$--$70D$ apart, so the constraint never engages and all four settings are identical by construction.
+We therefore report the $2D$ results in the main text without qualification.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{figures/gap_robustness.png}
+    \caption{Sensitivity to the inter-neighbor minimum boundary gap (TurboPark, FunWake schedule, $K = 500$, requested buffer $2D$).
+    Right column: the geometry each rule produces, which differs by up to $4.6\times$.
+    Middle column: the recoverable fraction, on which the curves collapse.
+    Shaded region: $n \leq 3$, where the rule is slack and all settings coincide.}
+    \label{fig:gapsweep}
+\end{figure}
 
 \section{Wake-model robustness}\label{app:robustness}
 

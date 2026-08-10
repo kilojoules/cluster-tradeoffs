@@ -19,23 +19,23 @@
 \@writefile{toc}{\contentsline {section}{\numberline {2}Methods}{3}{section.2}\protected@file@percent }
 \newlabel{sec:methods}{{2}{3}{Methods}{section.2}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Problem formulation}{3}{subsection.2.1}\protected@file@percent }
-\newlabel{eq:pooling}{{2}{3}{Problem formulation}{equation.2}{}}
 \citation{Bastankhah2014}
 \citation{jax2018github}
 \citation{Hart2025}
+\newlabel{eq:pooling}{{2}{4}{Problem formulation}{equation.2}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Wake model}{4}{subsection.2.2}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Wind rose parameterization}{4}{subsection.2.3}\protected@file@percent }
 \newlabel{eq:hart-cdf-q1}{{4}{4}{Wind rose parameterization}{equation.4}{}}
 \newlabel{eq:hart-sector}{{5}{4}{Wind rose parameterization}{equation.5}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {2.4}Adversarial neighbor placement: upper bound on regret}{5}{subsection.2.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.5}Regret cross-sections: realistic neighbor scenario}{5}{subsection.2.5}\protected@file@percent }
-\newlabel{sec:cross-section-method}{{2.5}{5}{Regret cross-sections: realistic neighbor scenario}{subsection.2.5}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {2.5.1}Inter-farm distance definition.}{5}{subsubsection.2.5.1}\protected@file@percent }
 \@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Greedy-grid screening snapshot at step 11/30 (10 neighbors already placed). Colored squares: candidate grid (spacing $5D$, extent $30D$ beyond target boundary), colored by the incremental AEP loss that placing a neighbor at that grid point would induce on the liberal target layout (single forward sim, no optimization). Red X markers: neighbors already placed in prior steps. Only the top 20 candidates by screening AEP loss advance to full $K$-start re-optimization in Stage 2. Dashed gray: $2D$ exclusion zone around the target polygon. White circles: target liberal layout.}}{6}{figure.caption.1}\protected@file@percent }
 \providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
 \newlabel{fig:greedy-screening}{{1}{6}{Greedy-grid screening snapshot at step 11/30 (10 neighbors already placed). Colored squares: candidate grid (spacing $5D$, extent $30D$ beyond target boundary), colored by the incremental AEP loss that placing a neighbor at that grid point would induce on the liberal target layout (single forward sim, no optimization). Red X markers: neighbors already placed in prior steps. Only the top 20 candidates by screening AEP loss advance to full $K$-start re-optimization in Stage 2. Dashed gray: $2D$ exclusion zone around the target polygon. White circles: target liberal layout}{figure.caption.1}{}}
 \citation{Quick2023sgd}
 \citation{Quick2026omae}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.5}Regret cross-sections: realistic neighbor scenario}{7}{subsection.2.5}\protected@file@percent }
+\newlabel{sec:cross-section-method}{{2.5}{7}{Regret cross-sections: realistic neighbor scenario}{subsection.2.5}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {2.5.1}Inter-farm distance definition.}{7}{subsubsection.2.5.1}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {2.5.2}Reference farm construction.}{7}{subsubsection.2.5.2}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {2.6}Multistart optimization and convergence}{7}{subsection.2.6}\protected@file@percent }
 \newlabel{sec:multistart-method}{{2.6}{7}{Multistart optimization and convergence}{subsection.2.6}{}}
@@ -47,9 +47,8 @@
 \newlabel{sec:convergence}{{3.1}{9}{Convergence study: how many starts are enough?}{subsection.3.1}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Convergence of design regret with multistart depth~$K$ (baseline schedule). Dashed gray: converged value ($K = 2000$). All configurations stabilize by $K \approx 500$ under this optimizer configuration; see Fig.~\ref {fig:funwake-convergence} for the schedule- and signal-size-dependence of this statement.}}{9}{figure.caption.3}\protected@file@percent }
 \newlabel{fig:convergence}{{3}{9}{Convergence of design regret with multistart depth~$K$ (baseline schedule). Dashed gray: converged value ($K = 2000$). All configurations stabilize by $K \approx 500$ under this optimizer configuration; see Fig.~\ref {fig:funwake-convergence} for the schedule- and signal-size-dependence of this statement}{figure.caption.3}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Design regret (GWh/yr) at selected $K$ values.}}{9}{table.caption.4}\protected@file@percent }
-\newlabel{tab:convergence}{{1}{9}{Design regret (GWh/yr) at selected $K$ values}{table.caption.4}{}}
-\citation{Quick2026omae}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Design regret (GWh/yr) at selected $K$ values.}}{10}{table.caption.4}\protected@file@percent }
+\newlabel{tab:convergence}{{1}{10}{Design regret (GWh/yr) at selected $K$ values}{table.caption.4}{}}
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {3.1.1}Per-start subsampling analysis.}{10}{subsubsection.3.1.1}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Wind rose shape controls design regret}{10}{subsection.3.2}\protected@file@percent }
 \newlabel{sec:shape}{{3.2}{10}{Wind rose shape controls design regret}{subsection.3.2}{}}
@@ -57,21 +56,22 @@
 \newlabel{fig:funwake-convergence}{{4}{11}{Multistart convergence computed exactly from stored per-start AEPs (FunWake schedule). Left: expected peak-bearing regret vs.\ start budget $K$ for representative high- and low-regret cells (exact subsample expectation; no bootstrap noise). Right: fraction of the $K = 2000$ regret captured at $K = 500$ across all 245 buffer-table cells per wake model. TurboPark (red) is converged to within a few percent at $K = 500$; Bastankhah (blue), whose regret signal sits near the multistart noise floor, is not converged even at $K = 2000$}{figure.caption.5}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Design regret across the wind rose shape space at $K = 500$. Left: absolute (GWh/yr). Right: relative (\% of AEP). Markers show fitted parameters for real North Sea sites: DEI (cyan square), Horns Rev~1 (green diamond), Lillgrund (magenta triangle), Borssele (yellow circle), and Princess Amalia (white pentagon). All real sites fall in the moderate-regret region of the shape space.}}{11}{figure.caption.6}\protected@file@percent }
 \newlabel{fig:heatmap}{{5}{11}{Design regret across the wind rose shape space at $K = 500$. Left: absolute (GWh/yr). Right: relative (\% of AEP). Markers show fitted parameters for real North Sea sites: DEI (cyan square), Horns Rev~1 (green diamond), Lillgrund (magenta triangle), Borssele (yellow circle), and Princess Amalia (white pentagon). All real sites fall in the moderate-regret region of the shape space}{figure.caption.6}{}}
-\citation{Fliegner2025}
+\citation{Quick2026omae}
 \@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Regret vs.\ folding $f$ at each concentration $a$ ($K = 500$). Monotonic increase with $f$ is consistent across all~$a$.}}{12}{figure.caption.7}\protected@file@percent }
 \newlabel{fig:regret_vs_f}{{6}{12}{Regret vs.\ folding $f$ at each concentration $a$ ($K = 500$). Monotonic increase with $f$ is consistent across all~$a$}{figure.caption.7}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Wind-rose-conditional buffer table}{12}{subsection.3.3}\protected@file@percent }
 \newlabel{sec:buffer-table}{{3.3}{12}{Wind-rose-conditional buffer table}{subsection.3.3}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.4}Buffer distance modulates regret}{12}{subsection.3.4}\protected@file@percent }
 \newlabel{sec:buffer}{{3.4}{12}{Buffer distance modulates regret}{subsection.3.4}{}}
+\citation{Fliegner2025}
 \@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Required buffer distance $d^*$ (in rotor diameters) such that peak design regret $\leq 0.2\%$ AEP, as a function of elliptical-rose parameters $(a, f)$. Bastankhah ($k = 0.04$), $K = 2000$, FunWake schedule; entries marked $>40$ denote regret that does not cross the threshold within the swept buffer range. Under TurboPark, even a $10\times $ higher threshold requires buffers beyond $40D$ over most of the shape space (Table~\ref {tab:buffer-table-tp}).}}{13}{table.caption.8}\protected@file@percent }
 \newlabel{tab:buffer-table}{{2}{13}{Required buffer distance $d^*$ (in rotor diameters) such that peak design regret $\leq 0.2\%$ AEP, as a function of elliptical-rose parameters $(a, f)$. Bastankhah ($k = 0.04$), $K = 2000$, FunWake schedule; entries marked $>40$ denote regret that does not cross the threshold within the swept buffer range. Under TurboPark, even a $10\times $ higher threshold requires buffers beyond $40D$ over most of the shape space (Table~\ref {tab:buffer-table-tp})}{table.caption.8}{}}
 \@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces \textbf  {TurboPark} buffer table $d^*(a, f; \tau = 2\%)$ in rotor diameters. $K = 2000$, FunWake schedule, TurboPark $A = 0.04$, TI = 0.06. $>40$ denotes regret that does not cross the threshold within the swept buffer range.}}{13}{table.caption.11}\protected@file@percent }
 \newlabel{tab:buffer-table-tp}{{3}{13}{\textbf {TurboPark} buffer table $d^*(a, f; \tau = 2\%)$ in rotor diameters. $K = 2000$, FunWake schedule, TurboPark $A = 0.04$, TI = 0.06. $>40$ denotes regret that does not cross the threshold within the swept buffer range}{table.caption.11}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.5}Directional vulnerability: regret cross-sections}{13}{subsection.3.5}\protected@file@percent }
-\newlabel{sec:cross-sections}{{3.5}{13}{Directional vulnerability: regret cross-sections}{subsection.3.5}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces \textbf  {Bastankhah.} Required buffer $d^*(a, f)$ at $\tau = 0.2\%$ AEP ($K = 2000$, FunWake schedule). Markers: fitted real-site placements (Horns Rev 1, Lillgrund, Borssele, Princess Amalia, DEI). The five fitted real-site placements require $d^* \approx 8$--$9D$ ($\sim $2\,km) at this threshold.}}{14}{figure.caption.9}\protected@file@percent }
 \newlabel{fig:buffer-table-contour}{{7}{14}{\textbf {Bastankhah.} Required buffer $d^*(a, f)$ at $\tau = 0.2\%$ AEP ($K = 2000$, FunWake schedule). Markers: fitted real-site placements (Horns Rev 1, Lillgrund, Borssele, Princess Amalia, DEI). The five fitted real-site placements require $d^* \approx 8$--$9D$ ($\sim $2\,km) at this threshold}{figure.caption.9}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.5}Directional vulnerability: regret cross-sections}{14}{subsection.3.5}\protected@file@percent }
+\newlabel{sec:cross-sections}{{3.5}{14}{Directional vulnerability: regret cross-sections}{subsection.3.5}{}}
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {3.5.1}Realistic multi-directional cases.}{14}{subsubsection.3.5.1}\protected@file@percent }
 \@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces \textbf  {TurboPark.} Required buffer $d^*(a, f)$ at $\tau = 2.0\%$ AEP under TurboPark ($A = 0.04$, TI = 0.06; $K = 2000$, FunWake schedule). Note the threshold is $10\times $ higher than Fig.~\ref {fig:buffer-table-contour}, because TurboPark's slower wake recovery raises realistic-scenario regret by one to two orders of magnitude. The threshold is unmet within the swept range ($d^* > 40D$) over most of the shape space, including the region containing all five fitted real sites: interpolated requirements run from $\sim $42$D$ (Princess Amalia, most bidirectional) to $\sim $60$D$ (Lillgrund, most unidirectional), i.e.\ 10--14\,km.}}{15}{figure.caption.10}\protected@file@percent }
 \newlabel{fig:buffer-table-tp-contour}{{8}{15}{\textbf {TurboPark.} Required buffer $d^*(a, f)$ at $\tau = 2.0\%$ AEP under TurboPark ($A = 0.04$, TI = 0.06; $K = 2000$, FunWake schedule). Note the threshold is $10\times $ higher than Fig.~\ref {fig:buffer-table-contour}, because TurboPark's slower wake recovery raises realistic-scenario regret by one to two orders of magnitude. The threshold is unmet within the swept range ($d^* > 40D$) over most of the shape space, including the region containing all five fitted real sites: interpolated requirements run from $\sim $42$D$ (Princess Amalia, most bidirectional) to $\sim $60$D$ (Lillgrund, most unidirectional), i.e.\ 10--14\,km}{figure.caption.10}{}}
@@ -82,7 +82,6 @@
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {3.5.2}Validation and stress test: single-direction case.}{17}{subsubsection.3.5.2}\protected@file@percent }
 \@writefile{lof}{\contentsline {figure}{\numberline {11}{\ignorespaces \textbf  {Bastankhah.} Regret cross-sections for six multi-directional wind roses ($K = 2000$ for the elliptical roses, $K = 500$ for DEI beyond $15D$; FunWake schedule; boundary-gap distances). Each panel shows design regret (\% of AEP) as a function of neighbor bearing and buffer distance for an identical copy of the target farm. Stars mark peak regret. Inset wind roses show the sector frequency distribution. All panels share the same color scale.}}{17}{figure.caption.14}\protected@file@percent }
 \newlabel{fig:cross-section}{{11}{17}{\textbf {Bastankhah.} Regret cross-sections for six multi-directional wind roses ($K = 2000$ for the elliptical roses, $K = 500$ for DEI beyond $15D$; FunWake schedule; boundary-gap distances). Each panel shows design regret (\% of AEP) as a function of neighbor bearing and buffer distance for an identical copy of the target farm. Stars mark peak regret. Inset wind roses show the sector frequency distribution. All panels share the same color scale}{figure.caption.14}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.5.3}$a$-ablation and the geometry of the elliptical rose.}{17}{subsubsection.3.5.3}\protected@file@percent }
 \@writefile{lof}{\contentsline {figure}{\numberline {12}{\ignorespaces \textbf  {TurboPark.} Same cross-sections as Fig.~\ref {fig:cross-section} under the TurboPark wake model. Peak regret is an order of magnitude larger (note the color scale) and sits at or near the prevailing upwind direction in most cases, in contrast to the oblique peaks under Bastankhah.}}{18}{figure.caption.15}\protected@file@percent }
 \newlabel{fig:cross-section-tp}{{12}{18}{\textbf {TurboPark.} Same cross-sections as Fig.~\ref {fig:cross-section} under the TurboPark wake model. Peak regret is an order of magnitude larger (note the color scale) and sits at or near the prevailing upwind direction in most cases, in contrast to the oblique peaks under Bastankhah}{figure.caption.15}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {13}{\ignorespaces \textbf  {Bastankhah.} Alternative view of the cross-section data (\emph  {constrained, identical-copy neighbor farm}---not the unconstrained greedy upper bound): peak regret over the elliptical-rose shape space $(a, f)$ at four fixed minimum buffer distances ($K = 2000$, FunWake schedule). Real-site fits overlaid as labelled markers. Hot corner (high concentration $a$ + high folding $f$, i.e.\ concentrated unidirectional) shrinks with buffer; operational North Sea sites sit in the cool moderate-shape region for all buffer choices.}}{18}{figure.caption.16}\protected@file@percent }
@@ -91,68 +90,81 @@
 \newlabel{fig:cross-section-contour-tp}{{14}{19}{\textbf {TurboPark.} Same view as Fig.~\ref {fig:cross-section-contour} but under the TurboPark wake model ($K = 2000$, FunWake schedule). Peak regret runs an order of magnitude higher across the shape space, the hot corner persists at all buffers shown, and the real sites no longer sit in a uniformly cool region. The wake-model bracket on realistic regret dominates any single number}{figure.caption.17}{}}
 \@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Peak regret from cross-sections under both wake models (FunWake schedule; boundary-gap distance). Elliptical roses at $K = 2000$; DEI mixes $K = 2000$ (near distances) and $K = 500$ (far distances); single-direction case at $K = 500$.}}{19}{table.caption.18}\protected@file@percent }
 \newlabel{tab:cross-section}{{4}{19}{Peak regret from cross-sections under both wake models (FunWake schedule; boundary-gap distance). Elliptical roses at $K = 2000$; DEI mixes $K = 2000$ (near distances) and $K = 500$ (far distances); single-direction case at $K = 500$}{table.caption.18}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.5.3}$a$-ablation and the geometry of the elliptical rose.}{20}{subsubsection.3.5.3}\protected@file@percent }
 \@writefile{lof}{\contentsline {figure}{\numberline {15}{\ignorespaces Regret vs.\ neighbor bearing as the rose concentration $a$ varies at full folding ($f = 1$, prevailing direction 270$^\circ $; baseline schedule, $K = 500$). Colored curves: $a$-sweep from perpendicular-bimodal ($a \ll 0.564$) through uniform ($a \approx 0.564$) to concentrated unidirectional ($a = 0.9$), with miniature wind-rose icons in the legend. The DEI real wind rose is overlaid for reference. Left: $2D$ buffer; right: $10D$.}}{20}{figure.caption.19}\protected@file@percent }
 \newlabel{fig:bearing-sweep}{{15}{20}{Regret vs.\ neighbor bearing as the rose concentration $a$ varies at full folding ($f = 1$, prevailing direction 270$^\circ $; baseline schedule, $K = 500$). Colored curves: $a$-sweep from perpendicular-bimodal ($a \ll 0.564$) through uniform ($a \approx 0.564$) to concentrated unidirectional ($a = 0.9$), with miniature wind-rose icons in the legend. The DEI real wind rose is overlaid for reference. Left: $2D$ buffer; right: $10D$}{figure.caption.19}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.6}Regret with multiple neighboring farms}{20}{subsection.3.6}\protected@file@percent }
 \newlabel{sec:ring}{{3.6}{20}{Regret with multiple neighboring farms}{subsection.3.6}{}}
-\citation{Hart2025}
-\@writefile{toc}{\contentsline {section}{\numberline {4}Discussion}{21}{section.4}\protected@file@percent }
-\newlabel{sec:discussion}{{4}{21}{Discussion}{section.4}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Real North Sea sites in the shape space}{21}{subsection.4.1}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces Fitted elliptical wind rose parameters for North Sea offshore sites. Data sources: Horns Rev~1 and Lillgrund from PyWake; Borssele from IEA Wind Task~55 ROWP; Princess Amalia from the python-windrose package; DEI from 10-year NEWA timeseries.}}{21}{table.caption.21}\protected@file@percent }
-\newlabel{tab:sites}{{5}{21}{Fitted elliptical wind rose parameters for North Sea offshore sites. Data sources: Horns Rev~1 and Lillgrund from PyWake; Borssele from IEA Wind Task~55 ROWP; Princess Amalia from the python-windrose package; DEI from 10-year NEWA timeseries}{table.caption.21}{}}
+\newlabel{eq:decomp}{{6}{21}{Regret with multiple neighboring farms}{equation.6}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.6.1}What closes the escape routes.}{21}{subsubsection.3.6.1}\protected@file@percent }
 \@writefile{lof}{\contentsline {figure}{\numberline {16}{\ignorespaces Ring sweep: $n$ identical-copy neighbors evenly spaced around the target, starting from the prevailing upwind bearing (FunWake schedule, $K = 500$). Columns: pooled regret, AEP loss of the liberal layout, and their ratio (recoverable fraction). Rows: Bastankhah (top), TurboPark (bottom). Filled markers: all farms at the nominal boundary gap. Open markers (shaded region): the $2D$ inter-neighbor packing constraint forces the ring outward, so realized gaps exceed the nominal value.}}{22}{figure.caption.20}\protected@file@percent }
 \newlabel{fig:ring}{{16}{22}{Ring sweep: $n$ identical-copy neighbors evenly spaced around the target, starting from the prevailing upwind bearing (FunWake schedule, $K = 500$). Columns: pooled regret, AEP loss of the liberal layout, and their ratio (recoverable fraction). Rows: Bastankhah (top), TurboPark (bottom). Filled markers: all farms at the nominal boundary gap. Open markers (shaded region): the $2D$ inter-neighbor packing constraint forces the ring outward, so realized gaps exceed the nominal value}{figure.caption.20}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Implications for North Sea cluster development}{22}{subsection.4.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.2.1}Economic magnitude.}{22}{subsubsection.4.2.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {17}{\ignorespaces Three interventions on the same quantity, all under TurboPark (Bastankhah shown for completeness; its curves sit near the multistart noise floor). (1) Concentrating the wind onto one axis, (2) adding full-size neighboring farms, (3) dividing a fixed total neighbor capacity into more, smaller farms at fixed buffer gap. Symmetry alone does not predict the recoverable fraction: intervention (3) spreads the threat around the compass yet raises it. Concentration of wake mass in the energy-carrying directions does.}}{23}{figure.caption.21}\protected@file@percent }
+\newlabel{fig:mechanism}{{17}{23}{Three interventions on the same quantity, all under TurboPark (Bastankhah shown for completeness; its curves sit near the multistart noise floor). (1) Concentrating the wind onto one axis, (2) adding full-size neighboring farms, (3) dividing a fixed total neighbor capacity into more, smaller farms at fixed buffer gap. Symmetry alone does not predict the recoverable fraction: intervention (3) spreads the threat around the compass yet raises it. Concentration of wake mass in the energy-carrying directions does}{figure.caption.21}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.7}Lease geometry bounds the multi-neighbor problem}{23}{subsection.3.7}\protected@file@percent }
+\newlabel{sec:feasibility}{{3.7}{23}{Lease geometry bounds the multi-neighbor problem}{subsection.3.7}{}}
+\citation{Hart2025}
+\@writefile{lof}{\contentsline {figure}{\numberline {18}{\ignorespaces Geometric feasibility of multi-neighbor rings---no wake model involved. Left: largest ring size for which every smaller ring also fits, versus requested buffer, for several inter-neighbor minimum gaps; grey curve is the analytic estimate, grey band the buffers swept in this study. Right: the arrangements at $2D$ and $80D$, showing that equal boundary gaps place farms at unequal radii.}}{24}{figure.caption.22}\protected@file@percent }
+\newlabel{fig:feasibility}{{18}{24}{Geometric feasibility of multi-neighbor rings---no wake model involved. Left: largest ring size for which every smaller ring also fits, versus requested buffer, for several inter-neighbor minimum gaps; grey curve is the analytic estimate, grey band the buffers swept in this study. Right: the arrangements at $2D$ and $80D$, showing that equal boundary gaps place farms at unequal radii}{figure.caption.22}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Discussion}{24}{section.4}\protected@file@percent }
+\newlabel{sec:discussion}{{4}{24}{Discussion}{section.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Real North Sea sites in the shape space}{24}{subsection.4.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces Fitted elliptical wind rose parameters for North Sea offshore sites. Data sources: Horns Rev~1 and Lillgrund from PyWake; Borssele from IEA Wind Task~55 ROWP; Princess Amalia from the python-windrose package; DEI from 10-year NEWA timeseries.}}{24}{table.caption.23}\protected@file@percent }
+\newlabel{tab:sites}{{5}{24}{Fitted elliptical wind rose parameters for North Sea offshore sites. Data sources: Horns Rev~1 and Lillgrund from PyWake; Borssele from IEA Wind Task~55 ROWP; Princess Amalia from the python-windrose package; DEI from 10-year NEWA timeseries}{table.caption.23}{}}
 \citation{Fliegner2025}
 \citation{Quick2026omae}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.2.2}German Bight and southern North Sea.}{23}{subsubsection.4.2.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.2.3}Danish waters.}{23}{subsubsection.4.2.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.2.4}Cross-border coordination.}{23}{subsubsection.4.2.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}The convergence problem}{23}{subsection.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Implications for North Sea cluster development}{25}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.2.1}Economic magnitude.}{25}{subsubsection.4.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.2.2}German Bight and southern North Sea.}{25}{subsubsection.4.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.2.3}Danish waters.}{25}{subsubsection.4.2.3}\protected@file@percent }
 \citation{Bastankhah2014}
 \citation{Nygaard2022}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Limitations}{24}{subsection.4.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.4.1}Wake model.}{24}{subsubsection.4.4.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.4.2}Adversarial vs.\ realistic neighbors.}{24}{subsubsection.4.4.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.4.3}Constant wind speed.}{24}{subsubsection.4.4.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.4.4}Single farm geometry.}{24}{subsubsection.4.4.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.4.5}Target farm size.}{25}{subsubsection.4.4.5}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.4.6}Cross-section resolution.}{25}{subsubsection.4.4.6}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {5}Conclusions}{25}{section.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.2.4}Cross-border coordination.}{26}{subsubsection.4.2.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}The convergence problem}{26}{subsection.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Limitations}{26}{subsection.4.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.4.1}Wake model.}{26}{subsubsection.4.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.4.2}Adversarial vs.\ realistic neighbors.}{27}{subsubsection.4.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.4.3}Constant wind speed.}{27}{subsubsection.4.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.4.4}Single farm geometry.}{27}{subsubsection.4.4.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.4.5}Target farm size.}{27}{subsubsection.4.4.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.4.6}Cross-section resolution.}{27}{subsubsection.4.4.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5}Conclusions}{27}{section.5}\protected@file@percent }
 \citation{Hart2025}
 \citation{Hart2025}
-\@writefile{toc}{\contentsline {section}{Appendix A: Single-direction methodology validation}{26}{appendix.A}\protected@file@percent }
-\newlabel{app:unidir}{{A}{26}{Conclusions}{appendix.A}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {A1}{\ignorespaces Single-direction validation case (wind exclusively from 90$^\circ $): AEP loss (left) vs.\ design regret (right). Downwind bearings have zero regret as required by physics.}}{27}{figure.caption.22}\protected@file@percent }
-\newlabel{fig:unidir-aep-loss}{{A1}{27}{Single-direction validation case (wind exclusively from 90$^\circ $): AEP loss (left) vs.\ design regret (right). Downwind bearings have zero regret as required by physics}{figure.caption.22}{}}
-\@writefile{toc}{\contentsline {section}{Appendix B: Mixture wind roses (realistic multi-modal climates)}{27}{appendix.B}\protected@file@percent }
-\newlabel{app:mixture}{{B}{27}{Conclusions}{appendix.B}{}}
-\@writefile{toc}{\contentsline {section}{Appendix C: Target farm size sensitivity}{27}{appendix.C}\protected@file@percent }
-\newlabel{app:n_target}{{C}{27}{Conclusions}{appendix.C}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {A2}{\ignorespaces Flow field for 135$^\circ $/$40D$ neighbor configuration, single wind direction (9\,m/s from east). White circles: target liberal layout; red circles: identical-copy neighbor at bearing 135$^\circ $, $40D$ boundary-gap.}}{28}{figure.caption.23}\protected@file@percent }
-\newlabel{fig:unidir-flow}{{A2}{28}{Flow field for 135$^\circ $/$40D$ neighbor configuration, single wind direction (9\,m/s from east). White circles: target liberal layout; red circles: identical-copy neighbor at bearing 135$^\circ $, $40D$ boundary-gap}{figure.caption.23}{}}
-\@writefile{toc}{\contentsline {subsubsection}{Appendix C0.1: Caveat: identical-copy is the wrong axis to upper-bound regret.}{28}{subsubsection.C.0.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{Appendix D: Greedy N-farm regret search}{28}{appendix.D}\protected@file@percent }
-\newlabel{app:nfarm}{{D}{28}{Conclusions}{appendix.D}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {B1}{\ignorespaces Peak regret for eight mixture-of-ellipses wind roses at $d = 2D$ (red) and $d = 20D$ (blue). All values stay within the single-rose envelope.}}{29}{figure.caption.24}\protected@file@percent }
-\newlabel{fig:mixture-explore}{{B1}{29}{Peak regret for eight mixture-of-ellipses wind roses at $d = 2D$ (red) and $d = 20D$ (blue). All values stay within the single-rose envelope}{figure.caption.24}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {C1}{\ignorespaces Peak regret vs.\ buffer distance at four target-farm sizes $N_t \in \{25, 50, 75, 100\}$. Neighbor is identical-copy throughout. Variation across $N_t$ is at the same scale as multistart noise; no monotone trend in $N_t$ is visible.}}{29}{figure.caption.25}\protected@file@percent }
-\newlabel{fig:n-target-sensitivity}{{C1}{29}{Peak regret vs.\ buffer distance at four target-farm sizes $N_t \in \{25, 50, 75, 100\}$. Neighbor is identical-copy throughout. Variation across $N_t$ is at the same scale as multistart noise; no monotone trend in $N_t$ is visible}{figure.caption.25}{}}
+\@writefile{toc}{\contentsline {section}{Appendix A: Single-direction methodology validation}{29}{appendix.A}\protected@file@percent }
+\newlabel{app:unidir}{{A}{29}{Conclusions}{appendix.A}{}}
+\@writefile{toc}{\contentsline {section}{Appendix B: Mixture wind roses (realistic multi-modal climates)}{29}{appendix.B}\protected@file@percent }
+\newlabel{app:mixture}{{B}{29}{Conclusions}{appendix.B}{}}
+\@writefile{toc}{\contentsline {section}{Appendix C: Target farm size sensitivity}{29}{appendix.C}\protected@file@percent }
+\newlabel{app:n_target}{{C}{29}{Conclusions}{appendix.C}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {A1}{\ignorespaces Single-direction validation case (wind exclusively from 90$^\circ $): AEP loss (left) vs.\ design regret (right). Downwind bearings have zero regret as required by physics.}}{30}{figure.caption.24}\protected@file@percent }
+\newlabel{fig:unidir-aep-loss}{{A1}{30}{Single-direction validation case (wind exclusively from 90$^\circ $): AEP loss (left) vs.\ design regret (right). Downwind bearings have zero regret as required by physics}{figure.caption.24}{}}
+\@writefile{toc}{\contentsline {subsubsection}{Appendix C0.1: Caveat: identical-copy is the wrong axis to upper-bound regret.}{30}{subsubsection.C.0.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{Appendix D: Greedy N-farm regret search}{30}{appendix.D}\protected@file@percent }
+\newlabel{app:nfarm}{{D}{30}{Conclusions}{appendix.D}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {A2}{\ignorespaces Flow field for 135$^\circ $/$40D$ neighbor configuration, single wind direction (9\,m/s from east). White circles: target liberal layout; red circles: identical-copy neighbor at bearing 135$^\circ $, $40D$ boundary-gap.}}{31}{figure.caption.25}\protected@file@percent }
+\newlabel{fig:unidir-flow}{{A2}{31}{Flow field for 135$^\circ $/$40D$ neighbor configuration, single wind direction (9\,m/s from east). White circles: target liberal layout; red circles: identical-copy neighbor at bearing 135$^\circ $, $40D$ boundary-gap}{figure.caption.25}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {D1}{\ignorespaces Regret (\% of AEP) of the greedy $n$-farm configuration vs.\ number of placed farms (Bastankhah, $K = 300$).}}{31}{table.caption.28}\protected@file@percent }
+\newlabel{tab:nfarm}{{D1}{31}{Regret (\% of AEP) of the greedy $n$-farm configuration vs.\ number of placed farms (Bastankhah, $K = 300$)}{table.caption.28}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {B1}{\ignorespaces Peak regret for eight mixture-of-ellipses wind roses at $d = 2D$ (red) and $d = 20D$ (blue). All values stay within the single-rose envelope.}}{32}{figure.caption.26}\protected@file@percent }
+\newlabel{fig:mixture-explore}{{B1}{32}{Peak regret for eight mixture-of-ellipses wind roses at $d = 2D$ (red) and $d = 20D$ (blue). All values stay within the single-rose envelope}{figure.caption.26}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {C1}{\ignorespaces Peak regret vs.\ buffer distance at four target-farm sizes $N_t \in \{25, 50, 75, 100\}$. Neighbor is identical-copy throughout. Variation across $N_t$ is at the same scale as multistart noise; no monotone trend in $N_t$ is visible.}}{32}{figure.caption.27}\protected@file@percent }
+\newlabel{fig:n-target-sensitivity}{{C1}{32}{Peak regret vs.\ buffer distance at four target-farm sizes $N_t \in \{25, 50, 75, 100\}$. Neighbor is identical-copy throughout. Variation across $N_t$ is at the same scale as multistart noise; no monotone trend in $N_t$ is visible}{figure.caption.27}{}}
 \citation{Nygaard2022}
-\@writefile{lot}{\contentsline {table}{\numberline {D1}{\ignorespaces Regret (\% of AEP) of the greedy $n$-farm configuration vs.\ number of placed farms (Bastankhah, $K = 300$).}}{30}{table.caption.26}\protected@file@percent }
-\newlabel{tab:nfarm}{{D1}{30}{Regret (\% of AEP) of the greedy $n$-farm configuration vs.\ number of placed farms (Bastankhah, $K = 300$)}{table.caption.26}{}}
-\@writefile{toc}{\contentsline {section}{Appendix E: Wake-model robustness}{30}{appendix.E}\protected@file@percent }
-\newlabel{app:robustness}{{E}{30}{Conclusions}{appendix.E}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {E1}{\ignorespaces Wake-model sensitivity of cross-section peak regret on the DEI rose (FunWake schedule).}}{30}{table.caption.27}\protected@file@percent }
-\newlabel{tab:robustness}{{E1}{30}{Wake-model sensitivity of cross-section peak regret on the DEI rose (FunWake schedule)}{table.caption.27}{}}
+\@writefile{toc}{\contentsline {section}{Appendix E: Sensitivity to the inter-neighbor spacing rule}{33}{appendix.E}\protected@file@percent }
+\newlabel{app:gapsweep}{{E}{33}{Conclusions}{appendix.E}{}}
+\@writefile{toc}{\contentsline {section}{Appendix F: Wake-model robustness}{33}{appendix.F}\protected@file@percent }
+\newlabel{app:robustness}{{F}{33}{Conclusions}{appendix.F}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {F1}{\ignorespaces Wake-model sensitivity of cross-section peak regret on the DEI rose (FunWake schedule).}}{33}{table.caption.30}\protected@file@percent }
+\newlabel{tab:robustness}{{F1}{33}{Wake-model sensitivity of cross-section peak regret on the DEI rose (FunWake schedule)}{table.caption.30}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {E1}{\ignorespaces Sensitivity to the inter-neighbor minimum boundary gap (TurboPark, FunWake schedule, $K = 500$, requested buffer $2D$). Right column: the geometry each rule produces, which differs by up to $4.6\times $. Middle column: the recoverable fraction, on which the curves collapse. Shaded region: $n \leq 3$, where the rule is slack and all settings coincide.}}{34}{figure.caption.29}\protected@file@percent }
+\newlabel{fig:gapsweep}{{E1}{34}{Sensitivity to the inter-neighbor minimum boundary gap (TurboPark, FunWake schedule, $K = 500$, requested buffer $2D$). Right column: the geometry each rule produces, which differs by up to $4.6\times $. Middle column: the recoverable fraction, on which the curves collapse. Shaded region: $n \leq 3$, where the rule is slack and all settings coincide}{figure.caption.29}{}}
+\@writefile{toc}{\contentsline {subsubsection}{Appendix F0.1: Loss-to-regret ratio.}{34}{subsubsection.F.0.1}\protected@file@percent }
 \bibstyle{copernicus}
 \bibdata{references}
-\@writefile{toc}{\contentsline {subsubsection}{Appendix E0.1: Loss-to-regret ratio.}{31}{subsubsection.E.0.1}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {E2}{\ignorespaces Peak-bearing AEP loss vs.\ design regret on DEI under both wake models (FunWake schedule). The ratio regret$/$loss is the fraction of neighbour-induced damage that target re-optimisation can recover.}}{31}{table.caption.28}\protected@file@percent }
-\newlabel{tab:loss-vs-regret}{{E2}{31}{Peak-bearing AEP loss vs.\ design regret on DEI under both wake models (FunWake schedule). The ratio regret$/$loss is the fraction of neighbour-induced damage that target re-optimisation can recover}{table.caption.28}{}}
-\@writefile{toc}{\contentsline {subsubsection}{Appendix E0.2: Blockage sensitivity.}{31}{subsubsection.E.0.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {F2}{\ignorespaces Peak-bearing AEP loss vs.\ design regret on DEI under both wake models (FunWake schedule). The ratio regret$/$loss is the fraction of neighbour-induced damage that target re-optimisation can recover.}}{35}{table.caption.31}\protected@file@percent }
+\newlabel{tab:loss-vs-regret}{{F2}{35}{Peak-bearing AEP loss vs.\ design regret on DEI under both wake models (FunWake schedule). The ratio regret$/$loss is the fraction of neighbour-induced damage that target re-optimisation can recover}{table.caption.31}{}}
+\@writefile{toc}{\contentsline {subsubsection}{Appendix F0.2: Blockage sensitivity.}{35}{subsubsection.F.0.2}\protected@file@percent }
 \bibcite{Bastankhah2014}{{1}{2014}{{Bastankhah and Port{\'e}-Agel}}{{}}}
 \bibcite{jax2018github}{{2}{2018}{{Bradbury et~al.}}{{Bradbury, Frostig, Hawkins, Johnson, Leary, Maclaurin, Necula, Paszke, Vander{P}las, Wanderman-{M}ilne, and Zhang}}}
 \bibcite{Canadillas2022}{{3}{2022}{{Canadillas et~al.}}{{Canadillas, Beckenbauer, Trujillo, Dorenkamper, Foreman, Neumann, and Lampert}}}
@@ -168,5 +180,5 @@
 \bibcite{Thomas2023}{{13}{2023}{{Thomas et~al.}}{{Thomas, Baker, Barter, Fleming, and Ning}}}
 \bibcite{ValottaRodrigues2024}{{14}{2024}{{Valotta~Rodrigues et~al.}}{{Valotta~Rodrigues, Pedersen, Sch{\o }ler, Quick, and R{\'e}thor{\'e}}}}
 \bibcite{Warder2025}{{15}{2025}{{Warder and Piggott}}{{}}}
-\newlabel{LastPage}{{}{32}{}{}{}}
-\gdef \@abspage@last{32}
+\newlabel{LastPage}{{}{36}{}{}{}}
+\gdef \@abspage@last{36}

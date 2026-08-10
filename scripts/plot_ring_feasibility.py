@@ -24,7 +24,7 @@ import run_ring_regret as rr
 
 D = rr.D
 FIGDIR = Path("paper_v3/figures")
-BUFFERS = [2, 5, 10, 15, 20, 30, 40, 50, 60, 70, 80, 100, 120, 150]
+BUFFERS = list(range(2, 151, 2))   # fine grid: coarse sampling misplaced the steps
 MGS = [(0.5, "C0", "--"), (2.0, "C3", "-"), (10.0, "C4", ":")]
 N_MAX_SCAN = 14
 
@@ -130,7 +130,7 @@ for k, (buf, title) in enumerate([(2, "buffer 2$D$"), (80, "buffer 80$D$")]):
 fig.text(0.5, 0.015,
          "Lease geometry bounds the multi-neighbour problem. The neighbour farms are ~150$D$ across, so the ring radius is set mostly by "
          "their own size: the buffer contributes only ~3% of it at 2$D$.\nAt the 2$D$ neighbour-to-neighbour minimum used throughout this "
-         "study, four is the largest ring that fits anywhere in the swept 2--40$D$ range; a fifth needs ~50$D$ (12 km), by which distance "
+         "study, four is the largest ring that fits anywhere in the swept 2--40$D$ range; a fifth first fits at 42$D$ (10 km), by which distance "
          "regret has already collapsed.\nCurves give the largest $n$ for which every smaller ring also fits. Right: farms sit at equal "
          "boundary gap but unequal radius, which is why the steps are not monotone.",
          ha="center", va="bottom", fontsize=9)
