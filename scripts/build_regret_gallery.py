@@ -130,6 +130,18 @@ FIGS = [
               "elongated, so equal boundary gaps place farms at very unequal radii (87D to 175D at a 20D "
               "buffer). The high-n, close-range corner of the parameter space is not conservative to "
               "ignore — it is empty."),
+    dict(file="gap_robustness.png",
+         eyebrow="does the assumption matter?",
+         title="Stress-testing the one geometric constant",
+         source="gbar",
+         body="The ring construction requires a minimum boundary gap between neighbouring farms, and "
+              "that constant was picked (2D) rather than derived — so it deserved a test, since it "
+              "decides when the ring is forced outward. Sweeping it over a forty-fold range, 0.5D to 20D, "
+              "moves the geometry it produces by up to 4.5 times and shifts regret magnitudes by around a "
+              "tenth. The recoverable fraction, which is the quantity the mechanism is actually stated in, "
+              "moves by at most 0.04 and usually less, and the peak at four neighbours survives in every "
+              "case. For three or fewer neighbours the farms sit 50 to 70D apart on their own, so the rule "
+              "never engages and all four settings are identical by construction."),
     dict(file="mech_angular_spread.png",
          eyebrow="the controlled test",
          title="Angular spread with everything else held still",
