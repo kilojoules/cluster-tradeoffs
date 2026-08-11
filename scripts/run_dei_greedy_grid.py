@@ -544,6 +544,9 @@ def main():
     parser.add_argument("--superposition", type=str, default="squaredsum",
                         choices=["squaredsum", "linearsum"],
                         help="Wake superposition model (squaredsum or linearsum)")
+    parser.add_argument("--schedule", type=str, default="sgd_baseline",
+                        choices=["sgd_baseline", "funwake_iter192"],
+                        help="Inner SGD schedule: pixwake default or FunWake iter_192")
     parser.add_argument("--output-dir", type=str, default=str(OUTPUT_DIR))
     args = parser.parse_args()
 
@@ -641,8 +644,27 @@ def main():
         additional_constant_lr_iterations=args.inner_max_iter,
         tol=1e-6,
     )
+    solve_fn = None
+    if args.schedule == "funwake_iter192":
+        import sys as _s
+        from pathlib import Path as _P
+        _s.path.insert(0, str(_P(__file__).resolve().parent))
+        from schedules import funwake_iter192
+        from scheduled_sgd import scheduled_sgd_solve
+        _apply = funwake_iter192(lr_init=args.inner_lr)
+
+        def solve_fn(objective, sx, sy, bnd, min_sp):
+            return scheduled_sgd_solve(objective, sx, sy, bnd, min_sp,
+                                       _apply, args.inner_max_iter,
+                                       lr_init=args.inner_lr)
+        print(f"Using FunWake iter_192 schedule (lr_init={args.inner_lr}, "
+              f"total_iter={args.inner_max_iter})")
+    else:
+        print("Using pixwake baseline SGD schedule")
+
     settings = GreedyGridSettings(
         sgd_settings=sgd_settings,
+        solve_fn=solve_fn,
         n_inner_starts=args.n_inner_starts,
         screen_top_k=args.screen_top_k,
         screen_chunk_size=args.screen_chunk_size,
@@ -700,6 +722,7 @@ def main():
             "n_inner_starts": args.n_inner_starts,
             "inner_max_iter": args.inner_max_iter,
             "inner_lr": args.inner_lr,
+            "schedule": args.schedule,
             "grid_pad_D": args.grid_pad_D,
             "buffer_D": args.buffer_D,
             "grid_spacing_D": args.grid_spacing_D,
