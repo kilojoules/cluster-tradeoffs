@@ -131,7 +131,7 @@ def fig_angular_spread():
     styles = [("Bastankhah", "", "C0", "o"), ("TurboPark", "_tp", "C3", "s")]
     roses = [("a0.9_f1.0", "-", "conc. unidir"), ("a0.5_f0.0", "--", "mod. bidir")]
     for wake, tag, color, mk in styles:
-        split = load_rings(f"analysis/ring_split{tag}_funwake/*/results.json")
+        split = load_rings(f"analysis/ring_split_fix{tag}_funwake/*/results.json")
         ident = load_rings(f"analysis/ring_regret{tag}_funwake/*/results.json")
         for rose, ls, rlabel in roses:
             rows = split.get(rose, {})

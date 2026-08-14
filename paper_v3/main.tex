@@ -546,10 +546,11 @@ A greedy adversarial variant of this experiment (Appendix~\ref{app:nfarm}) corro
 \paragraph{What closes the escape routes.}
 The natural reading of the falling recoverable fraction is that \emph{symmetry} is responsible: a target attacked from every side has nowhere to move.
 That reading is wrong, and a controlled experiment separates the two candidate explanations.
-Holding the total neighboring capacity, the total neighboring area and the buffer gap all fixed, we divide that capacity into $n$ smaller farms spread around the target (each the target polygon scaled by $1/\sqrt{n}$ carrying $\sim N_t/n$ turbines on a regular grid), which keeps every ring at the nominal $2D$ gap through $n = 5$.
+Holding the total neighboring capacity, the total neighboring area and the buffer gap all fixed, we divide that capacity into $n$ smaller farms spread around the target (each the target polygon scaled by $1/\sqrt{n}$ carrying $\sim N_t/n$ turbines on a regular grid: 50, 25, 17, 12 and 10 turbines for $n = 1$ to $5$), which keeps every ring at the nominal $2D$ gap throughout.
 This spreads the threat around the compass while adding nothing to it.
-The recoverable fraction \emph{rises} with $n$ rather than falling: under TurboPark from 0.51 at $n = 1$ to 0.69 at $n = 4$ (concentrated unidirectional) and from 0.19 to a maximum of 0.32 at $n = 3$ (moderate bidirectional, 0.27 at $n = 4$), the opposite of the trend in the identical-copy ring.
-Meanwhile the AEP loss follows the wind: spreading raises it under a bidirectional rose (3.9\,\% at $n = 1$ to 6.6\,\% at $n = 4$) and lowers it under a unidirectional one (12.6\,\% to 7.5\,\%), because wake is being moved into or out of the directions that carry energy.
+The recoverable fraction \emph{rises} with $n$ rather than falling: under TurboPark monotonically from 0.51 at $n = 1$ to 0.65 at $n = 5$ (concentrated unidirectional) and from 0.19 to 0.30 (moderate bidirectional), the opposite of the trend in the identical-copy ring.
+Meanwhile the AEP loss follows the wind: spreading raises it under a bidirectional rose (3.9\,\% at $n = 1$ to 7.0\,\% at $n = 5$) and lowers it under a unidirectional one (12.6\,\% to 5.6\,\% at $n = 3$, recovering to 7.2\,\% at $n = 5$), because wake is being moved into or out of the directions that carry energy.
+Under Bastankhah the same experiment points the same way for the unidirectional rose (0.21 to 0.32) but is not resolved for the bidirectional one, where the pooling clip binds at $n = 2$---the noise-floor behaviour documented in Section~\ref{sec:convergence}.
 Because these neighbors are grid layouts rather than liberal-optimized copies, their absolute magnitudes are not directly comparable with the identical-copy ring---an optimized neighbor is the more damaging one, costing 17.7\,\% against 12.6\,\% at $n = 1$---so only the within-experiment trend should be read across the two constructions.
 
 The governing quantity is therefore not angular symmetry but the \emph{concentration of wake mass in the directions that carry energy}.
@@ -768,7 +769,7 @@ The cross-section analysis uses 24 bearings and 7 distances, which may miss fine
 
     \item \textbf{What closes off redesign is concentrated wake mass, not symmetry.}
     Encircling a target lowers the recoverable fraction ($\approx$0.6 to 0.38 under TurboPark), which invites a symmetry explanation.
-    But dividing a \emph{fixed} neighbor capacity into more, smaller farms at the same buffer spreads the threat around the compass and \emph{raises} the recoverable fraction (0.51 to 0.69), because each individual wake corridor narrows.
+    But dividing a \emph{fixed} neighbor capacity into more, smaller farms at the same buffer spreads the threat around the compass and \emph{raises} the recoverable fraction (0.51 to 0.65), because each individual wake corridor narrows.
     Concentration of wake mass in the directions that carry energy, not angular symmetry, governs how much of the damage a neighbor-aware layout can avoid---and it accounts for the wind-rose result as well.
 \end{enumerate}
 

@@ -122,7 +122,7 @@ def peak_cell_fraction(path):
 
 def load_split(tag):
     series = defaultdict(dict)
-    for fp in sorted(glob.glob(f"analysis/ring_split{tag}_funwake/*/results.json")):
+    for fp in sorted(glob.glob(f"analysis/ring_split_fix{tag}_funwake/*/results.json")):
         d = json.load(open(fp))
         key = fp.split("/")[-2].rsplit("_", 1)[0]
         for r in d["rings"]:

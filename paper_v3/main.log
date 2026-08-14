@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2026.1.27)  14 AUG 2026 11:18
+This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2026.1.27)  14 AUG 2026 14:52
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -3264,42 +3264,41 @@ rboPark, concentrated unidirectional:
 
 
 [22]
-Overfull \hbox (11.85704pt too wide) in paragraph at lines 559--560
+Overfull \hbox (11.85704pt too wide) in paragraph at lines 560--561
 []\T1/ptm/m/n/10 For policy, worst-case single-neighbor regret multiplied by a 
 small factor ($\OMS/cmsy/m/n/10 ^^Y$\T1/ptm/m/n/10 3 at the bidirectional extre
 me, $\OMS/cmsy/m/n/10 ^^Y$\T1/ptm/m/n/10 1.2 for concentrated
  []
 
-<figures/ring_regret_fw.png, id=313, 1075.6185pt x 603.053pt>
+<figures/ring_regret_fw.png, id=314, 1075.6185pt x 603.053pt>
 File: figures/ring_regret_fw.png Graphic file (type png)
 <use figures/ring_regret_fw.png>
-Package pdftex.def Info: figures/ring_regret_fw.png  used on input line 563.
+Package pdftex.def Info: figures/ring_regret_fw.png  used on input line 564.
 (pdftex.def)             Requested size: 503.61377pt x 282.35834pt.
-<figures/mech_two_paths.png, id=314, 1184.425pt x 369.38pt>
+<figures/mech_two_paths.png, id=315, 1184.425pt x 369.38pt>
 File: figures/mech_two_paths.png Graphic file (type png)
 <use figures/mech_two_paths.png>
-Package pdftex.def Info: figures/mech_two_paths.png  used on input line 574.
+Package pdftex.def Info: figures/mech_two_paths.png  used on input line 575.
 (pdftex.def)             Requested size: 503.61377pt x 157.0605pt.
-
-
-[23 <./figures/ring_regret_fw.png>]
-<figures/greedy_reeval.png, id=321, 947.09834pt x 387.00584pt>
+<figures/greedy_reeval.png, id=317, 947.09834pt x 387.00584pt>
 File: figures/greedy_reeval.png Graphic file (type png)
 <use figures/greedy_reeval.png>
-Package pdftex.def Info: figures/greedy_reeval.png  used on input line 600.
+Package pdftex.def Info: figures/greedy_reeval.png  used on input line 601.
 (pdftex.def)             Requested size: 503.61377pt x 205.78531pt.
 
 
-[24 <./figures/mech_two_paths.png>]
+[23]
 
-[25 <./figures/greedy_reeval.png>]
-<figures/ring_feasibility.png, id=338, 1014.992pt x 411.5375pt>
+[24 <./figures/ring_regret_fw.png>]
+
+[25 <./figures/mech_two_paths.png> <./figures/greedy_reeval.png>]
+<figures/ring_feasibility.png, id=339, 1014.992pt x 411.5375pt>
 File: figures/ring_feasibility.png Graphic file (type png)
 <use figures/ring_feasibility.png>
-Package pdftex.def Info: figures/ring_feasibility.png  used on input line 627.
+Package pdftex.def Info: figures/ring_feasibility.png  used on input line 628.
 (pdftex.def)             Requested size: 503.61377pt x 204.19835pt.
 
-Overfull \hbox (3.63426pt too wide) in paragraph at lines 660--664
+Overfull \hbox (3.63426pt too wide) in paragraph at lines 661--665
 \T1/ptm/m/n/10 producing dominant southwesterly winds. The spread in $\OML/cmm/
 m/it/10 f$ \T1/ptm/m/n/10 (0.18--0.54) reflects varying degrees of bidirectiona
 lity, with Lillgrund
@@ -3310,13 +3309,13 @@ lity, with Lillgrund
 [26 <./figures/ring_feasibility.png>]
 
 [27]
-Overfull \hbox (12.46849pt too wide) in paragraph at lines 707--713
+Overfull \hbox (12.46849pt too wide) in paragraph at lines 708--714
 \T1/ptm/m/n/10 predictions of measured AEP differences. Under TurboPark the sam
 e scenarios produce 1.9--10.6% of AEP (Table []4[], Appendix []G[]):
  []
 
 
-Overfull \hbox (2.50168pt too wide) in paragraph at lines 707--713
+Overfull \hbox (2.50168pt too wide) in paragraph at lines 708--714
 \T1/ptm/m/n/10 the two models bracket realistic-scenario regret over an order-o
 f-magnitude range. The qualitative findings---folding dominance,
  []
@@ -3324,7 +3323,7 @@ f-magnitude range. The qualitative findings---folding dominance,
 
 
 [28]
-Overfull \hbox (1.6112pt too wide) in paragraph at lines 727--729
+Overfull \hbox (1.6112pt too wide) in paragraph at lines 728--730
 \T1/ptm/m/n/10 Real North Sea sites have speed--direction correlations. If high
 -speed winds are concentrated in the dominant direction (common
  []
@@ -3332,13 +3331,13 @@ Overfull \hbox (1.6112pt too wide) in paragraph at lines 727--729
 
 
 [29]
-Overfull \hbox (6.08698pt too wide) in paragraph at lines 750--752
+Overfull \hbox (6.08698pt too wide) in paragraph at lines 751--753
 \T1/ptm/m/n/10 identical-copy neighbors at close spacing produce 0.19--0.49% of
  AEP under Bastankhah and 2.0--10.6% under TurboPark
  []
 
 
-Overfull \hbox (3.07721pt too wide) in paragraph at lines 758--762
+Overfull \hbox (3.07721pt too wide) in paragraph at lines 759--763
 \T1/ptm/m/n/10 individual-turbine bound (0.4--2.5%) exceeds realistic identical
 -copy regret by roughly $\OT1/cmr/m/n/10 5\OMS/cmsy/m/n/10 ^^B$\T1/ptm/m/n/10 .
  Under TurboPark, the realistic
@@ -3353,16 +3352,16 @@ Overfull \hbox (3.07721pt too wide) in paragraph at lines 758--762
 File: figures/unidir_aep_loss_vs_regret.png Graphic file (type png)
 <use figures/unidir_aep_loss_vs_regret.png>
 Package pdftex.def Info: figures/unidir_aep_loss_vs_regret.png  used on input l
-ine 814.
+ine 815.
 (pdftex.def)             Requested size: 503.61377pt x 263.64272pt.
 <figures/unidir_flow_135deg_40D.png, id=430, 603.053pt x 519.1395pt>
 File: figures/unidir_flow_135deg_40D.png Graphic file (type png)
 <use figures/unidir_flow_135deg_40D.png>
 Package pdftex.def Info: figures/unidir_flow_135deg_40D.png  used on input line
- 822.
+ 823.
 (pdftex.def)             Requested size: 377.71033pt x 325.15846pt.
 
-Overfull \hbox (4.82056pt too wide) in paragraph at lines 830--835
+Overfull \hbox (4.82056pt too wide) in paragraph at lines 831--836
 \T1/ptm/m/n/10 decays similarly with buffer. The regret-maximising rose is not 
 a multi-mode superposition---a single concentrated unidirectional
  []
@@ -3373,10 +3372,10 @@ a multi-mode superposition---a single concentrated unidirectional
 <figures/mixture_explore.png, id=441, 714.67pt x 389.455pt>
 File: figures/mixture_explore.png Graphic file (type png)
 <use figures/mixture_explore.png>
-Package pdftex.def Info: figures/mixture_explore.png  used on input line 838.
+Package pdftex.def Info: figures/mixture_explore.png  used on input line 839.
 (pdftex.def)             Requested size: 428.07477pt x 233.27664pt.
 
-Overfull \hbox (2.40935pt too wide) in paragraph at lines 845--848
+Overfull \hbox (2.40935pt too wide) in paragraph at lines 846--849
 \T1/ptm/m/n/10 We re-ran the cross-section at $\OML/cmm/m/it/10 N[] \OMS/cmsy/m
 /n/10 2 f\OT1/cmr/m/n/10 25\OML/cmm/m/it/10 ; \OT1/cmr/m/n/10 50\OML/cmm/m/it/1
 0 ; \OT1/cmr/m/n/10 75\OML/cmm/m/it/10 ; \OT1/cmr/m/n/10 100\OMS/cmsy/m/n/10 g$
@@ -3388,36 +3387,37 @@ ances $\OMS/cmsy/m/n/10 f\OT1/cmr/m/n/10 2\OML/cmm/m/it/10 ; \OT1/cmr/m/n/10 10
 cmsy/m/n/10 g\OML/cmm/m/it/10 D$
  []
 
-<figures/n_target_sensitivity.png, id=443, 931.48pt x 353.7215pt>
-File: figures/n_target_sensitivity.png Graphic file (type png)
-<use figures/n_target_sensitivity.png>
-Package pdftex.def Info: figures/n_target_sensitivity.png  used on input line 8
-51.
-(pdftex.def)             Requested size: 478.43153pt x 181.68015pt.
 
 
 [33 <./figures/unidir_flow_135deg_40D.png>]
+<figures/n_target_sensitivity.png, id=449, 931.48pt x 353.7215pt>
+File: figures/n_target_sensitivity.png Graphic file (type png)
+<use figures/n_target_sensitivity.png>
+Package pdftex.def Info: figures/n_target_sensitivity.png  used on input line 8
+52.
+(pdftex.def)             Requested size: 478.43153pt x 181.68015pt.
 
-[34 <./figures/mixture_explore.png> <./figures/n_target_sensitivity.png>]
 
-[35]
-<figures/gap_robustness.png, id=471, 1073.611pt x 567.721pt>
+[34 <./figures/mixture_explore.png>]
+
+[35 <./figures/n_target_sensitivity.png>]
+<figures/gap_robustness.png, id=472, 1073.611pt x 567.721pt>
 File: figures/gap_robustness.png Graphic file (type png)
 <use figures/gap_robustness.png>
-Package pdftex.def Info: figures/gap_robustness.png  used on input line 918.
+Package pdftex.def Info: figures/gap_robustness.png  used on input line 919.
 (pdftex.def)             Requested size: 503.61377pt x 266.30914pt.
 
 
 [36]
 
 [37 <./figures/gap_robustness.png>]
-Overfull \hbox (10.13055pt too wide) in paragraph at lines 977--980
+Overfull \hbox (10.13055pt too wide) in paragraph at lines 978--981
 \T1/ptm/m/n/10 We additionally repeated the DEI cross-section with the SelfSimi
 larity2020 induction/blockage model added on top of Bastankhah
  []
 
 
-Overfull \hbox (10.81534pt too wide) in paragraph at lines 977--980
+Overfull \hbox (10.81534pt too wide) in paragraph at lines 978--981
 \T1/ptm/m/n/10 (baseline schedule, $\OML/cmm/m/it/10 K \OT1/cmr/m/n/10 = 500$\T
 1/ptm/m/n/10 ). Peak regret rises modestly (0.09% $\OMS/cmsy/m/n/10 !$ \T1/ptm/
 m/n/10 0.11% at $\OT1/cmr/m/n/10 2\OML/cmm/m/it/10 D$\T1/ptm/m/n/10 ; 0.05% $\O
@@ -3426,14 +3426,16 @@ $ \T1/ptm/m/n/10 in that configuration):
  []
 
 
-Overfull \hbox (0.11137pt too wide) in paragraph at lines 977--980
+Overfull \hbox (0.11137pt too wide) in paragraph at lines 978--981
 \T1/ptm/m/n/10 the upstream slowdown induced by a neighboring farm shifts the d
 eficit field in a way that gives the conservative re-optimization
  []
 
-(./main.bbl
 
-[38]
+
+[38] (./main.bbl
+
+[39]
 Underfull \hbox (badness 5954) in paragraph at lines 11--14
 []\T1/ptm/m/n/9 Bastankhah, M. and Porté-Agel, F.: A new analytical model for w
 ind-turbine wakes, Renewable Energy, 70, 116--123,
@@ -3441,15 +3443,15 @@ ind-turbine wakes, Renewable Energy, 70, 116--123,
 
 )
 
-[39] (./main.aux)
+[40] (./main.aux)
  ***********
 LaTeX2e <2024-11-01> patch level 2
 L3 programming layer <2021/03/21>
  ***********
  ) 
 Here is how much of TeX's memory you used:
- 19530 strings out of 473190
- 287143 string characters out of 5715800
+ 19531 strings out of 473190
+ 287150 string characters out of 5715800
  750821 words of memory out of 5000000
  42328 multiletter control sequences out of 15000+600000
  608277 words of font info for 109 fonts, out of 8000000 for 9000
@@ -3477,10 +3479,10 @@ xmf-dist/fonts/type1/public/amsfonts/symbols/msam10.pfb></usr/local/texlive/202
 exmf-dist/fonts/type1/urw/times/utmb8a.pfb></usr/local/texlive/2025/texmf-dist/
 fonts/type1/urw/times/utmr8a.pfb></usr/local/texlive/2025/texmf-dist/fonts/type
 1/urw/times/utmri8a.pfb>
-Output written on main.pdf (39 pages, 5992180 bytes).
+Output written on main.pdf (40 pages, 5986724 bytes).
 PDF statistics:
- 648 PDF objects out of 1000 (max. 8388607)
- 509 compressed objects within 6 object streams
- 162 named destinations out of 1000 (max. 500000)
+ 654 PDF objects out of 1000 (max. 8388607)
+ 514 compressed objects within 6 object streams
+ 163 named destinations out of 1000 (max. 500000)
  121 words of extra memory for PDF output out of 10000 (max. 10000000)
 
