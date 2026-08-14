@@ -109,11 +109,21 @@ for key, cfg in MODELS.items():
     tau = cfg["tau_plot"]
     fig, ax = plt.subplots(1, 1, figsize=(8.5, 6))
     A_g, F_g = np.meshgrid(A_VALS, F_VALS, indexing="ij")
-    Z = np.where(np.isinf(d_star[tau]), 60, d_star[tau])
-    levels = [2, 5, 10, 15, 20, 30, 40, 60]
+    # Censored cells (threshold never crossed within the swept range) are shown
+    # as a hatched region, not painted with a placeholder value.
+    Zc = d_star[tau]
+    Z = np.ma.masked_invalid(np.where(np.isinf(Zc), np.nan, Zc))
+    levels = [2, 5, 10, 15, 20, 30, 40]
+    ax.contourf(A_g, F_g, np.isinf(Zc).astype(float), levels=[0.5, 1.5],
+                colors="none", hatches=["////"])
     im = ax.contourf(A_g, F_g, Z, levels=levels, cmap="YlOrRd", extend="max")
     cs = ax.contour(A_g, F_g, Z, levels=levels, colors="k", linewidths=0.4, alpha=0.5)
     ax.clabel(cs, inline=True, fontsize=7, fmt="%.0f$D$")
+    if np.isinf(Zc).any():
+        from matplotlib.patches import Patch
+        ax.legend(handles=[Patch(facecolor="white", edgecolor="k", hatch="////",
+                                 label=f"$d^*$ censored ($>{max(D_VALS)}D$)")],
+                  loc="lower left", fontsize=7.5, framealpha=0.95)
     fig.colorbar(im, ax=ax, label=fr"Required buffer $d^*$ ($D$) for $\tau={tau}\%$ AEP")
     for name, a, f, marker, color in SITES:
         ax.plot(a, f, marker, markerfacecolor=color, markeredgecolor="black",
@@ -152,12 +162,29 @@ for key, cfg in MODELS.items():
             v = d_star[tau][i, j]
             row.append("   --" if np.isnan(v) else (">40D " if np.isinf(v) else f"{v:>5.1f}"))
         print(*row)
-    Z_t = np.where(np.isinf(d_star[tau]), 60, d_star[tau])
-    interp = RegularGridInterpolator((np.array(A_VALS), np.array(F_VALS)), Z_t,
-                                     method="linear", bounds_error=False, fill_value=np.nan)
+    # Site read-out must NOT interpolate through censored cells. A cell marked
+    # inf means the threshold was never crossed within the swept range (<=40D);
+    # substituting a finite placeholder there manufactures a number. Report the
+    # site as censored whenever any cell it interpolates from is censored.
+    Zc = d_star[tau]
+    finite = RegularGridInterpolator(
+        (np.array(A_VALS), np.array(F_VALS)), np.where(np.isinf(Zc), np.nan, Zc),
+        method="linear", bounds_error=False, fill_value=np.nan)
+    censored_frac = RegularGridInterpolator(
+        (np.array(A_VALS), np.array(F_VALS)), np.isinf(Zc).astype(float),
+        method="linear", bounds_error=False, fill_value=np.nan)
+    d_max = max(D_VALS)
     for name, a, f, _, _ in SITES:
-        v = float(interp([[a, f]])[0])
-        print(f"  {name:<14} a={a:.3f} f={f:.3f}: d*({tau}%)={v:5.1f}D ({v * D_M / 1000:.1f}km)")
+        cf = float(censored_frac([[a, f]])[0])
+        v = float(finite([[a, f]])[0])
+        if cf > 0:
+            note = ("all bracketing cells censored" if cf >= 1.0
+                    else f"{100*cf:.0f}% of bracketing cells censored")
+            print(f"  {name:<16} a={a:.3f} f={f:.3f}: d*({tau}%) > {d_max}D "
+                  f"(> {d_max * D_M / 1000:.1f} km)  [{note}]")
+        else:
+            print(f"  {name:<16} a={a:.3f} f={f:.3f}: d*({tau}%) = {v:5.1f}D "
+                  f"({v * D_M / 1000:.1f} km)")
 
     summary = {
         "schedule": "funwake_iter192", "k_inner": 2000,

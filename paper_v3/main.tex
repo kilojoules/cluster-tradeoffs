@@ -42,7 +42,7 @@ The adversarial figure is a deliberate ceiling---it assumes a neighbor placing t
 The two wake models also disagree on where vulnerability peaks: oblique to the prevailing wind under Bastankhah's fast recovery, at or near directly upwind under TurboPark---a contrast that is unambiguous in a single-direction stress test (135$^\circ$ vs.\ 90$^\circ$ inflow).
 For policy, we invert the buffer-decay curves into a wind-rose-conditional buffer lookup table.
 Under Bastankhah, capping realistic-scenario regret at $0.2\%$ of AEP requires $\sim$$8$--$9D$ ($\sim$2\,km) for typical North Sea sites.
-Under TurboPark---which recovers wakes more slowly and pushes realistic regret an order of magnitude higher---the equivalent threshold of $2\%$ of AEP requires $42$--$60D$ (10--14\,km) for the same sites, beyond common spacing recommendations.
+Under TurboPark---which recovers wakes more slowly and pushes realistic regret an order of magnitude higher---the equivalent $2\%$ threshold is never reached anywhere within the swept range at any of those sites, so the requirement there is censored at $>40D$ ($>9.6$\,km), already beyond common spacing recommendations.
 Finally, ringing the target with up to eight neighboring farms shows that regret is non-monotonic in the number of neighbors: it decomposes into AEP loss times the fraction a redesign can recover, and adding farms raises the first while lowering the second.
 Lease geometry caps the problem---farms $\sim$$150D$ across admit at most four close neighbors, so the many-close-neighbors case is unbuildable rather than unstudied---and a controlled experiment holding neighbor capacity fixed shows that what closes off redesign is concentrated wake mass in the energy-carrying directions rather than angular symmetry.
 The 12--22$\times$ wake-model bracket dominates any single number a policy rule could quote; rather than picking one, we tabulate both and recommend buffer policies treat the bracket explicitly.
@@ -86,7 +86,7 @@ This paper makes five contributions:
 \begin{enumerate}
     \item A convergence study demonstrating that hundreds of multistart optimizations are needed for reliable regret estimation---over an order of magnitude more than typical practice---and that the required budget depends on both the size of the regret signal and the strength of the inner optimizer.
     \item A systematic sweep of the wind rose shape space showing that design regret varies several-fold with directionality, with concentrated unidirectional sites most vulnerable under both wake models tested.
-    \item Buffer distance analysis quantifying how neighbor separation reduces regret, how the decay rate depends on wind rose shape, and how the absolute buffer requirement depends on the wake model (2\,km vs.\ 10--14\,km for the same real sites).
+    \item Buffer distance analysis quantifying how neighbor separation reduces regret, how the decay rate depends on wind rose shape, and how the absolute buffer requirement depends on the wake model ($\sim$2\,km under Bastankhah, versus a requirement still unmet at 9.6\,km under TurboPark, for the same real sites).
     \item Regret cross-sections with a realistic identical neighbor farm under two wake models, showing that the adversarial--realistic gap and even the location of peak vulnerability (oblique vs.\ near-upwind) are wake-model-dependent, and that a realistic scenario computed with a stronger optimizer can exceed an adversarial bound computed with a weaker one.
     \item A ring sweep over the number of neighboring farms, showing that regret is non-monotonic in neighbor count, that lease geometry makes the many-close-neighbors case unbuildable, and---via a controlled experiment holding neighbor capacity and distance fixed---that concentrated wake mass rather than angular symmetry governs how much damage a redesign can recover.
 \end{enumerate}
@@ -109,7 +109,9 @@ We therefore include the liberal layout itself as one of the candidate starts in
 \begin{equation}\label{eq:pooling}
     R = \max(\text{best conservative AEP},\; \text{AEP of liberal layout with neighbors}) - \text{AEP of liberal layout with neighbors}.
 \end{equation}
-This \emph{regret pooling} step does not bias the result upward in expectation: the conservative search inherits the liberal layout as a free starting point, so the pooled value equals the conservative AEP whenever the search finds anything at least as good as the liberal layout, and falls back to the liberal AEP otherwise---which is the correct answer when the conservative optimum has not been resolved beyond the liberal one.
+This \emph{regret pooling} step is a one-sided clip, and it is upward-biased whenever it binds: it replaces a negative measurement with zero but never the reverse.
+On the Bastankhah grid the clip binds in 1102 of 5880 evaluations (18.7\,\%) and raises the mean regret from 2.24 to 2.44\,GWh, an inflation of 8.8\,\%; under TurboPark, whose signal is far above the noise, it binds rarely and the inflation is negligible.
+We retain the clip because a negative value is not physically meaningful---the conservative search has access to the liberal layout's design space---but the frequency with which it binds is itself a diagnostic that the underlying search has not resolved the conservative optimum, and we report it rather than treating the pooled value as unbiased.
 The same trick is needed for any AEP-difference study where $R \geq 0$ holds in theory but optimization is imperfect.
 
 \subsection{Wake model}
@@ -163,13 +165,13 @@ Fitting the DEI wind rose with the elliptical model yields $a \approx 0.64$, $f 
 \subsection{Adversarial neighbor placement: upper bound on regret}
 
 To establish a worst-case upper bound on design regret, we place individual neighbor turbines using a greedy grid search.
-A candidate grid with $5D$ spacing extends $30D$ from the target boundary, minus a $2D$ exclusion buffer.
+A candidate grid with $5D$ spacing extends beyond the target boundary, minus a $2D$ exclusion buffer. The extent differs between the two production sweeps ($50D$ for Bastankhah, giving 1567 candidates; $200D$ for TurboPark, giving 10373), which matters: enlarging the grid admits more distant, less damaging candidates and so is not neutral (Appendix~\ref{app:gridextent}).
 At each of 30 greedy steps, the single candidate maximizing incremental regret is selected.
 Evaluating regret at every candidate would require a full $K$-start conservative optimization per candidate (thousands of SGD solves per step); instead we use a two-stage screen-then-evaluate scheme.
 \emph{Stage 1 (cheap screening):} for every remaining candidate, we compute the AEP loss that placing a turbine there would induce on the \emph{liberal} layout---a single forward wake simulation, no inner optimization.
-\emph{Stage 2 (full evaluation):} the top 20 candidates by screening AEP loss receive full $K$-start conservative re-optimization; the one producing the highest regret is selected and placed.
+\emph{Stage 2 (full evaluation):} the top few candidates by screening AEP loss receive full $K$-start conservative re-optimization; the one producing the highest regret is selected and placed. Production runs used the top 5 candidates for the elliptical-rose sweeps and 8--10 for the DEI case.
 This reduces per-step cost by a factor of 20-25 at the same final result, exploiting the strong correlation between raw AEP loss (which any upwind position induces) and the eventual regret after re-optimization.
-Figure~\ref{fig:greedy-screening} shows a mid-greedy snapshot with 10 neighbors already placed, the screening AEP-loss field over the candidate grid, and the top 20 candidates that would be fully evaluated at the next step.
+Figure~\ref{fig:greedy-screening} shows a mid-greedy snapshot, the screening AEP-loss field over the candidate grid, and the candidates that would be fully evaluated at the next step.
 
 \begin{figure}[htbp]
     \centering
@@ -177,7 +179,7 @@ Figure~\ref{fig:greedy-screening} shows a mid-greedy snapshot with 10 neighbors 
     \caption{Greedy-grid screening snapshot at step 11/30 (10 neighbors already placed).
     Colored squares: candidate grid (spacing $5D$, extent $30D$ beyond target boundary), colored by the incremental AEP loss that placing a neighbor at that grid point would induce on the liberal target layout (single forward sim, no optimization).
     Red X markers: neighbors already placed in prior steps.
-    Only the top 20 candidates by screening AEP loss advance to full $K$-start re-optimization in Stage 2.
+    Only the top few candidates by screening AEP loss advance to full $K$-start re-optimization in Stage 2 (5 in the production sweeps).
     Dashed gray: $2D$ exclusion zone around the target polygon.
     White circles: target liberal layout.}
     \label{fig:greedy-screening}
@@ -219,12 +221,13 @@ The resulting polar map separates bearing and distance effects and reveals wheth
 
 Each layout optimization uses gradient-based stochastic gradient descent (SGD) \citep{Quick2023sgd}.
 Two iteration schedules are used.
-The greedy grid sweep uses a baseline schedule (constant learning rate followed by decay, 5000 iterations).
+The greedy grid sweep uses a baseline schedule: a constant learning-rate phase of 5000 steps followed by a 5000-step decay phase, i.e.\ 10000 gradient steps in total.
 All cross-section and buffer-table production runs use a tuned learning-rate schedule (referred to as the \emph{FunWake} schedule below; 5000 iterations), obtained by an automated schedule search on the liberal layout problem.
-At equal iteration count, the tuned schedule consistently reaches higher-AEP optima than the baseline schedule, which matters for regret: an under-optimized inner solver systematically underestimates the conservative optimum and hence the regret (Section~\ref{sec:convergence}).
+Note that the two schedules therefore do \emph{not} run the same number of gradient steps: the baseline takes 10000 and FunWake 5000, so FunWake reaches higher-AEP optima at half the step count rather than at parity.
+This matters for regret because an under-optimized inner solver mis-estimates the conservative optimum---and, as Section~\ref{sec:optimizer-effect} shows by holding a neighbour configuration fixed and varying only the schedule, that mis-estimation is worth a factor of 1.1--2.1 in the reported number.
 
 Restarts include grid initialization, the liberal layout (ensuring regret pooling), and random polygon-sampled positions.
-The liberal layout is included as a conservative candidate to guarantee non-negative regret by construction.
+The liberal layout is included as one of the conservative \emph{restarts}; because the solver returns its final iterate rather than the best iterate seen, this does not by itself guarantee $R \geq 0$, and non-negativity is imposed by the explicit clip in Eq.~\eqref{eq:pooling}.
 Following the convergence analysis of \citet{Quick2026omae}, who found $\sim$400 starts needed for 66-turbine liberal layout convergence, we perform a dedicated convergence study for the regret computation (Section~\ref{sec:convergence}).
 
 Production configurations: $K = 500$ with the baseline schedule for the greedy grid sweep (upper bound); $K_\text{lib} = K_\text{cons} = 2000$ with the FunWake schedule for the elliptical-rose cross-sections, the buffer tables, and the near-distance DEI cells; and $K_\text{lib} = K_\text{cons} = 500$ with the FunWake schedule for the far-distance DEI cells and the single-direction case.
@@ -244,7 +247,7 @@ A $5 \times 5$ reference neighbor farm is placed at a fixed bearing and distance
     \includegraphics[width=\textwidth]{figures/convergence.png}
     \caption{Convergence of design regret with multistart depth~$K$ (baseline schedule).
     Dashed gray: converged value ($K = 2000$).
-    All configurations stabilize by $K \approx 500$ under this optimizer configuration; see Fig.~\ref{fig:funwake-convergence} for the schedule- and signal-size-dependence of this statement.}
+    Most of the gain is realised by $K \approx 500$, but four of the six configurations step up again beyond it (Table~\ref{tab:convergence}); see Fig.~\ref{fig:funwake-convergence} for the schedule- and signal-size-dependence of this statement.}
     \label{fig:convergence}
 \end{figure}
 
@@ -252,20 +255,31 @@ A $5 \times 5$ reference neighbor farm is placed at a fixed bearing and distance
     \centering
     \caption{Design regret (GWh/yr) at selected $K$ values.}
     \label{tab:convergence}
-    \begin{tabular}{lcccc}
+    \begin{tabular}{lcccccc}
         \toprule
-        Configuration & $K{=}100$ & $K{=}300$ & $K{=}500$ & $K{=}2000$ \\
+        & \multicolumn{6}{c}{Design regret (GWh/yr) at start budget $K$} \\
+        \cmidrule(l){2-7}
+        Configuration & $100$ & $300$ & $500$ & $2000$ & $3000$ & $5000$ \\
         \midrule
-        Conc.\ unidir.\ ($5D$)  & 15.9 & 26.2 & 26.2 & 26.6 \\
-        Conc.\ unidir.\ ($20D$) & 67.9 & 79.3 & 79.3 & 79.3 \\
-        Mod.\ bidir.\ ($5D$)    & 43.1 & 43.6 & 43.6 & 43.6 \\
+        \multicolumn{7}{l}{\emph{Bastankhah}} \\
+        \quad Conc.\ unidir.\ ($5D$)  & 15.9 & 26.2 & 26.2 & 26.6 & 26.6 & 27.4 \\
+        \quad Conc.\ unidir.\ ($20D$) & 67.9 & 79.3 & 79.3 & 79.3 & 79.3 & 79.3 \\
+        \quad Mod.\ bidir.\ ($5D$)    & 43.1 & 43.6 & 43.6 & 43.6 & \textbf{52.6} & 52.6 \\
+        \midrule
+        \multicolumn{7}{l}{\emph{TurboPark}} \\
+        \quad Conc.\ unidir.\ ($5D$)  & 72.1 & 72.1 & 75.7 & \textbf{111.1} & 111.1 & 111.1 \\
+        \quad Conc.\ unidir.\ ($20D$) & 30.1 & 45.9 & 54.3 & 54.3 & 54.3 & 55.8 \\
+        \quad Mod.\ bidir.\ ($5D$)    & 57.7 & 57.7 & 57.7 & 60.5 & 60.5 & \textbf{67.2} \\
         \bottomrule
     \end{tabular}
 \end{table}
 
 At $K = 100$, the concentrated unidirectional case at $5D$ still underestimates regret by $\sim$40\,\%, because the landscape has many local optima with similar standalone AEP but different neighbor-present AEP.
-All configurations stabilize by $K = 500$ under this optimizer configuration.
-SGD iteration convergence is much faster: at $K = 500$, regret at 5000 iterations is within 3\,\% of the 10000-iteration value.
+Most of the gain is realised by $K = 500$, but---and this is the more important observation---\emph{none} of these curves is flat thereafter.
+Four of the six configurations take a further discrete step upward beyond $K = 500$: the Bastankhah moderate-bidirectional case jumps 21\,\% at $K = 3000$, and the TurboPark concentrated-unidirectional case jumps 47\,\% at $K = 2000$ and a further 11\,\% by $K = 5000$ on the far-buffer case.
+Because the estimator is a running maximum over starts it can only increase with budget, so every value in Table~\ref{tab:convergence} is a lower bound, and we have not established an upper one.
+We therefore do not claim convergence at any budget tested; we claim that $K \lesssim 100$ is indefensible and that reported magnitudes should be read as lower bounds that grow slowly with budget.
+SGD iteration convergence is better behaved: at $K = 500$, regret at 5000 iterations is within 3\,\% of the 10000-iteration value.
 
 The root cause is catastrophic cancellation: regret is a \emph{difference} between two large AEP values, so a 0.5\,\% error in either optimization can produce a 50\,\% error in regret.
 This applies to any study computing AEP differences between strategies---robust optimization, Pareto analysis, or inter-farm coordination assessments.
@@ -329,6 +343,10 @@ The DEI wind rose ($a \approx 0.64$, $f \approx 0.38$) falls in the moderate-reg
 For policy use, we invert the cross-section buffer-decay curves.
 At each $(a, f)$ on the elliptical-rose grid we ran the cross-section at seven buffer distances $\{2, 5, 10, 15, 20, 30, 40\}D$ with $K_\text{lib} = K_\text{cons} = 2000$ and the FunWake schedule, took the peak-bearing regret $R(d; a, f)$, and inverted to find the smallest $d^*$ at which $R \leq \tau$.
 Because the two wake models produce regret magnitudes an order of magnitude apart, each is inverted at thresholds matched to its own scale: $\tau \in \{0.1, 0.2, 0.3\}\%$ AEP for Bastankhah and $\tau \in \{1, 2, 5\}\%$ AEP for TurboPark.
+Two post-processing choices in this inversion should be stated explicitly because they affect the reported $d^*$.
+First, measured $R(d)$ is not monotone in $d$---multistart noise produces local excursions---so before inverting we take the running maximum from the far end inward, which enforces the monotone decay the policy reading assumes.
+This is a conservative choice: it can only move $d^*$ outward, and removing it lowers the Bastankhah site values from $7.6$--$9.3D$ to $5.8$--$8.5D$.
+Second, where $R$ never falls below $\tau$ within the swept range we treat $d^*$ as \emph{censored} at $>40D$ rather than extrapolating; censored cells are hatched in the contours and are never interpolated through when reading off site values.
 Table~\ref{tab:buffer-table} reports Bastankhah $d^*$ at $\tau = 0.2\%$; Figure~\ref{fig:buffer-table-contour} shows the corresponding contour with the five real North Sea sites overlaid, and Figure~\ref{fig:buffer-table-decay} shows the underlying decay curves for both wake models.
 
 \begin{table}[htbp]
@@ -354,7 +372,8 @@ Table~\ref{tab:buffer-table} reports Bastankhah $d^*$ at $\tau = 0.2\%$; Figure~
     \includegraphics[width=0.9\textwidth]{figures/buffer_table_tp_contour_fw.png}
     \caption{\textbf{TurboPark.} Required buffer $d^*(a, f)$ at $\tau = 2.0\%$ AEP under TurboPark ($A = 0.04$, TI = 0.06; $K = 2000$, FunWake schedule).
     Note the threshold is $10\times$ higher than Fig.~\ref{fig:buffer-table-contour}, because TurboPark's slower wake recovery raises realistic-scenario regret by one to two orders of magnitude.
-    The threshold is unmet within the swept range ($d^* > 40D$) over most of the shape space, including the region containing all five fitted real sites: interpolated requirements run from $\sim$42$D$ (Princess Amalia, most bidirectional) to $\sim$60$D$ (Lillgrund, most unidirectional), i.e.\ 10--14\,km.}
+    Hatching marks cells where the threshold is never reached within the swept range, so $d^*$ is censored at $>40D$ rather than measured.
+    That censored region covers most of the shape space, including every one of the five fitted real sites; we therefore report their requirement as $>40D$ ($>9.6$\,km) and deliberately do not interpolate a finite value through censored cells.}
     \label{fig:buffer-table-tp-contour}
 \end{figure}
 
@@ -558,6 +577,31 @@ For policy, worst-case single-neighbor regret multiplied by a small factor ($\ap
     \label{fig:mechanism}
 \end{figure}
 
+\subsection{How much of a regret number is the optimizer?}\label{sec:optimizer-effect}
+
+Every regret value in this paper is the output of two nested optimizations, so it is worth measuring directly how much of it the inner solver determines.
+We do this by holding a neighbour configuration completely fixed---the 30 turbines placed by a completed greedy search---and re-computing regret twice, once with each schedule, on the same multistart set.
+Only the inner optimizer differs.
+
+Across four wind roses and both wake models, the tuned schedule raises measured regret in every case, by 1.10--2.13$\times$ (median 1.41$\times$); the largest effects appear where regret is smallest.
+Under-optimization therefore depresses these estimates, which is the direction that makes an inadequately optimized study look reassuring.
+
+Two cautions follow, and they cut against a naive reading of that ratio.
+First, the sign is not guaranteed. A weak \emph{conservative} search lowers regret, but a weak \emph{liberal} search finds a layout that is more exposed to neighbours and so raises it; which dominates is configuration-specific, and we observe both (the multi-farm experiment of Appendix~\ref{app:nfarm}, run at a lower budget, reports \emph{higher} regret than its converged counterpart).
+``We under-optimized, therefore we are conservative'' is not a valid inference in either direction.
+Second, this experiment measures the optimizer's effect at a fixed configuration; it does not establish what a stronger search would have \emph{found}.
+A greedy configuration is co-adapted to the liberal layout it was built against, and because that layout is not stored it cannot be reused: re-evaluating the same neighbours against an equally good but different liberal optimum reproduces the reported value within 25\,\% in six of eight cases but not in the other two.
+Adversarial-search outputs should accordingly be read as ``the worst found under this configuration with this optimizer'', not as bounds.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{figures/greedy_reeval.png}
+    \caption{Optimizer effect at fixed neighbour configuration.
+    Left: the same 30 placed neighbours and the same multistart set, evaluated under both schedules; the tuned schedule raises measured regret by 1.1--2.1$\times$.
+    Right: the same re-evaluation against the originally reported value, showing that most---but not all---cells reproduce.}
+    \label{fig:optimizer-effect}
+\end{figure}
+
 \subsection{Lease geometry bounds the multi-neighbor problem}\label{sec:feasibility}
 
 The packing limit encountered above is not an artifact of our spacing rule but a property of farm size, and it can be established without any wake computation.
@@ -699,7 +743,7 @@ The cross-section analysis uses 24 bearings and 7 distances, which may miss fine
 
     \item \textbf{Buffer distance requirements are wind-rose- and wake-model-dependent.}
     Under Bastankhah, the fitted real North Sea sites require $\sim$$8$--$9D$ ($\sim$2\,km) to hold regret below 0.2\,\% of AEP.
-    Under TurboPark, holding regret below 2\,\% requires 42--60$D$ (10--14\,km) at the same sites---beyond the NYSERDA 4\,nmi recommendation.
+    Under TurboPark the same 2\,\% threshold is not reached at any of those sites within the $40D$ we swept, so the requirement is censored at $>40D$ ($>9.6$\,km)---already beyond the NYSERDA 4\,nmi recommendation, with the true value unresolved.
     Wind-rose-conditional buffer standards could allow denser North Sea development at low-risk sites, but their absolute scale requires committing to a wake model.
 
     \item \textbf{Adversarial upper bounds are only as good as the optimizer that computes them.}
@@ -831,6 +875,20 @@ In both cases, regret saturates well below $N \times$(single-neighbor regret): f
 This matches the sublinear growth of the evenly-spaced ring; for why additional farms add so little recoverable damage, see the wake-mass argument of Section~\ref{sec:ring}.
 Note that these absolute magnitudes are not directly comparable to the FunWake cross-section values in Table~\ref{tab:cross-section}: here \emph{both} the liberal and conservative optimizations use the weaker baseline configuration, and a weaker liberal layout leaves more recoverable damage on the table, which can raise regret even as a weaker conservative search lowers it.
 Only the saturation trend with $N$, which is internal to this experiment, should be read from this table.
+
+\section{The greedy search is not a maximiser over its candidate grid}\label{app:gridextent}
+
+The greedy grid search is described as establishing an adversarial ceiling, which presumes that enlarging the candidate set cannot lower the result: a maximiser over a superset should not score below a maximiser over a subset.
+We can test this directly, because two Bastankhah sweeps exist that differ \emph{only} in grid extent---\,$50D$ of padding (1567 candidates) and $200D$ (10373 candidates)---at the same wake model, the same $K = 500$, and the same 30 placements.
+
+The larger grid gives a \emph{lower} regret in 33 of 35 shape cells, with a mean of 1.14\,\% against 1.48\,\% and a worst case of 1.80\,\% falling to 0.82\,\% ($2.2\times$) at $a = 0.9$, $f = 0.0$.
+A superset cannot genuinely contain a worse maximum, so this is a property of the search rather than of the problem: the two-stage screen-then-evaluate scheme ranks candidates by the AEP loss they inflict on the \emph{liberal} layout, only the top few advance to full evaluation, and the greedy path is sequential, so a changed candidate set diverts the whole trajectory.
+Enlarging the grid dilutes the screened shortlist and can steer the search down a worse path.
+
+Two consequences for how the greedy numbers in this paper should be read.
+The Bastankhah sweep quoted in Section~\ref{sec:shape} uses the $50D$ grid and the TurboPark sweep uses $200D$, so the two are not merely different wake models but different search domains, and the cross-model ratio inherits that.
+More importantly, the greedy output is a \emph{lower} bound on the worst achievable regret---the largest value any search happened to find---and calling it a ceiling is only defensible relative to the scenario class (individual unconstrained turbines rather than farms), not relative to the search.
+We report it on that basis throughout.
 
 \section{Sensitivity to the inter-neighbor spacing rule}\label{app:gapsweep}
 

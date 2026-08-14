@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2026.1.27)  10 AUG 2026 14:42
+This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2026.1.27)  14 AUG 2026 10:23
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -3102,7 +3102,7 @@ Overfull \hbox (21.53027pt too wide) in paragraph at lines 71--76
 [2]
 
 [3]
-Overfull \hbox (19.61317pt too wide) in paragraph at lines 127--129
+Overfull \hbox (19.61317pt too wide) in paragraph at lines 129--131
 \T1/ptm/m/n/10 from a unit-area ellipse with semi-major axis $\OML/cmm/m/it/10 
 a$ \T1/ptm/m/n/10 (along the prevailing-direction axis) and semi-minor axis $\O
 ML/cmm/m/it/10 b \OT1/cmr/m/n/10 = 1\OML/cmm/m/it/10 =\OT1/cmr/m/n/10 (\OML/cmm
@@ -3112,142 +3112,144 @@ ML/cmm/m/it/10 b \OT1/cmr/m/n/10 = 1\OML/cmm/m/it/10 =\OT1/cmr/m/n/10 (\OML/cmm
 
 
 [4]
-<figures/greedy_screening_snapshot.png, id=95, 743.9795pt x 685.3605pt>
+<figures/greedy_screening_snapshot.png, id=96, 743.9795pt x 685.3605pt>
 File: figures/greedy_screening_snapshot.png Graphic file (type png)
 <use figures/greedy_screening_snapshot.png>
 Package pdftex.def Info: figures/greedy_screening_snapshot.png  used on input l
-ine 176.
+ine 178.
 (pdftex.def)             Requested size: 428.07477pt x 394.34067pt.
 
 
 [5]
 
 [6 <./figures/greedy_screening_snapshot.png>]
-<figures/radar_schematic.png, id=112, 587.19376pt x 719.44785pt>
+<figures/radar_schematic.png, id=114, 587.19376pt x 719.44785pt>
 File: figures/radar_schematic.png Graphic file (type png)
 <use figures/radar_schematic.png>
-Package pdftex.def Info: figures/radar_schematic.png  used on input line 210.
+Package pdftex.def Info: figures/radar_schematic.png  used on input line 212.
 (pdftex.def)             Requested size: 327.34587pt x 401.07669pt.
 
 
 [7]
 
 [8 <./figures/radar_schematic.png>]
-<figures/convergence.png, id=139, 1148.73164pt x 637.4214pt>
+<figures/convergence.png, id=142, 1148.73164pt x 637.4214pt>
 File: figures/convergence.png Graphic file (type png)
 <use figures/convergence.png>
-Package pdftex.def Info: figures/convergence.png  used on input line 244.
+Package pdftex.def Info: figures/convergence.png  used on input line 247.
 (pdftex.def)             Requested size: 503.61377pt x 279.44502pt.
 
 
-[9 <./figures/convergence.png>]
-<figures/funwake_convergence.png, id=153, 786.5385pt x 360.547pt>
+[9]
+
+[10 <./figures/convergence.png>]
+<figures/funwake_convergence.png, id=166, 786.5385pt x 360.547pt>
 File: figures/funwake_convergence.png Graphic file (type png)
 <use figures/funwake_convergence.png>
-Package pdftex.def Info: figures/funwake_convergence.png  used on input line 28
-4.
+Package pdftex.def Info: figures/funwake_convergence.png  used on input line 29
+8.
 (pdftex.def)             Requested size: 503.61377pt x 230.8538pt.
-<figures/edrose_heatmap_k500.png, id=159, 988.6536pt x 391.34206pt>
+
+
+[11 <./figures/funwake_convergence.png>]
+<figures/edrose_heatmap_k500.png, id=183, 988.6536pt x 391.34206pt>
 File: figures/edrose_heatmap_k500.png Graphic file (type png)
 <use figures/edrose_heatmap_k500.png>
-Package pdftex.def Info: figures/edrose_heatmap_k500.png  used on input line 30
-0.
+Package pdftex.def Info: figures/edrose_heatmap_k500.png  used on input line 31
+4.
 (pdftex.def)             Requested size: 503.61377pt x 199.34892pt.
-
-
-[10]
-
-[11 <./figures/funwake_convergence.png> <./figures/edrose_heatmap_k500.png>]
-<figures/regret_vs_f.png, id=179, 570.57166pt x 353.03896pt>
+<figures/regret_vs_f.png, id=185, 570.57166pt x 353.03896pt>
 File: figures/regret_vs_f.png Graphic file (type png)
 <use figures/regret_vs_f.png>
-Package pdftex.def Info: figures/regret_vs_f.png  used on input line 315.
+Package pdftex.def Info: figures/regret_vs_f.png  used on input line 329.
 (pdftex.def)             Requested size: 327.34587pt x 202.5433pt.
 
-(./tables/buffer_table_fw.tex)
-<figures/buffer_table_contour_fw.png, id=186, 510.708pt x 397.485pt>
+
+[12 <./figures/edrose_heatmap_k500.png>] (./tables/buffer_table_fw.tex)
+<figures/buffer_table_contour_fw.png, id=198, 510.708pt x 397.485pt>
 File: figures/buffer_table_contour_fw.png Graphic file (type png)
 <use figures/buffer_table_contour_fw.png>
 Package pdftex.def Info: figures/buffer_table_contour_fw.png  used on input lin
-e 345.
+e 363.
 (pdftex.def)             Requested size: 453.24931pt x 352.77798pt.
-<figures/buffer_table_tp_contour_fw.png, id=187, 510.708pt x 397.485pt>
+<figures/buffer_table_tp_contour_fw.png, id=199, 510.708pt x 397.485pt>
 File: figures/buffer_table_tp_contour_fw.png Graphic file (type png)
 <use figures/buffer_table_tp_contour_fw.png>
 Package pdftex.def Info: figures/buffer_table_tp_contour_fw.png  used on input 
-line 354.
+line 372.
 (pdftex.def)             Requested size: 453.24931pt x 352.77798pt.
- (./tables/buffer_table_tp_fw.tex)
-<figures/buffer_table_decay_fw.png, id=189, 938.707pt x 396.682pt>
+
+(./tables/buffer_table_tp_fw.tex)
+<figures/buffer_table_decay_fw.png, id=201, 938.707pt x 396.682pt>
 File: figures/buffer_table_decay_fw.png Graphic file (type png)
 <use figures/buffer_table_decay_fw.png>
 Package pdftex.def Info: figures/buffer_table_decay_fw.png  used on input line 
-371.
+390.
 (pdftex.def)             Requested size: 503.61377pt x 212.81898pt.
-<figures/buffer_decay_k500.png, id=191, 642.4803pt x 427.1157pt>
-File: figures/buffer_decay_k500.png Graphic file (type png)
-<use figures/buffer_decay_k500.png>
-Package pdftex.def Info: figures/buffer_decay_k500.png  used on input line 383.
-
-(pdftex.def)             Requested size: 402.89255pt x 267.83951pt.
 
 
-[12 <./figures/regret_vs_f.png>]
-
-[13]
+[13 <./figures/regret_vs_f.png>]
 
 [14 <./figures/buffer_table_contour_fw.png>]
 
 [15 <./figures/buffer_table_tp_contour_fw.png>]
+<figures/buffer_decay_k500.png, id=225, 642.4803pt x 427.1157pt>
+File: figures/buffer_decay_k500.png Graphic file (type png)
+<use figures/buffer_decay_k500.png>
+Package pdftex.def Info: figures/buffer_decay_k500.png  used on input line 402.
 
-[16 <./figures/buffer_table_decay_fw.png> <./figures/buffer_decay_k500.png>]
-<figures/cross_section_fixed_fw.png, id=244, 2061.1404pt x 414.1071pt>
+(pdftex.def)             Requested size: 402.89255pt x 267.83951pt.
+
+
+[16 <./figures/buffer_table_decay_fw.png>]
+
+[17 <./figures/buffer_decay_k500.png>]
+<figures/cross_section_fixed_fw.png, id=258, 2061.1404pt x 414.1071pt>
 File: figures/cross_section_fixed_fw.png Graphic file (type png)
 <use figures/cross_section_fixed_fw.png>
 Package pdftex.def Info: figures/cross_section_fixed_fw.png  used on input line
- 423.
+ 442.
 (pdftex.def)             Requested size: 503.61377pt x 101.18225pt.
-<figures/cross_section_fixed_tp_fw.png, id=245, 2057.88824pt x 414.1071pt>
+<figures/cross_section_fixed_tp_fw.png, id=259, 2057.88824pt x 414.1071pt>
 File: figures/cross_section_fixed_tp_fw.png Graphic file (type png)
 <use figures/cross_section_fixed_tp_fw.png>
 Package pdftex.def Info: figures/cross_section_fixed_tp_fw.png  used on input l
-ine 434.
+ine 453.
 (pdftex.def)             Requested size: 503.61377pt x 101.34023pt.
-<figures/regret_contour_at_buffer_fw.png, id=247, 929.071pt x 347.2975pt>
+<figures/regret_contour_at_buffer_fw.png, id=261, 929.071pt x 347.2975pt>
 File: figures/regret_contour_at_buffer_fw.png Graphic file (type png)
 <use figures/regret_contour_at_buffer_fw.png>
 Package pdftex.def Info: figures/regret_contour_at_buffer_fw.png  used on input
- line 442.
+ line 461.
 (pdftex.def)             Requested size: 503.61377pt x 188.25327pt.
-<figures/regret_contour_at_buffer_tp_fw.png, id=248, 922.647pt x 347.2975pt>
+<figures/regret_contour_at_buffer_tp_fw.png, id=262, 922.647pt x 347.2975pt>
 File: figures/regret_contour_at_buffer_tp_fw.png Graphic file (type png)
 <use figures/regret_contour_at_buffer_tp_fw.png>
 Package pdftex.def Info: figures/regret_contour_at_buffer_tp_fw.png  used on in
-put line 451.
+put line 470.
 (pdftex.def)             Requested size: 503.61377pt x 189.56749pt.
 
 
-[17 <./figures/cross_section_fixed_fw.png>]
+[18 <./figures/cross_section_fixed_fw.png> <./figures/cross_section_fixed_tp_fw
+.png>]
 
-[18 <./figures/cross_section_fixed_tp_fw.png> <./figures/regret_contour_at_buff
-er_fw.png>]
-
-[19 <./figures/regret_contour_at_buffer_tp_fw.png>]
-<figures/bearing_sweep.png, id=274, 1076.46165pt x 462.528pt>
+[19 <./figures/regret_contour_at_buffer_fw.png> <./figures/regret_contour_at_bu
+ffer_tp_fw.png>]
+<figures/bearing_sweep.png, id=281, 1076.46165pt x 462.528pt>
 File: figures/bearing_sweep.png Graphic file (type png)
 <use figures/bearing_sweep.png>
-Package pdftex.def Info: figures/bearing_sweep.png  used on input line 490.
+Package pdftex.def Info: figures/bearing_sweep.png  used on input line 509.
 (pdftex.def)             Requested size: 503.61377pt x 216.39305pt.
 
 
-[20 <./figures/bearing_sweep.png>]
-Overfull \hbox (18.56094pt too wide) in paragraph at lines 515--524
+[20]
+Overfull \hbox (18.56094pt too wide) in paragraph at lines 534--543
 \T1/ptm/m/n/10 roses, whose multiple energy-carrying directions each admit a da
 maging neighbor; under multi-neighbor conditions the bidirectional
  []
 
 
-Overfull \hbox (5.94576pt too wide) in paragraph at lines 515--524
+Overfull \hbox (5.94576pt too wide) in paragraph at lines 534--543
 \T1/ptm/m/n/10 neighbors accumulate: loss rises to $\OML/cmm/m/it/10 n \OT1/cmr
 /m/n/10 = 4$ \T1/ptm/m/n/10 while the recoverable fraction falls throughout (Tu
 rboPark, concentrated unidirectional:
@@ -3255,35 +3257,43 @@ rboPark, concentrated unidirectional:
 
 
 
-[21]
-Overfull \hbox (11.85704pt too wide) in paragraph at lines 538--539
+[21 <./figures/bearing_sweep.png>]
+Overfull \hbox (11.85704pt too wide) in paragraph at lines 557--558
 []\T1/ptm/m/n/10 For policy, worst-case single-neighbor regret multiplied by a 
 small factor ($\OMS/cmsy/m/n/10 ^^Y$\T1/ptm/m/n/10 3 at the bidirectional extre
 me, $\OMS/cmsy/m/n/10 ^^Y$\T1/ptm/m/n/10 1.2 for concentrated
  []
 
-<figures/ring_regret_fw.png, id=299, 1075.6185pt x 603.053pt>
+<figures/ring_regret_fw.png, id=304, 1075.6185pt x 603.053pt>
 File: figures/ring_regret_fw.png Graphic file (type png)
 <use figures/ring_regret_fw.png>
-Package pdftex.def Info: figures/ring_regret_fw.png  used on input line 542.
+Package pdftex.def Info: figures/ring_regret_fw.png  used on input line 561.
 (pdftex.def)             Requested size: 503.61377pt x 282.35834pt.
-<figures/mech_two_paths.png, id=300, 1184.425pt x 369.38pt>
+<figures/mech_two_paths.png, id=305, 1184.425pt x 369.38pt>
 File: figures/mech_two_paths.png Graphic file (type png)
 <use figures/mech_two_paths.png>
-Package pdftex.def Info: figures/mech_two_paths.png  used on input line 553.
+Package pdftex.def Info: figures/mech_two_paths.png  used on input line 572.
 (pdftex.def)             Requested size: 503.61377pt x 157.0605pt.
 
 
-[22 <./figures/ring_regret_fw.png>]
-<figures/ring_feasibility.png, id=308, 1014.992pt x 411.5375pt>
+[22]
+<figures/greedy_reeval.png, id=313, 947.09834pt x 387.00584pt>
+File: figures/greedy_reeval.png Graphic file (type png)
+<use figures/greedy_reeval.png>
+Package pdftex.def Info: figures/greedy_reeval.png  used on input line 598.
+(pdftex.def)             Requested size: 503.61377pt x 205.78531pt.
+
+
+[23 <./figures/ring_regret_fw.png>]
+
+[24 <./figures/mech_two_paths.png> <./figures/greedy_reeval.png>]
+<figures/ring_feasibility.png, id=329, 1014.992pt x 411.5375pt>
 File: figures/ring_feasibility.png Graphic file (type png)
 <use figures/ring_feasibility.png>
-Package pdftex.def Info: figures/ring_feasibility.png  used on input line 581.
+Package pdftex.def Info: figures/ring_feasibility.png  used on input line 625.
 (pdftex.def)             Requested size: 503.61377pt x 204.19835pt.
 
-
-[23 <./figures/mech_two_paths.png>]
-Overfull \hbox (3.63426pt too wide) in paragraph at lines 614--618
+Overfull \hbox (3.63426pt too wide) in paragraph at lines 658--662
 \T1/ptm/m/n/10 producing dominant southwesterly winds. The spread in $\OML/cmm/
 m/it/10 f$ \T1/ptm/m/n/10 (0.18--0.54) reflects varying degrees of bidirectiona
 lity, with Lillgrund
@@ -3291,38 +3301,38 @@ lity, with Lillgrund
 
 
 
-[24 <./figures/ring_feasibility.png>]
-
 [25]
-Overfull \hbox (10.80846pt too wide) in paragraph at lines 660--666
+
+[26 <./figures/ring_feasibility.png>]
+
+[27]
+Overfull \hbox (12.46849pt too wide) in paragraph at lines 704--710
 \T1/ptm/m/n/10 predictions of measured AEP differences. Under TurboPark the sam
-e scenarios produce 1.9--10.6% of AEP (Table []4[], Appendix []F[]):
+e scenarios produce 1.9--10.6% of AEP (Table []4[], Appendix []G[]):
  []
 
 
-Overfull \hbox (2.50168pt too wide) in paragraph at lines 660--666
+Overfull \hbox (2.50168pt too wide) in paragraph at lines 704--710
 \T1/ptm/m/n/10 the two models bracket realistic-scenario regret over an order-o
 f-magnitude range. The qualitative findings---folding dominance,
  []
 
 
-
-[26]
-Overfull \hbox (1.6112pt too wide) in paragraph at lines 674--676
+Overfull \hbox (1.6112pt too wide) in paragraph at lines 718--720
 \T1/ptm/m/n/10 Real North Sea sites have speed--direction correlations. If high
 -speed winds are concentrated in the dominant direction (common
  []
 
 
-Overfull \hbox (6.08698pt too wide) in paragraph at lines 697--699
+
+[28]
+Overfull \hbox (6.08698pt too wide) in paragraph at lines 741--743
 \T1/ptm/m/n/10 identical-copy neighbors at close spacing produce 0.19--0.49% of
  AEP under Bastankhah and 2.0--10.6% under TurboPark
  []
 
 
-
-[27]
-Overfull \hbox (3.07721pt too wide) in paragraph at lines 705--709
+Overfull \hbox (3.07721pt too wide) in paragraph at lines 749--753
 \T1/ptm/m/n/10 individual-turbine bound (0.4--2.5%) exceeds realistic identical
 -copy regret by roughly $\OT1/cmr/m/n/10 5\OMS/cmsy/m/n/10 ^^B$\T1/ptm/m/n/10 .
  Under TurboPark, the realistic
@@ -3330,32 +3340,36 @@ Overfull \hbox (3.07721pt too wide) in paragraph at lines 705--709
 
 
 
-[28]
-<figures/unidir_aep_loss_vs_regret.png, id=397, 760.8425pt x 398.288pt>
+[29]
+
+[30]
+<figures/unidir_aep_loss_vs_regret.png, id=416, 760.8425pt x 398.288pt>
 File: figures/unidir_aep_loss_vs_regret.png Graphic file (type png)
 <use figures/unidir_aep_loss_vs_regret.png>
 Package pdftex.def Info: figures/unidir_aep_loss_vs_regret.png  used on input l
-ine 759.
+ine 803.
 (pdftex.def)             Requested size: 503.61377pt x 263.64272pt.
-<figures/unidir_flow_135deg_40D.png, id=398, 603.053pt x 519.1395pt>
+<figures/unidir_flow_135deg_40D.png, id=417, 603.053pt x 519.1395pt>
 File: figures/unidir_flow_135deg_40D.png Graphic file (type png)
 <use figures/unidir_flow_135deg_40D.png>
 Package pdftex.def Info: figures/unidir_flow_135deg_40D.png  used on input line
- 767.
+ 811.
 (pdftex.def)             Requested size: 377.71033pt x 325.15846pt.
 
-Overfull \hbox (4.82056pt too wide) in paragraph at lines 775--780
+
+[31 <./figures/unidir_aep_loss_vs_regret.png>]
+Overfull \hbox (4.82056pt too wide) in paragraph at lines 819--824
 \T1/ptm/m/n/10 decays similarly with buffer. The regret-maximising rose is not 
 a multi-mode superposition---a single concentrated unidirectional
  []
 
-<figures/mixture_explore.png, id=402, 714.67pt x 389.455pt>
+<figures/mixture_explore.png, id=431, 714.67pt x 389.455pt>
 File: figures/mixture_explore.png Graphic file (type png)
 <use figures/mixture_explore.png>
-Package pdftex.def Info: figures/mixture_explore.png  used on input line 783.
+Package pdftex.def Info: figures/mixture_explore.png  used on input line 827.
 (pdftex.def)             Requested size: 428.07477pt x 233.27664pt.
 
-Overfull \hbox (2.40935pt too wide) in paragraph at lines 790--793
+Overfull \hbox (2.40935pt too wide) in paragraph at lines 834--837
 \T1/ptm/m/n/10 We re-ran the cross-section at $\OML/cmm/m/it/10 N[] \OMS/cmsy/m
 /n/10 2 f\OT1/cmr/m/n/10 25\OML/cmm/m/it/10 ; \OT1/cmr/m/n/10 50\OML/cmm/m/it/1
 0 ; \OT1/cmr/m/n/10 75\OML/cmm/m/it/10 ; \OT1/cmr/m/n/10 100\OMS/cmsy/m/n/10 g$
@@ -3367,38 +3381,37 @@ ances $\OMS/cmsy/m/n/10 f\OT1/cmr/m/n/10 2\OML/cmm/m/it/10 ; \OT1/cmr/m/n/10 10
 cmsy/m/n/10 g\OML/cmm/m/it/10 D$
  []
 
-<figures/n_target_sensitivity.png, id=404, 931.48pt x 353.7215pt>
+
+
+[32 <./figures/unidir_flow_135deg_40D.png>]
+<figures/n_target_sensitivity.png, id=439, 931.48pt x 353.7215pt>
 File: figures/n_target_sensitivity.png Graphic file (type png)
 <use figures/n_target_sensitivity.png>
-Package pdftex.def Info: figures/n_target_sensitivity.png  used on input line 7
-96.
+Package pdftex.def Info: figures/n_target_sensitivity.png  used on input line 8
+40.
 (pdftex.def)             Requested size: 478.43153pt x 181.68015pt.
 
 
-[29]
+[33 <./figures/mixture_explore.png>]
 
-[30 <./figures/unidir_aep_loss_vs_regret.png>]
-
-[31 <./figures/unidir_flow_135deg_40D.png>]
-
-[32 <./figures/mixture_explore.png> <./figures/n_target_sensitivity.png>]
-<figures/gap_robustness.png, id=443, 1073.611pt x 567.721pt>
+[34 <./figures/n_target_sensitivity.png>]
+<figures/gap_robustness.png, id=462, 1073.611pt x 567.721pt>
 File: figures/gap_robustness.png Graphic file (type png)
 <use figures/gap_robustness.png>
-Package pdftex.def Info: figures/gap_robustness.png  used on input line 849.
+Package pdftex.def Info: figures/gap_robustness.png  used on input line 907.
 (pdftex.def)             Requested size: 503.61377pt x 266.30914pt.
 
 
-[33]
+[35]
 
-[34 <./figures/gap_robustness.png>]
-Overfull \hbox (10.13055pt too wide) in paragraph at lines 908--911
+[36 <./figures/gap_robustness.png>]
+Overfull \hbox (10.13055pt too wide) in paragraph at lines 966--969
 \T1/ptm/m/n/10 We additionally repeated the DEI cross-section with the SelfSimi
 larity2020 induction/blockage model added on top of Bastankhah
  []
 
 
-Overfull \hbox (10.81534pt too wide) in paragraph at lines 908--911
+Overfull \hbox (10.81534pt too wide) in paragraph at lines 966--969
 \T1/ptm/m/n/10 (baseline schedule, $\OML/cmm/m/it/10 K \OT1/cmr/m/n/10 = 500$\T
 1/ptm/m/n/10 ). Peak regret rises modestly (0.09% $\OMS/cmsy/m/n/10 !$ \T1/ptm/
 m/n/10 0.11% at $\OT1/cmr/m/n/10 2\OML/cmm/m/it/10 D$\T1/ptm/m/n/10 ; 0.05% $\O
@@ -3407,14 +3420,16 @@ $ \T1/ptm/m/n/10 in that configuration):
  []
 
 
-Overfull \hbox (0.11137pt too wide) in paragraph at lines 908--911
+Overfull \hbox (0.11137pt too wide) in paragraph at lines 966--969
 \T1/ptm/m/n/10 the upstream slowdown induced by a neighboring farm shifts the d
 eficit field in a way that gives the conservative re-optimization
  []
 
-(./main.bbl
 
-[35]
+
+[37] (./main.bbl
+
+[38]
 Underfull \hbox (badness 5954) in paragraph at lines 11--14
 []\T1/ptm/m/n/9 Bastankhah, M. and Porté-Agel, F.: A new analytical model for w
 ind-turbine wakes, Renewable Energy, 70, 116--123,
@@ -3422,20 +3437,20 @@ ind-turbine wakes, Renewable Energy, 70, 116--123,
 
 )
 
-[36] (./main.aux)
+[39] (./main.aux)
  ***********
 LaTeX2e <2024-11-01> patch level 2
 L3 programming layer <2021/03/21>
  ***********
  ) 
 Here is how much of TeX's memory you used:
- 19512 strings out of 473190
- 286762 string characters out of 5715800
- 750148 words of memory out of 5000000
- 42317 multiletter control sequences out of 15000+600000
+ 19528 strings out of 473190
+ 287107 string characters out of 5715800
+ 749779 words of memory out of 5000000
+ 42327 multiletter control sequences out of 15000+600000
  608277 words of font info for 109 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 84i,18n,93p,792b,571s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 84i,18n,93p,863b,603s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb
 ></usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb>
 </usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb><
@@ -3457,10 +3472,10 @@ xmf-dist/fonts/type1/public/amsfonts/symbols/msam10.pfb></usr/local/texlive/202
 -dist/fonts/type1/urw/times/utmb8a.pfb></usr/local/texlive/2025/texmf-dist/font
 s/type1/urw/times/utmr8a.pfb></usr/local/texlive/2025/texmf-dist/fonts/type1/ur
 w/times/utmri8a.pfb>
-Output written on main.pdf (36 pages, 5782896 bytes).
+Output written on main.pdf (39 pages, 5985642 bytes).
 PDF statistics:
- 611 PDF objects out of 1000 (max. 8388607)
- 480 compressed objects within 5 object streams
- 155 named destinations out of 1000 (max. 500000)
- 116 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 639 PDF objects out of 1000 (max. 8388607)
+ 502 compressed objects within 6 object streams
+ 161 named destinations out of 1000 (max. 500000)
+ 121 words of extra memory for PDF output out of 10000 (max. 10000000)
 
