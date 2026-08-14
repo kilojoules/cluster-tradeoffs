@@ -55,7 +55,7 @@ The North Sea is entering an era of unprecedented wind farm clustering.
 Denmark's Vindm\o{}lleparken energy island will connect up to 10\,GW across multiple farms in a shared concession zone; the German Bight already hosts over 8\,GW with plans for 30\,GW by 2050; and the broader North Sea basin is projected to reach 300\,GW as part of Europe's 500\,GW offshore target.
 At this density, wind farms no longer operate in isolation.
 Cluster wake losses in the German Bight are projected to reduce capacity factors by 30\,\%, with half of the loss attributable to cross-border wake accumulation \citep{Fliegner2025}.
-The phenomenon---increasingly termed ``wind theft'' \citep{Finseraas2024, Du2026}---has prompted the UK to issue the first national policy guidance on inter-farm wake effects and NYSERDA to recommend minimum inter-farm spacing of 4\,nmi \citep{NYSERDA2024}.
+The phenomenon---increasingly termed ``wind theft'' \citep{Finseraas2024, Du2026}---has prompted the UK to issue the first national policy guidance on inter-farm wake effects and NYSERDA to recommend minimum inter-farm spacing of 4\,nmi \citep{NYSERDA2018}.
 Wake-induced velocity deficits have been measured at distances exceeding 50\,km \citep{Schneemann2020, Canadillas2022}, and inter-farm losses are projected to exceed the impact of a century of climate change on North Sea wind resources \citep{Warder2025}.
 
 Yet these emerging policy responses share a common gap: they treat all sites uniformly.
@@ -117,8 +117,9 @@ The same trick is needed for any AEP-difference study where $R \geq 0$ holds in 
 \subsection{Wake model}
 
 We use the \citet{Bastankhah2014} Gaussian deficit model with $k = 0.04$ and root-sum-of-squares superposition.
+One implementation detail matters for reproducibility: the version of the simulator used here applies a radial cut-off, zeroing the Gaussian deficit beyond twice its standard deviation. This departs from the reference implementation (and has since been changed upstream); with the cut-off disabled our simulator reproduces PyWake~2.6.19 to within $0.2\%$ across downstream spacings of 4--30$D$ and lateral offsets out to $2D$, while with it enabled downstream turbine power is over-predicted by up to $5\%$ (Bastankhah) and $16\%$ (TurboPark) at partial lateral overlap. Integrated over the farm the effect is smaller: it inflates neighbour-induced AEP loss by $5.0\%$ (Bastankhah) and $3.0\%$ (TurboPark) on the headline configuration, which is well inside the wake-model bracket reported below and does not affect any comparative conclusion.
 The simulation is implemented in JAX \citep{jax2018github}, enabling automatic differentiation through the wake model.
-AEP is computed over 24 equally-spaced wind direction sectors at a constant wind speed of 9\,m/s:
+AEP is computed over 24 equally-spaced wind direction sectors. The elliptical-rose cases use a constant 9\,m/s; the DEI case instead uses the per-sector mean speed from the measured record, which spans 7.5--11.6\,m/s (mean 10.1\,m/s). Both therefore evaluate $P(\mathbb{E}[v])$ rather than $\mathbb{E}[P(v)]$, which is discussed as a limitation in Section~\ref{sec:limitations}:
 \begin{equation}
     \text{AEP} = 8760 \sum_{k=1}^{24} w_k \sum_{i=1}^{N_t} P_i(U_{i,k}),
 \end{equation}
@@ -409,6 +410,7 @@ For concentrated unidirectional wind ($a = 0.9$, $f = 1.0$), regret drops from 2
 The bidirectional case ($a = 0.5$, $f = 0.0$) shows gentle decay from 0.4\,\% to 0.2\,\%.
 
 Under the Bastankhah model, the NYSERDA 4\,nmi ($\sim$$31D$) recommendation reduces regret to $<$1\,\% for all wind roses tested, but is unnecessarily conservative for bidirectional sites.
+One caveat on that comparison: the NYSERDA figure is a nearest-turbine separation, whereas our buffers are boundary-gap distances between lease polygons, so the two are not measured between the same points and the comparison is indicative rather than exact.
 Under TurboPark the same recommendation is insufficient rather than conservative: the converged buffer table (Table~\ref{tab:buffer-table-tp}) places the $\tau = 2\%$ requirement beyond $40D$ for all five fitted real sites.
 Wind-rose-dependent buffer standards could allow denser development at low-risk sites (bidirectional, e.g., DEI) while maintaining protection at high-risk sites (unidirectional, e.g., German Bight)---but the adequacy of any fixed standard is wake-model-dependent.
 This is directly relevant to the emerging cross-border coordination frameworks for the North Sea \citep{Fliegner2025}.
@@ -665,8 +667,9 @@ A mixture-of-ellipses extension \citep{Hart2025} would be needed for full fideli
 The six-fold variation in design regret across wind rose shape has direct implications for the North Sea's emerging cluster framework.
 
 \paragraph{Economic magnitude.}
-For a representative 750\,MW farm (50$\times$15\,MW), the realistic-scenario regret at a typical North Sea rose (DEI) spans the wake-model bracket 0.16\,\% (Bastankhah) to 1.9\,\% (TurboPark) of AEP at close spacing, i.e.\ $\sim$9--108\,GWh/yr.
-At a contract-for-difference strike price of 70\,EUR/MWh, this is $\sim$0.6--7.6\,M EUR/yr, or $\sim$16--190\,M EUR over a 25-year operational lifetime.
+For a representative 750\,MW farm (50$\times$15\,MW), the realistic-scenario regret at a typical North Sea rose (DEI) spans the wake-model bracket 0.16\,\% (Bastankhah) to 1.9\,\% (TurboPark) of AEP at close spacing, i.e.\ $\sim$9--108\,GWh/yr against our modelled AEP.
+That denominator is itself optimistic---our speed treatment implies an $84.7\%$ capacity factor for DEI (Section~\ref{sec:limitations})---so on a realistic $50$--$55\%$ capacity factor the same percentages correspond to roughly $6$--$70$\,GWh/yr, and the figures below should be scaled accordingly.
+At a contract-for-difference strike price of 70\,EUR/MWh, this is $\sim$0.6--7.6\,M EUR/yr, or---undiscounted, and therefore an upper figure---$\sim$16--190\,M EUR over a 25-year operational lifetime; at a 6\,\% discount rate the present value is roughly half that.
 Even the low end of this bracket is order-of-magnitude comparable to the cost of running a neighbor-aware layout optimization study, which is negligible relative to project CAPEX; the high end, and the concentrated-unidirectional worst case (10.6\,\% under TurboPark), represent project-material losses.
 The headline economic case is therefore: the cost of doing the analysis is small enough that even the most optimistic wake model justifies it, and under slower-recovery wake physics the stakes are tens to hundreds of millions of euros per farm.
 
@@ -696,9 +699,9 @@ The convergence budget is moreover conditional on the inner optimizer: a stronge
 
 This affects any study computing AEP differences between strategies.
 We recommend $K \geq 500$ for 50-turbine farms, storing per-start AEPs so that convergence can be verified by subsampling after the fact, and reporting the capture fraction alongside the regret estimate.
-The computational cost at $K = 500$ was approximately 2\,hours per wind rose on a single AMD MI250X GCD, or 70\,GPU-hours for the full 35-case sweep; the $K = 2000$ FunWake production grid cost roughly $22$ (Bastankhah) to $37$ (TurboPark) GPU-hours per $(a, f, d)$ cell.
+The greedy sweep at $K = 500$ took a median of 27\,hours per wind rose on a single AMD MI250X GCD, or roughly 950\,GPU-hours for the full 35-case sweep; the $K = 2000$ FunWake production grid cost roughly $22$ (Bastankhah) to $37$ (TurboPark) GPU-hours per $(a, f, d)$ cell.
 
-\subsection{Limitations}
+\subsection{Limitations}\label{sec:limitations}
 
 \paragraph{Wake model.}
 Our primary sweep uses \citet{Bastankhah2014} with $k = 0.04$ and root-sum-of-squares superposition, and every cross-section and buffer-table analysis is replicated in full under TurboPark \citep{Nygaard2022} with TI = 0.06.
@@ -714,7 +717,13 @@ Neither represents a self-interested neighbor that optimizes its own AEP.
 A self-interested neighbor might concentrate turbines in high-wind upwind positions, potentially producing different regret patterns.
 This comparison is left to future work.
 
-\paragraph{Constant wind speed.}
+\paragraph{Wind speed treated as a per-sector constant.}
+Every result evaluates $P(\mathbb{E}[v])$ rather than $\mathbb{E}[P(v)]$: a single 9\,m/s for the elliptical roses, and 24 sector-mean speeds for DEI.
+Because the power curve is strongly concave over its mid-range and flat above rated, collapsing the within-sector speed distribution onto its mean systematically over-states production.
+The effect is visible in the implied capacity factors---the DEI liberal layout reaches 5565\,GWh on 750\,MW, an $84.7\%$ capacity factor, against roughly $50$--$55\%$ for operating North Sea farms---so absolute AEP, the percentage denominators, and the monetary figures in Section~\ref{sec:discussion} should be read as optimistic.
+Regret is a difference of two AEPs computed under the same treatment, so the comparative results are far less affected than the levels; a full speed-resolved re-evaluation of the headline cells is the obvious next step and requires no re-optimisation of the loss term.
+
+\paragraph{Speed--direction correlation.}
 Real North Sea sites have speed--direction correlations.
 If high-speed winds are concentrated in the dominant direction (common for storm-driven sites), regret could be amplified through the cubic power relationship.
 
@@ -780,7 +789,9 @@ PER supervised the research and contributed to methodology and manuscript revisi
 }
 
 \competinginterests{
-The authors declare no competing interests.
+One author (PM) is employed by TotalEnergies, an offshore wind developer. The
+study was designed and executed independently and the results are reported
+without input from that affiliation.
 }
 
 \begin{acknowledgements}

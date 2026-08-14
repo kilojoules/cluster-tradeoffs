@@ -7,38 +7,38 @@ Warning--entry type for "jax2018github" isn't style-file defined
 --line 191 of file references.bib
 You've used 15 entries,
             2819 wiz_defined-function locations,
-            1098 strings with 12206 characters,
-and the built_in function-call counts, 14032 in all, are:
+            1099 strings with 12226 characters,
+and the built_in function-call counts, 14040 in all, are:
 = -- 1499
 > -- 604
-< -- 5
+< -- 6
 + -- 268
 - -- 189
-* -- 935
+* -- 937
 := -- 1486
 add.period$ -- 15
 call.type$ -- 15
-change.case$ -- 92
+change.case$ -- 91
 chr.to.int$ -- 15
 cite$ -- 45
-duplicate$ -- 1356
-empty$ -- 735
+duplicate$ -- 1358
+empty$ -- 736
 format.name$ -- 235
-if$ -- 2756
+if$ -- 2758
 int.to.chr$ -- 1
 int.to.str$ -- 1
 missing$ -- 161
 newline$ -- 54
 num.names$ -- 60
-pop$ -- 560
+pop$ -- 558
 preamble$ -- 1
 purify$ -- 91
 quote$ -- 0
 skip$ -- 787
 stack$ -- 0
 substring$ -- 544
-swap$ -- 1133
-text.length$ -- 0
+swap$ -- 1135
+text.length$ -- 1
 text.prefix$ -- 0
 top$ -- 0
 type$ -- 135
