@@ -90,21 +90,32 @@ def create_dei_turbine():
 
 
 def generate_target_grid(boundary_np, n_target, spacing):
+    # Containment must be tested against the polygon actually passed in, not the
+    # module-global target polygon: callers that supply a scaled polygon (e.g.
+    # the split-neighbour rings) otherwise get points that lie outside it.
+    poly_path = MplPath(boundary_np)
     x_lo, x_hi = boundary_np[:, 0].min(), boundary_np[:, 0].max()
     y_lo, y_hi = boundary_np[:, 1].min(), boundary_np[:, 1].max()
-    gx = np.arange(x_lo + 2 * D, x_hi - 2 * D, spacing)
-    gy = np.arange(y_lo + 2 * D, y_hi - 2 * D, spacing)
+    margin = min(2 * D, 0.15 * min(x_hi - x_lo, y_hi - y_lo))
+    gx = np.arange(x_lo + margin, x_hi - margin, spacing)
+    gy = np.arange(y_lo + margin, y_hi - margin, spacing)
     gx_2d, gy_2d = np.meshgrid(gx, gy)
     candidates = np.column_stack([gx_2d.ravel(), gy_2d.ravel()])
-    inside = _polygon_path.contains_points(candidates)
+    inside = poly_path.contains_points(candidates)
     pts = candidates[inside]
-    if len(pts) < n_target:
-        gx = np.arange(x_lo + D, x_hi - D, spacing * 0.7)
-        gy = np.arange(y_lo + D, y_hi - D, spacing * 0.7)
+    shrink = 0.7
+    while len(pts) < n_target and shrink > 0.05:
+        gx = np.arange(x_lo + margin * 0.5, x_hi - margin * 0.5, spacing * shrink)
+        gy = np.arange(y_lo + margin * 0.5, y_hi - margin * 0.5, spacing * shrink)
         gx_2d, gy_2d = np.meshgrid(gx, gy)
         candidates = np.column_stack([gx_2d.ravel(), gy_2d.ravel()])
-        inside = _polygon_path.contains_points(candidates)
+        inside = poly_path.contains_points(candidates)
         pts = candidates[inside]
+        shrink *= 0.7
+    if len(pts) < n_target:
+        raise RuntimeError(
+            f"generate_target_grid: only {len(pts)} points fit inside the given "
+            f"polygon for n_target={n_target} at spacing={spacing:.1f}")
     indices = np.round(np.linspace(0, len(pts) - 1, n_target)).astype(int)
     selected = pts[indices]
     return jnp.array(selected[:, 0]), jnp.array(selected[:, 1])
