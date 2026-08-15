@@ -24,3 +24,6 @@ venv/
 
 # Analysis outputs
 analysis/
+
+# closed-source simulator: kept locally, not distributed
+src/pixwake/
