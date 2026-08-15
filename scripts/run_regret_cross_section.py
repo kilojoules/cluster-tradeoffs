@@ -266,6 +266,11 @@ def main():
                              "(different multistart seeds) instead of identical-copy")
 
     parser.add_argument("--output-dir", type=str, default="analysis/regret_cross_section")
+    parser.add_argument("--radius-mask", dest="radius_mask", action="store_true", default=True,
+                        help="Truncate the Gaussian deficit beyond 2 sigma (the historical "
+                             "default; departs from the reference implementation)")
+    parser.add_argument("--no-radius-mask", dest="radius_mask", action="store_false",
+                        help="Disable the 2-sigma truncation (matches PyWake)")
     parser.add_argument("--schedule", type=str, default="sgd_baseline",
                         choices=["sgd_baseline", "funwake_iter192"],
                         help="Inner SGD schedule: pixwake default or FunWake iter_192")
@@ -311,9 +316,11 @@ def main():
     from pixwake.superposition import LinearSum, SquaredSum
     sup = LinearSum() if args.superposition == "linearsum" else SquaredSum()
     if args.deficit == "bastankhah":
-        deficit = BastankhahGaussianDeficit(k=0.04, superposition=sup)
+        deficit = BastankhahGaussianDeficit(k=0.04, superposition=sup,
+                                            use_radius_mask=args.radius_mask)
     elif args.deficit == "turbopark":
-        deficit = TurboGaussianDeficit(A=0.04, superposition=sup)
+        deficit = TurboGaussianDeficit(A=0.04, superposition=sup,
+                                       use_radius_mask=args.radius_mask)
     blockage_model = None
     if args.blockage:
         from pixwake.deficit.selfsimilarity import SelfSimilarityBlockageDeficit2020
@@ -643,6 +650,7 @@ def main():
                 "inner_max_iter": args.inner_max_iter,
                 "inner_lr": args.inner_lr,
                 "schedule": args.schedule,
+                "use_radius_mask": args.radius_mask,
                 "ed_a": args.ed_a if args.wind_rose in ("elliptical", "mixture") else None,
                 "ed_f": args.ed_f if args.wind_rose in ("elliptical", "mixture") else None,
             },
